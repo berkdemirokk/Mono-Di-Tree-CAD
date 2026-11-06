@@ -172,7 +172,7 @@ internal sealed class ALinePanelPreviewWindow : Window
                     if(total is decimal known && (left>=known || right>=known || (left.HasValue && right.HasValue && left+right!=known)))
                         throw new ArgumentException(label+": aktarım sonrası açık yaylar toplam beden ölçüsüyle çelişiyor; eksik yay türetilmedi, alanlar değiştirilmedi.");
                 }
-                if(after.All(value=>value.Length>0)) { var input=ALineMeasurementReview.Normalize(after,selectedUnit);ValidateRequestFields(input);_ = ALinePanelPreview.Create(input); }
+                if(after.All(value=>value.Length>0)) { var input=ALineMeasurementReview.Normalize(after,selectedUnit);ValidateRequestFields(after,selectedUnit);_ = ALinePanelPreview.Create(input); }
                 proposal.Text+="\n"+string.Join(Environment.NewLine,candidate.Rows.Where(row=>row.ProposedText is not null).Select(row=>labels[row.Index]+": DOLDURULACAK — "+row.ProposedText+" "+suffix));
                 proposal.Text+="\nOndalık değerler kayıpsız aktarılır; üç ondalık basamak gerektiğinde 0.1250 gibi sonuna sıfır eklenir. Bu, 0.125 mm ile aynı değerdir; yuvarlama yapılmaz.";
                 if(!candidate.HasWrites) { proposal.Text+="\nAktarılacak boş alan yok; dolu alanlar korunuyor.";return; }
@@ -197,23 +197,24 @@ internal sealed class ALinePanelPreviewWindow : Window
             catch(InvalidOperationException ex) { RefreshProposal();status.Text=ex.Message; }
         };
         ALinePanelInput ReadInput()=>ALineMeasurementReview.Normalize(fields.Select(f=>f.Text).ToArray(),unit.SelectedIndex switch { 0=>ALineLengthUnit.Centimeter,1=>ALineLengthUnit.Millimeter,_=>(ALineLengthUnit?)null });
-        void ValidateRequestFields(ALinePanelInput input)
+        void ValidateRequestFields(IReadOnlyList<string> form,ALineLengthUnit? formUnit)
         {
             var source=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);
             if(source.Issues.Count>0)throw new ArgumentException(string.Join(Environment.NewLine,source.Issues));
-            double[] current=[input.FrontWaistArc,input.BackWaistArc,input.FrontHipArc,input.BackHipArc,input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase,input.HipDepth,input.WaistToHem,input.FinishedHemCircumference];
-            for(int i=0;i<current.Length;i++)if(source.Millimeters[i] is decimal value && Math.Abs(current[i]-(double)value)>0.000001)
+            var current=ALineMeasurementReview.NormalizeMillimeters(form,formUnit);
+            for(int i=0;i<current.Length;i++)if(source.Millimeters[i] is decimal value && current[i]!=value)
                 throw new ArgumentException(ALineRequestMeasurements.Labels[i]+": form değeri açık istek ölçüsüyle çelişiyor; önce kaynağı düzeltin.");
         }
-        void ValidateRequestTotals(ALinePanelInput input)
+        void ValidateRequestTotals(IReadOnlyList<string> form,ALineLengthUnit? formUnit)
         {
             var review=DressMeasurementParser.Review(promptSnapshot,measurementSnapshot);
-            foreach(var (label,total) in new[]{("bel çevresi",input.FrontWaistArc+input.BackWaistArc),("kalça çevresi",input.FrontHipArc+input.BackHipArc)})
+            var current=ALineMeasurementReview.NormalizeMillimeters(form,formUnit);
+            foreach(var (label,total) in new[]{("bel çevresi",current[0]+current[1]),("kalça çevresi",current[2]+current[3])})
             {
                 if(review.Questions.Any(q=>q.StartsWith(label+":",StringComparison.Ordinal) && !q.Contains("açık ölçü ve birim")))
                     throw new ArgumentException(label+": istek notlarındaki belirsizliği önce düzeltin.");
                 var existing=review.Measurements.FirstOrDefault(m=>m.Label==label);
-                if(existing is not null && Math.Abs((double)existing.Millimeters-total)>0.000001)
+                if(existing is not null && existing.Millimeters!=total)
                     throw new ArgumentException(label+": ön ve arka yay toplamı kayıtlı istek ölçüsünden farklı; önce kaynağı düzeltin.");
             }
         }
@@ -308,7 +309,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Önce simetri ve kesit varsayımlarını inceleyin.");
-                var input=ReadInput();ValidateRequestFields(input);ValidateRequestTotals(input);_ = ALinePanelPreview.Create(input);reviewGate.Stage(input);
+                var input=ReadInput();var form=fields.Select(f=>f.Text).ToArray();ValidateRequestFields(form,CurrentUnit());ValidateRequestTotals(form,CurrentUnit());_ = ALinePanelPreview.Create(input);reviewGate.Stage(input);
                 var normalized=fields.Select((field,i)=>ALineMeasurementReview.ParseLengthMm(field.Text,CurrentUnit(),i)).ToArray();
                 static string DecimalText(decimal value)=>value.ToString("0.############################",CultureInfo.InvariantCulture);
                 static string Both(decimal mm)=>$"{DecimalText(mm)} mm = {DecimalText(mm/10m)} cm";
@@ -325,7 +326,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Gösterim varsayımını okuyup seçin.");
-                var input=ReadInput();ValidateRequestFields(input);ValidateRequestTotals(input);
+                var input=ReadInput();var form=fields.Select(f=>f.Text).ToArray();ValidateRequestFields(form,CurrentUnit());ValidateRequestTotals(form,CurrentUnit());
                 if(confirm.IsChecked!=true)throw new ArgumentException("Önce cm/mm özetini inceleyip ölçüleri onaylayın.");
                 reviewGate.Confirm();reviewGate.RequireConfirmed(input);
                 var preview=ALinePanelPreview.Create(input);

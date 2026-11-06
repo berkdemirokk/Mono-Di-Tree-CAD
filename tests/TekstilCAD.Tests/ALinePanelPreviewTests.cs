@@ -17,6 +17,15 @@ public sealed class ALinePanelPreviewTests
     }
     private static ALinePanelInput Input => new(360,360,500,500,20,20,20,20,200,700,1600);
     private static string[] CmFields => ["36","36","50","50","2","2","2","2","20","70","160"];
+    [Fact] public void DecimalNormalizationPreservesSmallDifferencesAcrossUnits()
+    {
+        var mm=new[] { "360.0000001","360","500","500","20","20","20","20","200","700","1600" };
+        var cm=new[] { "36.00000001","36","50","50","2","2","2","2","20","70","160" };
+        var normalized=ALineMeasurementReview.NormalizeMillimeters(mm,ALineLengthUnit.Millimeter);
+        Assert.Equal(360.0000001m,normalized[0]);Assert.Equal(720.0000001m,normalized[0]+normalized[1]);
+        Assert.Equal(normalized,ALineMeasurementReview.NormalizeMillimeters(cm,ALineLengthUnit.Centimeter));
+        Assert.NotEqual(360m,normalized[0]);
+    }
     [Theory]
     [InlineData("1,000")]
     [InlineData("1.000")]

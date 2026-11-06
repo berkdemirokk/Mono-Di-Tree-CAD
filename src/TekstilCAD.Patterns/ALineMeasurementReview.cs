@@ -19,17 +19,22 @@ public sealed class ALineMeasurementReview
             throw new ArgumentException($"{fieldIndex+1}. alana seçilen birimde açık değer girin; bolluk için sıfır yazılabilir.");
         return checked(value*(unit==ALineLengthUnit.Centimeter ? 10m : 1m));
     }
-    public static ALinePanelInput Normalize(IReadOnlyList<string> fields, ALineLengthUnit? unit)
+    public static decimal[] NormalizeMillimeters(IReadOnlyList<string> fields, ALineLengthUnit? unit)
     {
         ArgumentNullException.ThrowIfNull(fields);
         if(unit is not (ALineLengthUnit.Millimeter or ALineLengthUnit.Centimeter))
             throw new ArgumentException("Önce ölçü birimini seçin: cm veya mm.");
         if(fields.Count!=11)throw new ArgumentException("On bir ölçü/bolluk alanı gerekli.");
-        var values=new double[11];
+        var values=new decimal[11];
         for(int i=0;i<values.Length;i++)
         {
-            values[i]=(double)ParseLengthMm(fields[i],unit,i);
+            values[i]=ParseLengthMm(fields[i],unit,i);
         }
+        return values;
+    }
+    public static ALinePanelInput Normalize(IReadOnlyList<string> fields, ALineLengthUnit? unit)
+    {
+        var values=NormalizeMillimeters(fields,unit).Select(value=>(double)value).ToArray();
         return new(values[0],values[1],values[2],values[3],values[4],values[5],values[6],values[7],values[8],values[9],values[10]);
     }
     public void Stage(ALinePanelInput input) { Invalidate();_ = ALinePanelPreview.Create(input);reviewed=input; }

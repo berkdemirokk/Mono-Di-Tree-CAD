@@ -219,6 +219,13 @@ internal static partial class DesktopVerification
             Click(conflict.ReviewForVerification);conflict.ConfirmationForVerification.IsChecked=true;Click(conflict.DrawForVerification);
             Check(conflict.CanvasForVerification.Children.Count==0 && conflict.StatusForVerification.Text.Contains("kayıtlı istek ölçüsünden farklı"),
                 "Existing request waist conflict blocks drawing even after field confirmation",checks);
+            var preciseTotal=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm") { ConfirmDiscardWorkForVerification=()=>true };
+            try {
+                Fill(preciseTotal,false);preciseTotal.UnitForVerification.SelectedIndex=1;preciseTotal.AgreementForVerification.IsChecked=true;
+                preciseTotal.FieldsForVerification[0].Text="360.0000001";Click(preciseTotal.ReviewForVerification);
+                Check(!preciseTotal.ConfirmationForVerification.IsEnabled && preciseTotal.StatusForVerification.Text.Contains("kayıtlı istek ölçüsünden farklı"),
+                    "A sub-micrometer decimal mismatch against a recorded body total blocks review",checks);
+            } finally { preciseTotal.Close(); }
             var explicitSections=string.Join(";",ALineRequestMeasurements.Labels.Zip(new[]{"36","36","50","50","2","2","2","2","20","70","160"},(label,value)=>label+" "+value+" cm"));
             var sourceText="bel çevresi 72 cm;kalça çevresi 100 cm;"+explicitSections;
             request.LoadForVerification(new DesignRequest("A kesim elbise",sourceText,null,"aline",2));
@@ -241,6 +248,9 @@ internal static partial class DesktopVerification
                     proposalWindow.CanvasForVerification.Children.Count==0 && proposalWindow.AgreementForVerification.IsChecked!=true && !proposalWindow.ConfirmationForVerification.IsEnabled,
                     "Accepted proposal transfers explicit mm values but cannot accept symmetry, confirm geometry or draw",checks);
                 proposalWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(proposalWindow);
+                proposalWindow.FieldsForVerification[0].Text="360.0000001";Click(proposalWindow.ReviewForVerification);
+                Check(!proposalWindow.ConfirmationForVerification.IsEnabled && proposalWindow.StatusForVerification.Text.Contains("açık istek ölçüsüyle çelişiyor"),
+                    "A sub-micrometer decimal mismatch against an explicit source field blocks review",checks);
                 proposalWindow.FieldsForVerification[0].Text="370";Click(proposalWindow.ReviewForVerification);Click(proposalWindow.DrawForVerification);
                 Check(proposalWindow.CanvasForVerification.Children.Count==0 && proposalWindow.StatusForVerification.Text.Contains("açık istek ölçüsüyle çelişiyor"),
                     "Editing a proposed arc invalidates drawing and cannot contradict its source",checks);
