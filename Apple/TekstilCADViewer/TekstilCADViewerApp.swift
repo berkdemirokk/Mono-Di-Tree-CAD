@@ -3616,6 +3616,13 @@ private struct ExperimentalDesignBriefView: View {
                         TextField("Örn. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
                     }
 
+                    Button(image == nil ? "Görsel eklemeden isteği gözden geçir" : "Seçili görselle isteği gözden geçir") {
+                        guard !referenceBlocksClose, !draftTransition else { return }
+                        focusedInput = nil; message = ""; step = 3
+                    }
+                    .frame(minHeight: 44)
+                    .disabled(referenceBlocksClose || draftTransition)
+                    .accessibilityHint("Tarif, ölçüler ve varsa seçili görselle son kontrol adımına geçer. İstek henüz kaydedilmez.")
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Ölçülerinizi mesaj gibi yazın", systemImage: "text.bubble")
                             .font(.headline).accessibilityAddTraits(.isHeader)
