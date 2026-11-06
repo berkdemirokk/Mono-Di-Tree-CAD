@@ -27,7 +27,10 @@ internal sealed class PhotoTraceWindow : Window
     private readonly TextBox xInput=new() { Width=60,MaxLength=24 },yInput=new() { Width=60,MaxLength=24 };
     internal (int Width,int Height) SourceDimensions => (sourceWidth,sourceHeight);
     internal long DraftRevision { get; private set; }
-    internal bool HasDraft => PlaneSettings is not null || CanvasForVerification.Points.Count>0 || LengthForVerification.Text.Length>0 || xInput.Text.Length>0 || yInput.Text.Length>0;
+    private bool HasTraceDraft => PlaneSettings is not null || CanvasForVerification.Points.Count>0 || LengthForVerification.Text.Length>0 || xInput.Text.Length>0 || yInput.Text.Length>0;
+    internal bool HasDraft => HasTraceDraft || regionContinuation is not null;
+    internal Func<string,bool>? ConfirmCloseForVerification { get; set; }
+    internal bool ClosingAllowedForVerification() { var e=new CancelEventArgs();OnClosing(this,e);return !e.Cancel; }
     internal PhotoTraceCanvas CanvasForVerification { get; } = new();
     internal TextBox LengthForVerification { get; } = new() { Width=85,MaxLength=32 };
     internal Expander RecoveryForVerification { get; } = new() { Header="Taslağı koruma ve yeniden açma",Visibility=Visibility.Collapsed,IsExpanded=true };
@@ -64,7 +67,7 @@ internal sealed class PhotoTraceWindow : Window
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(12) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,5,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
-        var recoveryText=new TextBlock { Text="Kaynak istek değişti veya kapandı; çizim korunuyor fakat bu pencereden CAD aktarımı yapılamaz. Düz serilmiş kalıp görseli seçiliyken süren işlemi bitirin; ⋯ (Çizgi dosyası) > Çizgiyi kaydet ile yeni bir .tdtrace dosyası kaydedin ve başarılı kayıt mesajını bekleyin. Ardından taslak ve fotoğraf pencerelerini kapatın, güncel istekte aynı özgün fotoğrafı seçip yeniden inceleyin; çizim penceresinde düz kalıp türünü seçip ⋯ > Çizgiyi aç ile dosyayı yükleyin. Farklı fotoğrafla dosya açılmaz; eski fotoğrafı saklayın. Dosya çizgi ve referans noktalarının koordinatlarını, girilmiş referans ölçüsünü ve çizim ayarlarını içerir; fotoğraf, bölge maskesi ve uygulanmamış öneriler dahil değildir.",TextWrapping=TextWrapping.Wrap };
+        var recoveryText=new TextBlock { Text="Kaynak istek değişti veya kapandı; çizim korunuyor fakat bu pencereden CAD aktarımı yapılamaz. Düz serilmiş kalıp görseli seçiliyken süren işlemi bitirin; ⋯ (Çizgi dosyası) > Çizgiyi kaydet ile yeni bir .tdtrace dosyası kaydedin ve başarılı kayıt mesajını bekleyin. Çizgi dosyası koordinatları, girilmiş referans ölçüsünü ve ayarları içerir; fotoğraf, bölge maskesi ve uygulanmamış öneriler dahil değildir. Maskeyi de saklamak için kapatmadan önce Son noktayı kaldır ile yalnız referans noktalarını bırakın (eksikse tamamlayın); Bölge… > Bölgeyi kaydet… ile ayrı .tdregion dosyası kaydedin. Ardından taslak ve fotoğraf pencerelerini kapatın, güncel istekte aynı özgün fotoğrafı seçip yeniden inceleyin. Düz kalıp türünü seçip ⋯ > Çizgiyi aç ile çizgiyi, Bölge… > Bölgeyi aç… ile maskeyi yükleyin. Farklı fotoğrafla dosyalar açılmaz; eski fotoğrafı saklayın.",TextWrapping=TextWrapping.Wrap };
         RecoveryForVerification.Content=new ScrollViewer { Content=recoveryText,MaxHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
         AutomationProperties.SetName(RecoveryForVerification,"Değişen kaynak için taslak kurtarma adımları");DockPanel.SetDock(RecoveryForVerification,Dock.Top);root.Children.Add(RecoveryForVerification);
         if(requestMeasurements is not null || requestPrompt is not null)
@@ -244,7 +247,7 @@ internal sealed class PhotoTraceWindow : Window
     internal async Task<bool> TryLoadTraceSessionAsync(string path)
     {
         if(!CanUseTraceSession())return false;var revision=DraftRevision;
-        if(HasDraft) { var accepted=ConfirmForVerification?.Invoke("Çizgi dosyası mevcut taslağın yerini alacak. Devam edilsin mi?") ?? (MessageBox.Show(this,"Çizgi dosyası mevcut taslağın yerini alacak. Devam edilsin mi?","Çizgiyi aç",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+        if(HasTraceDraft) { var accepted=ConfirmForVerification?.Invoke("Çizgi dosyası mevcut taslağın yerini alacak. Devam edilsin mi?") ?? (MessageBox.Show(this,"Çizgi dosyası mevcut taslağın yerini alacak. Devam edilsin mi?","Çizgiyi aç",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!accepted || revision!=DraftRevision || !CanUseTraceSession()) { if(!closed)StatusForVerification.Text="Çizgi açılmadı; mevcut taslak korundu.";return false; } }
         var cts=new CancellationTokenSource();sessionCancellation=cts;
         try {
@@ -294,7 +297,7 @@ internal sealed class PhotoTraceWindow : Window
         if(!accepted || dialog.SelectedContour is not { } contour)return;
         if(closed || revision!=DraftRevision || !CanvasForVerification.SetRegionContourSuggestion(contour))
         { StatusForVerification.Text="Taslak değişti veya sınır geçersiz; öneri kullanılmadı.";return; }
-        regionContinuation=dialog.CaptureContinuation();
+        regionContinuation=dialog.CaptureContinuation();DraftRevision++;
         var approximationNote=dialog.SelectedContourMaximumDeviation is double deviation ? $" Sadeleştirilmiş: kaynak noktalarının karşılık gelen kenara en büyük uzaklığı yaklaşık {deviation:0.###} önizleme pikseli; kayan nokta hesabı yaklaşık, kesin üst sınır değil. İnce ayrıntılar kaybolabilir, fiziksel hata ölçülmedi." : "";
         StatusForVerification.Text="Mavi sınır yalnız öneridir. Diğer bölgeler ve boşluklar aktarılmaz; inceleyip Yolu uygula seçin. Taslak açık kalır."+approximationNote;
         _=StartTraceTopologyReviewAsync(approximationNote);
@@ -535,7 +538,8 @@ internal sealed class PhotoTraceWindow : Window
                 $"Düzlem referansı {MeasurementInput.Format(plane.WidthMm)} × {MeasurementInput.Format(plane.HeightMm)} mm. Dört köşe ve çizgi aynı düzlemde olmalı; seçilen köşeler doğru sırada ve ölçüler gerçek olmalıdır. Lens bozulması ve kumaş dökümü düzeltilmez.";
             var version=plane is null ? 8 : 9;
             var continueNotice=keepOpen ? "\n\nÇizgi eklendikten sonra çizgi noktaları temizlenecek; fotoğraf ve ölçü referansları yeni çizgi için korunacak. Her çizgi bağımsız açık taslaktır; iç boşluk olarak kaydedilmez." : "";
-            var question=$"{calibrationNotice}\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Görsel türü seçimi proje geçmişine kaydedilmez. Fotoğraf özeti, boyutlar, işaretler ve referans proje biçimi {version} ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion}{closureNotice}{continueNotice} Devam edilsin mi?";
+            var maskNotice=!keepOpen && regionContinuation is not null ? "\n\nBu işlem çizim penceresini kapatır; oturumdaki bölge maskesi kaybolur. Maskeyi korumak için önce Bölge… > Bölgeyi kaydet… ile ayrı .tdregion dosyası kaydedin; gerekiyorsa önce çizgiyi kaydedip yalnız referans noktalarını bırakın." : "";
+            var question=$"{calibrationNotice}\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Görsel türü seçimi proje geçmişine kaydedilmez. Fotoğraf özeti, boyutlar, işaretler ve referans proje biçimi {version} ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion}{closureNotice}{continueNotice}{maskNotice} Devam edilsin mi?";
             var approvedRevision=DraftRevision;
             var confirmed=ConfirmForVerification?.Invoke(question) ?? (MessageBox.Show(this,question,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!confirmed) { StatusForVerification.Text="İşlem iptal edildi; proje değiştirilmedi.";return; }
@@ -559,7 +563,8 @@ internal sealed class PhotoTraceWindow : Window
         if(!allowClose && HasDraft)
         {
             var revision=DraftRevision;
-            var accepted=MessageBox.Show(this,"İşaretlenmiş noktalar ve girilen değerler kaybolacak. Kapatılsın mı?","Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
+            var message="İşaretlenmiş noktalar ve girilen değerler kaybolacak."+(regionContinuation is null ? "" : " Oturumdaki bölge maskesi ve düzeltmeleri de kaybolacak. Çizgi dosyası maskeyi içermez. Maskeyi korumak için önce çizgiyi kaydedin, Son noktayı kaldır ile yalnız referansları bırakın; Bölge… > Bölgeyi kaydet… ile ayrı .tdregion dosyası kaydedin. Referanslar eksikse Bölge açmadan önce tamamlayın.")+" Kapatılsın mı?";
+            var accepted=ConfirmCloseForVerification?.Invoke(message) ?? (MessageBox.Show(this,message,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!accepted || revision!=DraftRevision) { e.Cancel=true;if(accepted)StatusForVerification.Text="Taslak değişti; pencere kapatılmadı."; }
         }
     }

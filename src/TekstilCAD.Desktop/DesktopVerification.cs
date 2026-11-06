@@ -11288,6 +11288,24 @@ internal static partial class DesktopVerification
                         trace.CanvasForVerification.PathSuggestion is { } currentProposal && currentProposal.SequenceEqual(proposal) && trace.DraftRevision==draftRevision,
                         "Cancel preserves the accepted mask and existing suggestion without selecting a boundary",checks);
                 } finally { afterCancel.Close(); }
+                canvas.ClearPoints();trace.LengthForVerification.Clear();
+                var closeMessage="";trace.ConfirmCloseForVerification=message=> { closeMessage=message;return false; };
+                Check(trace.HasDraft && !trace.ClosingAllowedForVerification() && closeMessage.Contains(".tdregion") && closeMessage.Contains("maskesi") && canvas.Points.Count==0,
+                    "A retained mask alone prevents silent trace close and explains separate region saving",checks);
+                canvas.TryAddPixelPoint(new Point(10,10));canvas.TryAddPixelPoint(new Point(100,10));
+                var maskToSave=trace.CreateRegionWindow() ?? throw new InvalidOperationException("Retained mask is unavailable for saving.");maskToSave.ConfirmCloseForVerification=()=>true;
+                var savedMaskPath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(reportPath))!,"retained-mask-"+Guid.NewGuid().ToString("N")+".tdregion");
+                try
+                {
+                    var saveMask=maskToSave.TrySaveSessionAsync(savedMaskPath);PumpUntil(()=>saveMask.IsCompleted);
+                    Check(saveMask.GetAwaiter().GetResult(),"Retained mask can be saved independently of the trace",checks);
+                    var maskReload=new PhotoRegionWindow(workspace,bitmap) { ConfirmCloseForVerification=()=>true };
+                    try { var reload=maskReload.TryLoadSessionAsync(savedMaskPath);PumpUntil(()=>reload.IsCompleted);
+                        Check(reload.GetAwaiter().GetResult() && maskReload.CopyMaskForVerification()!.SequenceEqual(window.CopyMaskForVerification()!),
+                            "Separately saved retained mask reopens for the same photo",checks); }
+                    finally { maskReload.Close(); }
+                }
+                finally { maskToSave.Close();if(File.Exists(savedMaskPath))File.Delete(savedMaskPath); }
             } finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close(); }
             var reopened=new PhotoRegionWindow(workspace,bitmap) { ConfirmCloseForVerification=()=>true };
             try {
