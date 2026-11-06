@@ -76,6 +76,25 @@ internal sealed class PhotoRegionWindow : Window
         public override string ToString()=>$"Bölge {Id} · {Pixels} piksel · ({Left},{Top})–({Right},{Bottom})";
     }
 
+    // This detached state belongs to the same frozen bitmap and is never persisted.
+    // Snapshot, component labels and the arrays are replaced, never mutated, by edits.
+    internal sealed record Continuation(BitmapSource Image,RegionProposal.Snapshot Snapshot,MaskComponents Components,byte[] Source,byte[]? Applied,string[] Rectangle);
+    internal Continuation? CaptureContinuation()
+    {
+        if(running is not null || pendingMarks.Count!=0 || SelectedContour is null || snapshot is null || components is null || sourceBgr is null)return null;
+        return new(image,snapshot,components,sourceBgr,appliedMarks,[left.Text,top.Text,width.Text,height.Text]);
+    }
+    internal bool RestoreContinuation(Continuation state)
+    {
+        if(!ReferenceEquals(state.Image,image) || snapshot is not null || running is not null || pendingMarks.Count!=0 || state.Rectangle.Length!=4)return false;
+        var boxes=new[] { left,top,width,height };
+        changingRectangle=true;try { for(var i=0;i<boxes.Length;i++) { boxes[i].Text=state.Rectangle[i];boxes[i].Tag=boxes[i].Text; } } finally { changingRectangle=false; }
+        snapshot=state.Snapshot;sourceBgr=state.Source;appliedMarks=state.Applied;
+        UpdateMarksOverlay();UpdateBoxOverlay();ShowComponents(state.Components);
+        Status.Text="Önceki bölge maskesi bu oturumda korundu; yeni bir bölge seçip sınırını yeniden inceleyin. Kalıp veya ölçü doğrulanmadı.";
+        return true;
+    }
+
     internal PhotoRegionWindow(Window owner,BitmapSource image,bool reviewOnly=false)
     {
         if(!image.IsFrozen || image.PixelWidth<3 || image.PixelHeight<3 || image.PixelWidth>RegionProposal.MaxDimension ||

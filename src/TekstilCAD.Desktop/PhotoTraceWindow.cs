@@ -49,6 +49,7 @@ internal sealed class PhotoTraceWindow : Window
     private bool allowClose,closed,continuationBlocked;
     private CancellationTokenSource? pathCancellation;
     private CancellationTokenSource? sessionCancellation;
+    private PhotoRegionWindow.Continuation? regionContinuation;
 
     internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1,Func<bool>? sourceCurrent=null,Window? windowOwner=null)
     {
@@ -251,7 +252,9 @@ internal sealed class PhotoTraceWindow : Window
         { StatusForVerification.Text="Önce referansları seçin; bölge önerisi için çizgi noktaları boş olmalı.";return null; }
         if(image.PixelWidth<3 || image.PixelHeight<3)
         { StatusForVerification.Text="Bölge önerisi için görsel en az 3 × 3 piksel olmalı.";return null; }
-        return new PhotoRegionWindow(this,image,reviewOnly:SourcePurpose==PhotoSourcePurpose.GarmentReference);
+        var window=new PhotoRegionWindow(this,image,reviewOnly:SourcePurpose==PhotoSourcePurpose.GarmentReference);
+        if(SourcePurpose==PhotoSourcePurpose.FlatPattern && regionContinuation is { } saved)window.RestoreContinuation(saved);
+        return window;
     }
     private void OpenRegionSuggestion()
     {
@@ -262,9 +265,12 @@ internal sealed class PhotoTraceWindow : Window
             if(!closed && revision==DraftRevision && SourcePurpose==purpose)StatusForVerification.Text="Giysi bölgesi yalnız incelendi; ölçü, kalıp veya CAD değişikliği yapılmadı.";
             return;
         }
-        if(dialog.ShowDialog()!=true || dialog.SelectedContour is not { } contour)return;
+        var accepted=dialog.ShowDialog()==true;
+        regionContinuation=null;
+        if(!accepted || dialog.SelectedContour is not { } contour)return;
         if(closed || revision!=DraftRevision || !CanvasForVerification.SetRegionContourSuggestion(contour))
         { StatusForVerification.Text="Taslak değişti veya sınır geçersiz; öneri kullanılmadı.";return; }
+        regionContinuation=dialog.CaptureContinuation();
         var approximationNote=dialog.SelectedContourMaximumDeviation is double deviation ? $" Sadeleştirilmiş: kaynak noktalarının karşılık gelen kenara en büyük uzaklığı yaklaşık {deviation:0.###} önizleme pikseli; kayan nokta hesabı yaklaşık, kesin üst sınır değil. İnce ayrıntılar kaybolabilir, fiziksel hata ölçülmedi." : "";
         StatusForVerification.Text="Mavi sınır yalnız öneridir. Diğer bölgeler ve boşluklar aktarılmaz; inceleyip Yolu uygula seçin. Taslak açık kalır."+approximationNote;
         _=StartTraceTopologyReviewAsync(approximationNote);

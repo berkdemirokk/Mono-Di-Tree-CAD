@@ -11203,6 +11203,16 @@ internal static partial class DesktopVerification
             var approximate=window.TrySelectContourAsync(true);PumpUntil(()=>approximate.IsCompleted);
             Check(approximate.GetAwaiter().GetResult() && window.SelectedContour is { Length:>=3 and <=508 } && window.SelectedContourMaximumDeviation is double deviation && deviation<=1,
                 "Explicit approximation produces a bounded photo contour preview",checks);
+            var continuation=window.CaptureContinuation();
+            var reopened=new PhotoRegionWindow(workspace,bitmap) { ConfirmCloseForVerification=()=>true };
+            try {
+                Check(continuation is not null && reopened.RestoreContinuation(continuation) && reopened.Regions.Items.Count==window.Regions.Items.Count &&
+                    reopened.Regions.SelectedIndex==-1 && reopened.CopyMaskForVerification()!.SequenceEqual(window.CopyMaskForVerification()!) && reopened.SelectedContour is null,
+                    "Region continuation retains the mask but requires a fresh boundary selection",checks);
+                var otherImage=BitmapSource.Create(side,side,96,96,PixelFormats.Bgra32,null,pixels,side*4);otherImage.Freeze();
+                var other=new PhotoRegionWindow(workspace,otherImage) { ConfirmCloseForVerification=()=>true };
+                try { Check(!other.RestoreContinuation(continuation!),"Region continuation rejects a different image instance",checks); } finally { other.Close(); }
+            } finally { reopened.Close(); }
         } finally { window.Close();File.Delete(path); }
     }
     private static bool SelectContourForVerification(PhotoRegionWindow window)
