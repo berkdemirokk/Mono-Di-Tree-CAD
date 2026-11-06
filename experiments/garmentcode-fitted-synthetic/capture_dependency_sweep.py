@@ -1,5 +1,5 @@
 """Pinned-source, fixed-synthetic finite differences; no real-person input."""
-import contextlib, io, json, runpy, sys
+import contextlib, hashlib, io, json, runpy, sys
 from decimal import Decimal
 from pathlib import Path
 import numpy, scipy
@@ -8,7 +8,9 @@ with contextlib.redirect_stdout(io.StringIO()):
 run=env['run']; g=run.__globals__; base=dict(g['base'])
 fields=['bust','back_width','waist','waist_back_width','bust_points','shoulder_w','shoulder_incl','waist_line','waist_over_bust_line','bust_line','vert_bust_line','bum_points','neck_w','armscye_depth','hips','hip_back_width','hips_line','height','head_l','hip_inclination']
 with contextlib.redirect_stdout(io.StringIO()): baseline=run('synthetic-base')
-golden=json.loads((env['here']/'golden.json').read_text(encoding='utf-8-sig'))
+golden_text=(env['here']/'golden.json').read_text(encoding='utf-8-sig')
+if hashlib.sha256(golden_text.encode('utf-8')).hexdigest()!='7fc3c5dcf7ad38e33bc37ab6466290fe28e17cc375aff2af5f61d8ce66d4a207':raise RuntimeError('Golden fixture identity mismatch')
+golden=json.loads(golden_text)
 fixture=next(c for c in golden['cases'] if c['id']=='synthetic-base')
 if baseline['body_input_cm_degree']!=fixture['body_input_cm_degree'] or set(baseline['panels'])!=set(fixture['panels']):raise RuntimeError('Fixture baseline mismatch')
 # Only compare represented contour definitions, not serialized measurements,

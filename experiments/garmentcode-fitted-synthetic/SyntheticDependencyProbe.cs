@@ -42,6 +42,14 @@ internal static class SyntheticDependencyProbe
         }
         return output.AsReadOnly();
     }
+    internal static void CheckArtifactIdentity(string text, string expectedHash)
+    {
+        var normalized=text.TrimStart('\uFEFF').Replace("\r\n", "\n");
+        var actual=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(normalized)));
+        if (!StringComparer.Ordinal.Equals(actual,expectedHash)) throw new InvalidDataException("Dependency artifact identity mismatch");
+    }
+    internal const string TraceHash="4FE20E00F8F4F38307A6F43BB4C61F03804C7B88A18F5EDC9CBB450566C6216E";
+    internal const string GoldenHash="7FC3C5DCF7AD38E33BC37AB6466290FE28E17CC375AFF2AF5F61D8CE66D4A207";
     internal static void CompareSource(IReadOnlyList<Result> probe,JsonElement trace)
     {
         void Need(bool ok,string message) {if(!ok)throw new InvalidDataException(message);}

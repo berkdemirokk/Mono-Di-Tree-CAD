@@ -566,7 +566,14 @@ internal static class Validator
         Need(probe.All(x=>x.Change==(x.Field is "shoulder_incl" or "hip_inclination"?1m:.1m))&&probe.All(x=>x.ChangedPanels.Distinct().Count()==x.ChangedPanels.Count),"synthetic dependency perturbation");
         foreach(var row in probe)Console.WriteLine(FormattableString.Invariant($"synthetic dependency {row.Field}: delta={row.Change}, changed panels={string.Join(',',row.ChangedPanels)}; snapshot changed={row.SnapshotChanged}; diagnostic only."));
         using var source=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.source-dependency-sweep.json")??throw new InvalidDataException("Missing dependency source trace");
-        using var reader=new StreamReader(source);string json=reader.ReadToEnd();using var doc=JsonDocument.Parse(json);SyntheticDependencyProbe.CompareSource(probe,doc.RootElement);
+        using var reader=new StreamReader(source);string json=reader.ReadToEnd();
+        SyntheticDependencyProbe.CheckArtifactIdentity(json,SyntheticDependencyProbe.TraceHash);
+        using(var goldenStream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")??throw new InvalidDataException("Missing golden fixture"))
+        using(var goldenReader=new StreamReader(goldenStream)) SyntheticDependencyProbe.CheckArtifactIdentity(goldenReader.ReadToEnd(),SyntheticDependencyProbe.GoldenHash);
+        using var doc=JsonDocument.Parse(json);SyntheticDependencyProbe.CompareSource(probe,doc.RootElement);
+        void RejectArtifactMutation(string altered) {try {SyntheticDependencyProbe.CheckArtifactIdentity(altered,SyntheticDependencyProbe.TraceHash);throw new Exception("Mutated trace accepted");}catch(InvalidDataException) { }}
+        RejectArtifactMutation(json.Replace("\"skirt_back\": true", "\"skirt_back\": false",StringComparison.Ordinal));
+        RejectArtifactMutation(json.Replace("\"delta\": \"0.1\"", "\"delta\": \"9\"",StringComparison.Ordinal));
         var duplicated=JsonNode.Parse(json)!;duplicated["cases"]![1]!["field"]=duplicated["cases"]![0]!["field"]!.GetValue<string>();
         using(var bad=JsonDocument.Parse(duplicated.ToJsonString())) {try {SyntheticDependencyProbe.CompareSource(probe,bad.RootElement);throw new Exception("Duplicate dependency field accepted");}catch(InvalidDataException) { }}
         var enlarged=JsonNode.Parse(json)!;var hips=enlarged["cases"]!.AsArray().Single(x=>x!["field"]!.GetValue<string>()=="hips")!;
