@@ -309,10 +309,11 @@ internal sealed class ALinePanelPreviewWindow : Window
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Önce simetri ve kesit varsayımlarını inceleyin.");
                 var input=ReadInput();ValidateRequestFields(input);ValidateRequestTotals(input);_ = ALinePanelPreview.Create(input);reviewGate.Stage(input);
-                double[] normalized=[input.FrontWaistArc,input.BackWaistArc,input.FrontHipArc,input.BackHipArc,input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase,input.HipDepth,input.WaistToHem,input.FinishedHemCircumference];
-                string Both(double mm)=>$"{mm:G9} mm = {mm/10:G9} cm";
+                var normalized=fields.Select((field,i)=>ALineMeasurementReview.ParseLengthMm(field.Text,CurrentUnit(),i)).ToArray();
+                static string DecimalText(decimal value)=>value.ToString("0.############################",CultureInfo.InvariantCulture);
+                static string Both(decimal mm)=>$"{DecimalText(mm)} mm = {DecimalText(mm/10m)} cm";
                 summary.Text=string.Join(Environment.NewLine,labels.Select((label,i)=>label+": "+Both(normalized[i])))+
-                    $"\nBEDEN bel toplamı (bolluksuz): {Both(input.FrontWaistArc+input.BackWaistArc)}\nBEDEN kalça toplamı (bolluksuz): {Both(input.FrontHipArc+input.BackHipArc)}\nÖrneğin 72 mm yalnız 7,2 cm'dir. Bu kontrol beden ölçülerinin doğruluğunu veya makul olduğunu kanıtlamaz; yanlış birimi düzeltin.";
+                    $"\nBEDEN bel toplamı (bolluksuz): {Both(normalized[0]+normalized[1])}\nBEDEN kalça toplamı (bolluksuz): {Both(normalized[2]+normalized[3])}\nGirilen ondalık değerler gösterilir; geometri hesabında bilgisayar sayıları yaklaşık temsil edilebilir. Örneğin 72 mm yalnız 7,2 cm'dir. Bu kontrol beden ölçülerinin doğruluğunu veya makul olduğunu kanıtlamaz; yanlış birimi düzeltin.";
                 confirm.IsEnabled=true;status.Text="Özetin tamamını ölçü kaynağınızla karşılaştırıp onaylayın; henüz çizim yok.";
             }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { status.Text=ex.Message; }

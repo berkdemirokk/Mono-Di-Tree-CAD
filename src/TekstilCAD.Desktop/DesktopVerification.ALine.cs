@@ -161,6 +161,12 @@ internal static partial class DesktopVerification
             try
             {
                 sideDisplay.UnitForVerification.SelectedIndex=1;Fill(sideDisplay,false);sideDisplay.AgreementForVerification.IsChecked=true;
+                sideDisplay.FieldsForVerification[0].Text="360.0000001";Click(sideDisplay.ReviewForVerification);
+                Check(sideDisplay.SummaryForVerification.Text.Contains("Ön bel yayı: 360.0000001 mm = 36.00000001 cm") &&
+                    sideDisplay.SummaryForVerification.Text.Contains("720.0000001 mm = 72.00000001 cm") &&
+                    sideDisplay.SummaryForVerification.Text.Contains("geometri hesabında bilgisayar sayıları yaklaşık"),
+                    "Measurement review preserves entered decimal precision and exact decimal totals",checks);
+                sideDisplay.FieldsForVerification[0].Text="360";
                 ReviewAndDraw(sideDisplay);
                 Check(sideDisplay.StatusForVerification.Text.Contains("hesaplanan fark 0 mm") && sideDisplay.StatusForVerification.Text.Contains("yuvarlanır") && sideDisplay.StatusForVerification.Text.Contains("Dikiş eşleşmesi onaylanmadı"),"Equal side lengths report computed zero and rounding limits",checks);
                 sideDisplay.FieldsForVerification[3].Text="500.0010";ReviewAndDraw(sideDisplay);
