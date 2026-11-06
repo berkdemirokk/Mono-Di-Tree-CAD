@@ -1855,6 +1855,31 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(input.otherMeasurements, "bel çevresi 72 cm")
         }
     }
+    func testSingleMessageWithExplicitMeasurementsJoinedByVe() throws {
+        func draft(_ description: String, waist: String = "") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: description, bust: "", waist: waist, hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        }
+        for space in [" ", "\u{00A0}", "\u{202F}"] {
+            let text = "A kesim elbise istiyorum, göğüs çevresi 92 cm\(space)ve\(space)bel çevresi 72 cm"
+            let original = draft(text)
+            XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(original), .aline)
+            let proposal = try XCTUnwrap(ExperimentalDesignBrief.descriptionMeasurements(original))
+            XCTAssertEqual(proposal.values, ["göğüs çevresi": "92 cm", "bel çevresi": "72 cm"])
+            XCTAssertEqual(proposal.source, text); XCTAssertEqual(original.description, text)
+            XCTAssertNil(ExperimentalDesignBrief.descriptionMeasurements(draft(text, waist: "72 cm")))
+        }
+        for text in [
+            "A kesim elbise istiyorum, bel çevresi 72 cm ve bel çevresi 90 cm",
+            "A kesim elbise istiyorum, bel çevresi 72 cm ve kalça çevresi 100 cm değil",
+            "A kesim elbise istiyorum, bel çevresi 72 cm veya kalça çevresi 100 cm",
+            "A kesim elbise istiyorum, bel çevresi 72 cm ve",
+            "A kesim elbise istiyorum, bel çevresi 72 cm ve bilinmeyen",
+            "A kesim elbise istiyorum, bel çevresi 1,000 mm ve kalça çevresi 100 cm"
+        ] {
+            XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft(text)), text)
+            XCTAssertNil(ExperimentalDesignBrief.descriptionMeasurements(draft(text)), text)
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

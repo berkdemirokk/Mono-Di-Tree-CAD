@@ -140,16 +140,24 @@ enum ExperimentalDesignBrief {
             "yakalı": ("yaka", "var"), "yakasız": ("yaka", "yok")
         ]
         guard let detailPattern = try? NSRegularExpression(pattern: #"(?:uzun[\t\p{Zs}]+kollu|kısa[\t\p{Zs}]+kollu|kolsuz|ipek|pamuklu|keten|midi|sade|yakalı|yakasız)"#),
-              let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[\t\p{Zs}]+çevresi|bel[\t\p{Zs}]+çevresi|kalça[\t\p{Zs}]+çevresi|elbise[\t\p{Zs}]+boyu)[\t\p{Zs}]*(?::|=)?[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(cm|mm)"#) else { return false }
+              let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[\t\p{Zs}]+çevresi|bel[\t\p{Zs}]+çevresi|kalça[\t\p{Zs}]+çevresi|elbise[\t\p{Zs}]+boyu)[\t\p{Zs}]*(?::|=)?[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(cm|mm)"#),
+              let conjunctionPattern = try? NSRegularExpression(pattern: #"ve[\t\p{Zs}]+"#) else { return false }
         let source = text as NSString
-        var cursor = 0, observedDetails: [String: String] = [:], observedMeasures: [String: Decimal] = [:]
+        var cursor = 0, parsedAny = false, observedDetails: [String: String] = [:], observedMeasures: [String: Decimal] = [:]
         let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;."))
         while cursor < source.length {
             let separatorStart = cursor
             while cursor < source.length, let scalar = UnicodeScalar(source.character(at: cursor)), separators.contains(scalar) { cursor += 1 }
             if cursor == source.length { break }
             let separator = source.substring(with: NSRange(location: separatorStart, length: cursor - separatorStart))
-            let separatedExplicitly = separator.rangeOfCharacter(from: CharacterSet(charactersIn: ",;.\n\r")) != nil
+            var separatedExplicitly = separator.rangeOfCharacter(from: CharacterSet(charactersIn: ",;.\n\r")) != nil
+            // Only a complete, whitespace-delimited “ve” between already parsed and next complete phrases.
+            if parsedAny && separator.range(of: #"\A[\t\p{Zs}]+\z"#, options: .regularExpression) != nil,
+               let conjunction = conjunctionPattern.firstMatch(in: text, options: .anchored, range: NSRange(location: cursor, length: source.length - cursor)) {
+                cursor = NSMaxRange(conjunction.range)
+                guard cursor < source.length else { return false }
+                separatedExplicitly = true
+            }
             let region = NSRange(location: cursor, length: source.length - cursor)
             if let match = measurePattern.firstMatch(in: text, options: .anchored, range: region) {
                 let label = source.substring(with: match.range(at: 1)).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
@@ -167,6 +175,7 @@ enum ExperimentalDesignBrief {
                 if let previous = observedDetails[category], previous != value { return false }
                 observedDetails[category] = value; cursor = NSMaxRange(match.range)
             } else { return false }
+            parsedAny = true
             // Require a separator between complete phrases; do not accept a
             // recognized prefix of an unknown or contradictory expression.
             if cursor < source.length {
