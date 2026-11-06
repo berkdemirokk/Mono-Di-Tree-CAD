@@ -3534,12 +3534,12 @@ private struct ExperimentalDesignBriefView: View {
                     if ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) {
                         Text("Seçilen model ile tarifteki model bilgisini kontrol edin.").font(.caption).foregroundStyle(plum)
                     }
-                    Button("Örnek modellere git") {
-                        focusedInput = nil; requestScroll.scrollTo("request-models", anchor: .top)
-                        focusedBriefSection = .models
+                    Button("Tarife git") {
+                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
+                        focusedBriefSection = .description
                     }
                         .frame(minHeight: 44)
-                        .accessibilityHint("Model kartlarına kaydırır.")
+                        .accessibilityHint("Elbise tarifi alanına kaydırır.")
                     Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         .accessibilityAddTraits(.isHeader).id("request-models")
                         .accessibilityFocused($focusedBriefSection, equals: .models)
@@ -3569,6 +3569,11 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. Ayrıntıları aşağıda düzenleyebilirsiniz.").font(.caption)
                     Text("Nasıl bir elbise istiyorsun?").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
                         .id("request-description").accessibilityFocused($focusedBriefSection, equals: .description)
+                    Button("Örnek modellere dön") {
+                        focusedInput = nil; requestScroll.scrollTo("request-models", anchor: .top)
+                        focusedBriefSection = .models
+                    }
+                        .frame(minHeight: 44).accessibilityHint("Model kartlarına kaydırır.")
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: A kesim, midi boy ve uzun kollu bir elbise istiyorum.").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
