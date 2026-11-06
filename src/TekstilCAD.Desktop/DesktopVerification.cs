@@ -11112,7 +11112,7 @@ internal static partial class DesktopVerification
             Check(session.Undo() && DocumentSession.ContentEquals(initial,workspace.Document) && session.Redo() && DocumentSession.ContentEquals(added,workspace.Document),
                 "Manual photo draft participates in undo and redo",checks);
             var closureContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(workspace.Dispatcher));
-            var closureOwner=new Window { Owner=workspace };
+            var closureOwner=new Window { Owner=workspace };_ = new WindowInteropHelper(closureOwner).EnsureHandle();
             var photoClosure=workspace.CreatePhotoTraceClosure(closureRequested ?? throw new InvalidOperationException("Photo closure source was not requested."),closureOwner)!;
             try
             {
@@ -11813,7 +11813,7 @@ internal static partial class DesktopVerification
                 Check(invalidTask.GetAwaiter().GetResult() is null && notes.TraceStatusForVerification.Text.Contains("açılamadı") && DocumentSession.ContentEquals(before,studio.Document),
                     "Direct photo tracing reports invalid stored image without changing the project",checks);
                 var bytes=EncodePhoto(32,16,false);var expectedHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
-                var unsaved=new DesignRequestWindow(studio);var unsavedClosed=false;unsaved.Closed+=(_,_)=>unsavedClosed=true;
+                var unsaved=new DesignRequestWindow(studio);_ = new WindowInteropHelper(unsaved).EnsureHandle();var unsavedClosed=false;unsaved.Closed+=(_,_)=>unsavedClosed=true;
                 unsaved.LoadForVerification(new DesignRequest("Özgün tarif","72 cm",new DesignReference("foto.png","image/png",bytes)));
                 unsaved.PromptForVerification.Text="Kaydedilmemiş tarif";
                 unsaved.ConfirmDiscardForVerification=_=>true;
@@ -11829,7 +11829,7 @@ internal static partial class DesktopVerification
                     unsaved.MeasurementsForVerification.Text="72 cm";
                     Check(!preview.TraceSourceCurrentForVerification!(),"Restoring old request values does not revive stale photo source",checks);
                     Check(!unsaved.ClosingAllowedForVerification(),"Open photo preview prevents source request from closing",checks);
-                    var stalePreview=unsaved.CreateUnsavedPhotoPreview()!;var stalePreviewClosed=false;stalePreview.Closed+=(_,_)=>stalePreviewClosed=true;
+                    var stalePreview=unsaved.CreateUnsavedPhotoPreview()!;_ = new WindowInteropHelper(stalePreview).EnsureHandle();var stalePreviewClosed=false;stalePreview.Closed+=(_,_)=>stalePreviewClosed=true;
                     try
                     {
                         var stamp=studio.CapturePhotoTrace()!;
