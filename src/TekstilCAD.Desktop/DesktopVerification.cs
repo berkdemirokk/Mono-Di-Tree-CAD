@@ -11254,9 +11254,12 @@ internal static partial class DesktopVerification
                     } finally { dialog.Close(); }
                 };
                 trace.OpenRegionSuggestionForVerification();
+                PumpUntil(()=>!trace.PathOperationRunningForVerification);
                 var proposal=trace.CanvasForVerification.PathSuggestion?.ToArray();
                 var draftRevision=trace.DraftRevision;
+                var cancellationDialogReached=false;
                 trace.RegionDialogForVerification=dialog=> {
+                    cancellationDialogReached=true;
                     dialog.ConfirmCloseForVerification=()=>true;
                     try {
                         Check(dialog.CopyMaskForVerification()!.SequenceEqual(window.CopyMaskForVerification()!),
@@ -11265,7 +11268,8 @@ internal static partial class DesktopVerification
                     } finally { dialog.Close(); }
                 };
                 trace.OpenRegionSuggestionForVerification();
-                var afterCancel=trace.CreateRegionWindow()!;afterCancel.ConfirmCloseForVerification=()=>true;
+                Check(cancellationDialogReached,"Reopened mask dialog actually reaches the cancellation action",checks);
+                var afterCancel=trace.CreateRegionWindow() ?? throw new InvalidOperationException("Region window unavailable after completed review and cancellation.");afterCancel.ConfirmCloseForVerification=()=>true;
                 try {
                     Check(afterCancel.CopyMaskForVerification() is { } retained && retained.SequenceEqual(window.CopyMaskForVerification()!) &&
                         afterCancel.Regions.SelectedIndex==-1 && afterCancel.SelectedContour is null && proposal is not null &&

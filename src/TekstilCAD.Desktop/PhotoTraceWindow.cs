@@ -51,6 +51,7 @@ internal sealed class PhotoTraceWindow : Window
     private readonly Label referenceLabel=new() { Foreground=DesignRequestWindow.Ink };
     private bool allowClose,closed,continuationBlocked;
     private CancellationTokenSource? pathCancellation;
+    internal bool PathOperationRunningForVerification => pathCancellation is not null;
     private CancellationTokenSource? sessionCancellation;
     private PhotoRegionWindow.Continuation? regionContinuation;
     internal Func<PhotoRegionWindow,bool?>? RegionDialogForVerification { get; set; }
