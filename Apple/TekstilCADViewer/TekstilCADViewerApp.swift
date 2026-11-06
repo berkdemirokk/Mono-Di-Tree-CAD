@@ -2576,6 +2576,8 @@ private struct ExperimentalDesignBriefView: View {
     @State private var measurementProposal: MeasurementMessageParser.Proposal?
     @State private var messageMeasurementSnapshot: ExperimentalDesignBrief.MessageMeasurementSuggestion?
     @State private var descriptionMeasurementSuggestion: ExperimentalDesignBrief.DescriptionMeasurementSuggestion?
+    @State private var combinedDescriptionReview: ExperimentalDesignBrief.CombinedDescriptionReview?
+    @State private var showCombinedDescriptionReview = false
     @State private var showDescriptionMeasurements = false
     @State private var modelSuggestion: ExperimentalDesignBrief.ModelSuggestion?
     @State private var showModelSuggestion = false
@@ -3177,6 +3179,34 @@ private struct ExperimentalDesignBriefView: View {
     private func parseMeasurementMessage() throws -> MeasurementMessageParser.Proposal {
         try ExperimentalDesignBrief.measurementMessageProposal(draft)
     }
+    private func proposeCombinedDescription() {
+        guard !draftTransition, !referenceBlocksClose,
+              let proposal = ExperimentalDesignBrief.combinedDescriptionProposal(draft) else {
+            measurementMessageStatus = "Model ve ölçüler birlikte güvenle önerilemedi. Tek bir model adı, açık cm/mm ölçüleri ve mevcut alanları kontrol edin; hiçbir şey değiştirilmedi."
+            return
+        }
+        combinedDescriptionReview = .init(draft: draft, proposal: proposal, explicitSelection: modelExplicitlySelected,
+            importedPortable: importedPortable, version: requestExportVersion, revision: referenceRevision.token)
+        measurementMessageStatus = ""; showCombinedDescriptionReview = true
+    }
+    private func applyCombinedDescription() {
+        guard let review = combinedDescriptionReview else { return }
+        combinedDescriptionReview = nil
+        guard review.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+                             version: requestExportVersion, revision: referenceRevision.token,
+                             referencePending: referenceBlocksClose, transition: draftTransition) else {
+            measurementMessageStatus = "Taslak veya seçim değişti; model ve ölçüler uygulanmadı. Tekrar inceleyin."
+            return
+        }
+        let values = review.proposal.measurements.values
+        referenceRevision.changed()
+        style = review.proposal.model; modelExplicitlySelected = true; importedPortable = false
+        if let value = values["göğüs çevresi"] { bust = value }
+        if let value = values["bel çevresi"] { waist = value }
+        if let value = values["kalça çevresi"] { hips = value }
+        if let value = values["elbise boyu"] { length = value }
+        measurementMessageStatus = "Onaylanan model ve ölçüler eklendi. Özgün tarif ve görsel korundu; bu işlem kalıp oluşturmaz."
+    }
     private func proposeDescriptionMeasurements() {
         guard !draftTransition, !referenceDecisionPending,
               let proposal = ExperimentalDesignBrief.descriptionMeasurements(draft) else {
@@ -3601,6 +3631,8 @@ private struct ExperimentalDesignBriefView: View {
                         .frame(minHeight: 44).accessibilityHint("Model kartlarına kaydırır.")
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: \(ExperimentalDesignBrief.modelSuggestionExample)").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
+                    Button("Modeli ve ölçüleri birlikte incele") { proposeCombinedDescription() }.frame(minHeight: 44)
+                    Text("Tek bir açık model ve birimli ölçüler tanınırsa birlikte onayınıza sunulur; tarifiniz korunur.").font(.caption)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
                     Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
                     Text("Yalnız tamamı tanınan açık bir tarifteki ölçüler önerilir. Onaylamadan alanlar değişmez; tarif aynen kalır.").font(.caption)
@@ -4035,6 +4067,14 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Tarif olarak koru") { referenceRevision.changed(); style = .describe; modelExplicitlySelected = true }
                 Button("Açıklamayı gözden geçir", role: .cancel) { }
             } message: { Text("Dosyadaki önceki model açıklaması silinmez. Yeni bir model seçmek için önce açıklamadaki model satırını kendiniz düzenleyin; aksi halde tarif olarak koruyun.") }
+            .confirmationDialog("Model ve ölçü önerisini inceleyin", isPresented: $showCombinedDescriptionReview, titleVisibility: .visible) {
+                Button("Modeli ve ölçüleri uygula") { applyCombinedDescription() }
+                Button("Vazgeç", role: .cancel) { combinedDescriptionReview = nil }
+            } message: {
+                Text("Önerilen model: \(combinedDescriptionReview?.proposal.model.rawValue ?? "")")
+                Text(combinedDescriptionReview?.proposal.measurements.preview ?? "Ölçü bulunamadı.")
+                Text("Yalnız boş alanlara eklenir. Özgün tarif ve görsel korunur; kalıp oluşturulmaz.")
+            }
             .confirmationDialog("Model önerisini inceleyin", isPresented: $showModelSuggestion, titleVisibility: .visible) {
                 Button("Önerilen modeli seç") { applyModelSuggestion() }
                 Button("Vazgeç", role: .cancel) { modelSuggestion = nil }

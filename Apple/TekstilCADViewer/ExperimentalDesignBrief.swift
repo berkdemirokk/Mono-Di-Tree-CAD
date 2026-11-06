@@ -211,6 +211,30 @@ enum ExperimentalDesignBrief {
         guard !values.isEmpty else { return nil }
         return MeasurementMessageParser.Proposal(source: draft.description, values: values)
     }
+    struct CombinedDescriptionProposal: Equatable {
+        let model: DressStyle
+        let measurements: MeasurementMessageParser.Proposal
+    }
+    static func combinedDescriptionProposal(_ draft: Draft) -> CombinedDescriptionProposal? {
+        guard draft.aLineGuideInput == nil, draft.measurementForm?.hasValues != true,
+              let model = suggestedModel(draft),
+              let measurements = descriptionMeasurements(draft), measurements.isApplicable else { return nil }
+        return .init(model: model, measurements: measurements)
+    }
+    struct CombinedDescriptionReview {
+        let draft: Draft
+        let proposal: CombinedDescriptionProposal
+        let explicitSelection: Bool
+        let importedPortable: Bool
+        let version: Int
+        let revision: UUID
+        func matches(_ current: Draft, explicitSelection: Bool, importedPortable: Bool, version: Int,
+                     revision: UUID, referencePending: Bool, transition: Bool) -> Bool {
+            !referencePending && !transition && draft == current && self.explicitSelection == explicitSelection
+                && self.importedPortable == importedPortable && self.version == version && self.revision == revision
+                && ExperimentalDesignBrief.combinedDescriptionProposal(current) == proposal
+        }
+    }
     /// Cross-check a proposed message with the description; unknown or qualified
     /// references are rejected rather than interpreted as body measurements.
     static func measurementMessageProposal(_ draft: Draft) throws -> MeasurementMessageParser.Proposal {

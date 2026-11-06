@@ -1897,6 +1897,43 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum", notes: "bel çevresi 72 cm", waist: "720 mm")))
         XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum, bel çevresi 72 cm ve kalça çevresi 100 cm")), .aline)
     }
+    func testCombinedDescriptionReviewRequiresCurrentCompleteSafeProposal() throws {
+        let originalText = "A kesim elbise istiyorum, göğüs çevresi 92 cm ve bel çevresi 72 cm"
+        func draft(_ text: String, style: ExperimentalDesignBrief.DressStyle = .describe, waist: String = "", hips: String = "", image: Data? = nil) -> ExperimentalDesignBrief.Draft {
+            .init(style: style, description: text, bust: "", waist: waist, hips: hips, length: "", otherMeasurements: "", image: image, imageName: image == nil ? nil : "foto.png")
+        }
+        let original = draft(originalText, hips: "98 cm")
+        let proposal = try XCTUnwrap(ExperimentalDesignBrief.combinedDescriptionProposal(original))
+        XCTAssertEqual(proposal.model, .aline)
+        XCTAssertEqual(proposal.measurements.values, ["göğüs çevresi": "92 cm", "bel çevresi": "72 cm"])
+        XCTAssertEqual(proposal.measurements.source, originalText)
+        XCTAssertEqual(original.hips, "98 cm"); XCTAssertEqual(original.description, originalText)
+        let revision = UUID()
+        let review = ExperimentalDesignBrief.CombinedDescriptionReview(draft: original, proposal: proposal, explicitSelection: false, importedPortable: false, version: 1, revision: revision)
+        func matches(_ current: ExperimentalDesignBrief.Draft, revision r: UUID = revision, referencePending: Bool = false, transition: Bool = false) -> Bool {
+            review.matches(current, explicitSelection: false, importedPortable: false, version: 1, revision: r, referencePending: referencePending, transition: transition)
+        }
+        XCTAssertTrue(matches(original))
+        XCTAssertFalse(matches(original, revision: UUID()))
+        XCTAssertFalse(matches(original, referencePending: true)); XCTAssertFalse(matches(original, transition: true))
+        XCTAssertFalse(review.matches(original, explicitSelection: true, importedPortable: false, version: 1, revision: revision, referencePending: false, transition: false))
+        XCTAssertFalse(review.matches(original, explicitSelection: false, importedPortable: true, version: 1, revision: revision, referencePending: false, transition: false))
+        XCTAssertFalse(review.matches(original, explicitSelection: false, importedPortable: false, version: 2, revision: revision, referencePending: false, transition: false))
+        XCTAssertFalse(matches(draft(originalText + " ", hips: "98 cm")))
+        XCTAssertFalse(matches(draft(originalText, hips: "98 cm", image: Data([1]))))
+        XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(originalText, waist: "72 cm")))
+        XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(originalText, style: .wrap)))
+        for text in [originalText + " değil", originalText + "?", "eğer " + originalText,
+                     originalText + ", bel çevresi 72 cm", "A kesim elbise istiyorum, bel çevresi 1,000 mm"] {
+            XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(text)), text)
+        }
+        var pending = original
+        pending.aLineGuideInput = .init(values: ["36"] + Array(repeating: "", count: 10), unit: "cm")
+        XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(pending))
+        var pendingForm = original
+        pendingForm.measurementForm = .init(values: ["72"] + Array(repeating: "", count: 14), unit: "cm")
+        XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(pendingForm))
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))
