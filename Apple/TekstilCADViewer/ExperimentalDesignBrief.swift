@@ -138,9 +138,9 @@ enum ExperimentalDesignBrief {
             "uzun kollu": ("kol", "uzun"), "kısa kollu": ("kol", "kısa"), "kolsuz": ("kol", "yok"),
             "ipek": ("kumaş", "ipek"), "pamuklu": ("kumaş", "pamuklu"), "keten": ("kumaş", "keten"),
             "midi": ("boy", "midi"), "midi boy": ("boy", "midi"), "sade": ("stil", "sade"),
-            "yakalı": ("yaka", "var"), "yakasız": ("yaka", "yok")
+            "yakalı": ("yaka", "var"), "yakasız": ("yaka", "yok"), "v yaka": ("yaka", "v")
         ]
-        guard let detailPattern = try? NSRegularExpression(pattern: #"(?:uzun[\t\p{Zs}]+kollu|kısa[\t\p{Zs}]+kollu|kolsuz|ipek|pamuklu|keten|midi(?:[\t\p{Zs}]+boy)?|sade|yakalı|yakasız)"#),
+        guard let detailPattern = try? NSRegularExpression(pattern: #"(?:uzun[\t\p{Zs}]+kollu|kısa[\t\p{Zs}]+kollu|kolsuz|ipek|pamuklu|keten|midi(?:[\t\p{Zs}]+boy)?|sade|yakalı|yakasız|v[\t\p{Zs}]+yaka)"#),
               let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[\t\p{Zs}]+çevresi|bel[\t\p{Zs}]+çevresi|kalça[\t\p{Zs}]+çevresi|elbise[\t\p{Zs}]+boyu)[\t\p{Zs}]*(?::|=)?[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(cm|mm)"#),
               let conjunctionPattern = try? NSRegularExpression(pattern: #"ve[\t\p{Zs}]+"#) else { return false }
         let source = text as NSString

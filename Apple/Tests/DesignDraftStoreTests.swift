@@ -1957,6 +1957,35 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(text)), text)
         }
     }
+    func testCombinedDescriptionRecognizesVYakaAndPreservesReviewSafety() throws {
+        func draft(_ text: String, waist: String = "", style: ExperimentalDesignBrief.DressStyle = .describe) -> ExperimentalDesignBrief.Draft {
+            .init(style: style, description: text, bust: "", waist: waist, hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        }
+        for space in [" ", "\u{00A0}", "\u{202F}"] {
+            let text = "A kesim elbise istiyorum, V\(space)yaka ve bel çevresi 72 cm"
+            let original = draft(text)
+            let proposal = try XCTUnwrap(ExperimentalDesignBrief.combinedDescriptionProposal(original))
+            XCTAssertEqual(proposal.model, .aline)
+            XCTAssertEqual(proposal.measurements.values, ["bel çevresi": "72 cm"])
+            XCTAssertEqual(proposal.measurements.source, text); XCTAssertEqual(original.description, text)
+            XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(text, waist: "72 cm")))
+            XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(text, style: .wrap)))
+            let revision = UUID()
+            let review = ExperimentalDesignBrief.CombinedDescriptionReview(draft: original, proposal: proposal, explicitSelection: false, importedPortable: false, version: 1, revision: revision)
+            XCTAssertTrue(review.matches(original, explicitSelection: false, importedPortable: false, version: 1, revision: revision, referencePending: false, transition: false))
+            XCTAssertFalse(review.matches(draft(text + " "), explicitSelection: false, importedPortable: false, version: 1, revision: revision, referencePending: false, transition: false))
+            XCTAssertFalse(review.matches(original, explicitSelection: false, importedPortable: false, version: 1, revision: UUID(), referencePending: false, transition: false))
+        }
+        for text in [
+            "A kesim elbise istiyorum, V yaka değil ve bel çevresi 72 cm",
+            "eğer uygunsa A kesim elbise istiyorum, V yaka ve bel çevresi 72 cm",
+            "A kesim elbise istiyorum, V yaka ve yakasız ve bel çevresi 72 cm",
+            "A kesim elbise istiyorum, V yakalı ve bel çevresi 72 cm",
+            "A kesim elbise istiyorum, V yaka ve bel çevresi 72 cm ve bel çevresi 90 cm"
+        ] {
+            XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(text)), text)
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))
