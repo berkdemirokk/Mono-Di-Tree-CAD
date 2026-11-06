@@ -11152,6 +11152,34 @@ internal static partial class DesktopVerification
             typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close();
         }
         VerifyPhotoTraceOwnerClose(reportPath,checks);
+        VerifyPhotoTraceContinuation(checks);
+    }
+
+    private static void VerifyPhotoTraceContinuation(List<string> checks)
+    {
+        var session=new DocumentSession(new ProjectDocument { Name="Fotoğraf devam testi" });var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
+        var bitmap=BitmapSource.Create(100,100,96,96,PixelFormats.Bgra32,null,new byte[100*100*4],400);bitmap.Freeze();
+        byte[] photo;using(var stream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(stream);photo=stream.ToArray(); }
+        var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,100,100,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),photo.Length);
+        try
+        {
+            trace.SourcePurposeForVerification.SelectedIndex=1;trace.LengthForVerification.Text="100";
+            var canvas=trace.CanvasForVerification;
+            var reference=new[] { new Point(10,10),new Point(90,10) };
+            foreach(var point in reference.Concat(new[] { new Point(20,20),new Point(40,20),new Point(40,40) }))canvas.TryAddPixelPoint(point);
+            trace.ConfirmForVerification=_=>false;trace.TryApplyAndContinue();
+            Check(workspace.Document.Pieces.Count==0 && canvas.Points.Count==5,"Cancelled photo continuation preserves the trace",checks);
+            trace.ConfirmForVerification=_=>true;trace.TryApplyAndContinue();
+            Check(workspace.Document.Pieces.Count==1 && canvas.Points.SequenceEqual(reference) && trace.LengthForVerification.Text=="100",
+                "Photo continuation adds one open draft and preserves calibration",checks);
+            canvas.TryAddPixelPoint(new Point(50,50));canvas.TryAddPixelPoint(new Point(70,50));trace.TryApplyAndContinue();
+            Check(workspace.Document.Pieces.Count==2 && workspace.Document.Pieces.All(p=>!p.Closed) && workspace.Document.PhotoTraceHistory is { Count:2 } && canvas.Points.SequenceEqual(reference),
+                "Consecutive photo drafts retain independent provenance",checks);
+            canvas.TryAddPixelPoint(new Point(50,60));canvas.TryAddPixelPoint(new Point(70,60));workspace.Commit("test",()=>workspace.Document.Name="Değişti");trace.TryApplyAndContinue();
+            Check(workspace.Document.Pieces.Count==2 && canvas.Points.Count==4 && trace.StatusForVerification.Text.Contains("değişti"),
+                "Changed project rejects a later photo draft without clearing it",checks);
+        }
+        finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close();typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close(); }
     }
 
     private static void VerifyDenseRegionApproximation(MainWindow workspace,string reportPath,List<string> checks)

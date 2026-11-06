@@ -17,7 +17,7 @@ internal enum PhotoSourcePurpose { Unspecified, GarmentReference, FlatPattern }
 internal sealed class PhotoTraceWindow : Window
 {
     private readonly MainWindow workspace;
-    private readonly MainWindow.PhotoTraceStamp stamp;
+    private MainWindow.PhotoTraceStamp stamp;
     private readonly Func<bool>? sourceCurrent;
     private readonly BitmapSource image;
     private readonly int sourceWidth,sourceHeight;
@@ -46,7 +46,7 @@ internal sealed class PhotoTraceWindow : Window
     internal Action<CancellationToken>? BeforeTopologyReviewForVerification { get; set; }
     internal (double Width,double Height)? PlaneSettings { get; private set; }
     private readonly Label referenceLabel=new() { Foreground=DesignRequestWindow.Ink };
-    private bool allowClose,closed;
+    private bool allowClose,closed,continuationBlocked;
     private CancellationTokenSource? pathCancellation;
     private CancellationTokenSource? sessionCancellation;
 
@@ -63,11 +63,12 @@ internal sealed class PhotoTraceWindow : Window
         ApplyForVerification=apply;
         AutomationProperties.SetHelpText(apply,"Seçilen ve açıkça kabul edilen noktalarla açık çizgiyi CAD'e ekler; kalıp ve üretim uygunluğu doğrulanmaz.");
         var traceMenu=new ContextMenu();
+        var addContinue=new MenuItem { Header="CAD'e ekle ve çizime devam et" };addContinue.Click+=(_,_)=>TryApplyAndContinue();traceMenu.Items.Add(addContinue);
         var saveTrace=new MenuItem { Header="Çizgiyi kaydet…" };saveTrace.Click+=(_,_)=>_ = SaveTraceDialogAsync();traceMenu.Items.Add(saveTrace);
         var loadTrace=new MenuItem { Header="Çizgiyi aç…" };loadTrace.Click+=(_,_)=>_ = LoadTraceDialogAsync();traceMenu.Items.Add(loadTrace);
         var cancelTrace=new MenuItem { Header="Dosya işlemini iptal et" };cancelTrace.Click+=(_,_)=> { sessionCancellation?.Cancel();StatusForVerification.Text="İptal istendi; tamamlanmış kayıt geri alınmaz."; };traceMenu.Items.Add(cancelTrace);
         var traceFiles=Action("⋯",()=> { traceMenu.IsOpen=true; });actions.Children.Remove(traceFiles);traceFiles.Width=25;traceFiles.Padding=new Thickness(0);traceFiles.Margin=new Thickness(1,0,0,4);traceMenu.PlacementTarget=traceFiles;AutomationProperties.SetName(traceFiles,"Çizgi dosyası");
-        AutomationProperties.SetHelpText(traceFiles,"Referans ve çizgi noktalarını kaydedin veya aynı fotoğrafa ait taslağı açın. Fotoğraf ve bölge maskesi dosyaya dahil değildir.");
+        AutomationProperties.SetHelpText(traceFiles,"CAD'e ekleyip aynı referanslarla çizime devam edin veya çizgi dosyasını kaydedin ve açın. Fotoğraf ve bölge maskesi dosyaya dahil değildir.");
         Action("Kapat",Close);
         var region=Action("Bölge…",OpenRegionSuggestion);RegionForVerification=region;
         AutomationProperties.SetHelpText(region,"Dikdörtgen içinden deneysel renk bölgesi önerir. Giysi fotoğrafında yalnız inceleme yapılır; düz kalıp görselinde sınır ayrıca önizlenebilir. Üretim doğruluğu göstermez.");
@@ -462,9 +463,12 @@ internal sealed class PhotoTraceWindow : Window
             if(ReviewClosureForVerification.IsChecked==true)StatusForVerification.Text+=" Kapanış kenarı önizlemedir; taslak açık kalır.";
         }
     }
-    internal void TryApply()
+    internal void TryApply()=>TryApplyCore(false);
+    internal void TryApplyAndContinue()=>TryApplyCore(true);
+    private void TryApplyCore(bool keepOpen)
     {
         if(sourceCurrent is not null && !sourceCurrent()) { StatusForVerification.Text="Kaynak istek veya fotoğraf değişti ya da kapandı; taslak projeye eklenmedi.";return; }
+        if(continuationBlocked) { StatusForVerification.Text="Önceki çizgi eklendi; proje durumu değiştiği için devam edilemiyor. Gerekirse çizgiyi kaydedip pencereyi kapatın.";return; }
         if(SourcePurpose!=PhotoSourcePurpose.FlatPattern) { StatusForVerification.Text="CAD'e ölçekli taslak eklemek için düz serilmiş kalıp görselini seçin; giysi/model referansı kalıp değildir.";return; }
         try
         {
@@ -472,6 +476,7 @@ internal sealed class PhotoTraceWindow : Window
             var referenceCount=CanvasForVerification.ReferencePointCount;
             if(p.Count<referenceCount+2) { StatusForVerification.Text="Referans noktalarını ve en az iki çizgi noktası seçin.";return; }
             var reviewClosure=ReviewClosureForVerification.IsChecked==true;
+            if(keepOpen && reviewClosure) { StatusForVerification.Text="Çizime devam etmek için kapatma incelemesini kaldırın; kapanışı incelemek için CAD'e taslak ekle seçeneğini kullanın.";return; }
             if(reviewClosure && p.Count<referenceCount+3) { StatusForVerification.Text="Kapanışı incelemek için en az üç çizgi noktası seçin.";return; }
             if(string.IsNullOrEmpty(sourceSha256) || sourceByteLength<=0) { StatusForVerification.Text="Fotoğraf kaynak kimliği bulunamadı; taslak eklenmedi.";return; }
             if(!MeasurementInput.TryParseMillimeters(LengthForVerification.Text,out var mm) || mm<=0) { StatusForVerification.Text="Bilinen mesafeyi pozitif milimetre olarak girin.";return; }
@@ -499,13 +504,20 @@ internal sealed class PhotoTraceWindow : Window
             var calibrationNotice=plane is null ? $"Referans uçları önizlemede {MeasurementInput.Format(distance)} piksel aralığında. Kısa bir referans, nokta seçme hatasını büyütebilir; mümkünse daha uzun bir referans seçin." :
                 $"Düzlem referansı {MeasurementInput.Format(plane.WidthMm)} × {MeasurementInput.Format(plane.HeightMm)} mm. Dört köşe ve çizgi aynı düzlemde olmalı; seçilen köşeler doğru sırada ve ölçüler gerçek olmalıdır. Lens bozulması ve kumaş dökümü düzeltilmez.";
             var version=plane is null ? 8 : 9;
-            var question=$"{calibrationNotice}\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Görsel türü seçimi proje geçmişine kaydedilmez. Fotoğraf özeti, boyutlar, işaretler ve referans proje biçimi {version} ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion}{closureNotice} Devam edilsin mi?";
+            var continueNotice=keepOpen ? "\n\nÇizgi eklendikten sonra çizgi noktaları temizlenecek; fotoğraf ve ölçü referansları yeni çizgi için korunacak. Her çizgi bağımsız açık taslaktır; iç boşluk olarak kaydedilmez." : "";
+            var question=$"{calibrationNotice}\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Görsel türü seçimi proje geçmişine kaydedilmez. Fotoğraf özeti, boyutlar, işaretler ve referans proje biçimi {version} ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion}{closureNotice}{continueNotice} Devam edilsin mi?";
             var approvedRevision=DraftRevision;
             var confirmed=ConfirmForVerification?.Invoke(question) ?? (MessageBox.Show(this,question,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!confirmed) { StatusForVerification.Text="İşlem iptal edildi; proje değiştirilmedi.";return; }
             if(sourceCurrent is not null && !sourceCurrent()) { StatusForVerification.Text="Kaynak istek veya fotoğraf değişti ya da kapandı; taslak projeye eklenmedi.";return; }
             if(DraftRevision!=approvedRevision) { StatusForVerification.Text="Fotoğraf noktaları veya değerleri değişti; taslak eklenmedi.";return; }
-            if(!workspace.ApplyPhotoTrace(stamp,trace,history,out var addedId)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
+            if(!workspace.ApplyPhotoTrace(stamp,trace,history,out var addedId,out var next)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
+            if(keepOpen)
+            {
+                if(next is null || DraftRevision!=approvedRevision) { continuationBlocked=true;StatusForVerification.Text="Çizgi eklendi; proje veya fotoğraf taslağı değiştiğinden devam edilemiyor. Gerekirse çizgiyi kaydedip pencereyi kapatın.";return; }
+                stamp=next;CanvasForVerification.ClearTraceKeepReferences();
+                StatusForVerification.Text="Açık taslak eklendi. Ölçü referansları korundu; yeni bağımsız çizgiyi seçin. İç boşluklar ayrıca temsil edilmez.";return;
+            }
             var closureOwner=Owner;allowClose=true;Close();
             if(reviewClosure && addedId is Guid id) { if(OpenClosureForVerification is { } open)open(id);else workspace.OpenPhotoTraceClosure(id,closureOwner); }
         }

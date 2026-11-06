@@ -1436,9 +1436,9 @@ public class MainWindow : Window
             return "Proje, seçim veya bekleyen çalışma değişti. Taslak eklenmedi; güncel projeyle yeniden başlayın.";
         return null;
     }
-    internal bool ApplyPhotoTrace(PhotoTraceStamp stamp,IReadOnlyList<Point2> points,PhotoTraceProvenance history,out Guid? addedId)
+    internal bool ApplyPhotoTrace(PhotoTraceStamp stamp,IReadOnlyList<Point2> points,PhotoTraceProvenance history,out Guid? addedId,out PhotoTraceStamp? continuation)
     {
-        addedId=null;
+        addedId=null;continuation=null;
         ArgumentNullException.ThrowIfNull(history);
         if(PhotoTraceProblem(stamp) is { } problem) { SetStatus(problem);return false; }
         var copied=points.ToList();LargeOpenPathValidator.Validate(copied);
@@ -1453,7 +1453,13 @@ public class MainWindow : Window
         try { CommitObserved("Fotoğraftan açık taslak eklendi; ölçü ve üretim uygunluğu doğrulanmadı.",()=> { Document.Pieces.Add(piece.Clone());(Document.PhotoTraceHistory ??= []).Add(captured.Clone());SelectedId=piece.Id; },()=>committed=true); }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         { mainMutationReviewRequired=true;SetStatus("Taslak eklendi ancak görünüm yenilenemedi; projeyi kontrol edin. İşlem geri alınabilir.");return true; }
-        if(committed)addedId=piece.Id;
+        if(committed)
+        {
+            addedId=piece.Id;
+            // DocumentSession replaces the document with a detached copy on commit.
+            var next=new PhotoTraceStamp(Document,candidate,stamp.Epoch,piece.Id);
+            if(!mainMutationReviewRequired && PhotoTraceProblem(next) is null)continuation=next;
+        }
         return committed;
     }
 

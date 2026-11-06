@@ -292,6 +292,13 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(points.Count==0)return;
         points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
     }
+    internal void ClearTraceKeepReferences()
+    {
+        if(points.Count<=ReferencePointCount)return;
+        points.RemoveRange(ReferencePointCount,points.Count-ReferencePointCount);cursor=points[^1];
+        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;
+        InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
+    }
 
     // Rectangle is the actual uniform-fit image, excluding letterbox regions.
     internal Rect ImageBounds(Size viewport)
