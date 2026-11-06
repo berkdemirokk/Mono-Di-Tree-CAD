@@ -11289,6 +11289,9 @@ internal static partial class DesktopVerification
                         "Cancel preserves the accepted mask and existing suggestion without selecting a boundary",checks);
                 } finally { afterCancel.Close(); }
                 canvas.ClearPoints();trace.LengthForVerification.Clear();
+                var recoveryText=((TextBlock)((ScrollViewer)trace.RecoveryForVerification.Content).Content).Text;
+                Check(recoveryText.Contains("görüntü veya arama sınırına") && recoveryText.Contains("İç boşluklar çizgiye aktarılmaz") && recoveryText.Contains("ayrıca onaylayın"),
+                    "Recovery instructions disclose edge and omitted-hole review before acceptance",checks);
                 var closeMessage="";trace.ConfirmCloseForVerification=message=> { closeMessage=message;return false; };
                 Check(trace.HasDraft && !trace.ClosingAllowedForVerification() && closeMessage.Contains(".tdregion") && closeMessage.Contains("maskesi") && canvas.Points.Count==0,
                     "A retained mask alone prevents silent trace close and explains separate region saving",checks);
