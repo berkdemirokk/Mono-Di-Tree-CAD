@@ -4078,7 +4078,10 @@ private struct ExperimentalDesignBriefView: View {
                     exportAttempt = attempt
                     exportPresentation.begin(attempt.id)
                 }
-                Button("İptal", role: .cancel) { pendingExportAttempt = nil; pendingExportSnapshot = nil }
+                Button("İptal", role: .cancel) {
+                    pendingExportAttempt = nil; pendingExportSnapshot = nil
+                    message = "İstek kaydı iptal edildi; ekrandaki bilgiler korunuyor. Yeni bir dosyanın kaydedildiği doğrulanmadı."
+                }
             } message: {
                 Text("Yeni ve kullanılmamış bir dosya adı seçin. Aynı dosyanın farklı bir yolu veya sonradan oluşturulan bir hedef uygulama tarafından kesin olarak tespit edilmez; mevcut dosyanın üzerine yazılmasını engelleyemiyoruz. Emin değilseniz iptal edin.")
                 if let snapshot = pendingExportSnapshot, snapshot.version == 1,
@@ -4276,7 +4279,11 @@ private struct ExperimentalDesignBriefView: View {
                                 : "Önceki içerik kaydedildi; sonraki değişiklikler henüz kaydedilmedi."
                             #endif
                         case .failure(let error):
-                            if !isFilePickerCancellation(error) { message = "İstek dosyası kaydedilemedi; içerik burada korunuyor." }
+                            if isFilePickerCancellation(error) {
+                                message = "İstek kaydı iptal edildi; ekrandaki bilgiler korunuyor. Yeni bir dosyanın kaydedildiği doğrulanmadı."
+                            } else {
+                                message = "İstek dosyası kaydedilemedi; içerik burada korunuyor."
+                            }
                         }
                     }
                     .id(attempt.id)
