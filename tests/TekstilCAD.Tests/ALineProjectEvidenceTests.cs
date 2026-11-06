@@ -68,5 +68,27 @@ public sealed class ALineProjectEvidenceTests
             Assert.Throws<InvalidDataException>(()=>ProjectStorage.Save(project,path));Assert.Equal(original,File.ReadAllBytes(path));
         }
         finally { if(File.Exists(path))File.Delete(path); }
+    }    [Fact] public void UndoBudgetIncludesEvidenceAndChargesAcrossUndoAndRedo()
+    {
+        var (project,evidence)=Fixture();
+        var bytes=256L+2L*evidence.CandidateEvidenceJson.Length+2L*evidence.IntegritySha256.Length+
+            8L*(evidence.TranslationMm.LongLength+evidence.FrontPlacedCoordinatesMm.LongLength+evidence.BackPlacedCoordinatesMm.LongLength);
+        var units=10+(bytes+15)/16;
+        var tooSmall=new DocumentSession(project,maximumPoints:units-1);
+        Assert.False(tooSmall.CanRetainCurrentUndoSnapshot);
+        var exact=new DocumentSession(project,maximumPoints:units);
+        Assert.True(exact.CanRetainCurrentUndoSnapshot);
+        Assert.True(exact.Execute(d=>d.Name="edited",ProjectStorage.Validate));Assert.Equal(units,exact.StoredPointCount);
+        Assert.True(exact.Undo());Assert.Equal(units,exact.StoredPointCount);
+        Assert.True(exact.Redo());Assert.Equal(units,exact.StoredPointCount);
+        var history=new DocumentHistory(maximumPoints:units);
+        history.Record(project);history.Record(project);Assert.Equal(1,history.UndoCount);Assert.Equal(units,history.StoredPointCount);Assert.Equal(1,history.CapacityDiscardedSnapshots);
+    }
+    [Fact] public void PlacementRejectsTouchingAndNonFiniteOffsets()
+    {
+        var (_,evidence)=Fixture();var native=ALineCandidateEvidenceStorage.Deserialize(evidence.CandidateEvidenceJson);
+        Assert.Throws<InvalidDataException>(()=>ALineProjectEvidenceStorage.Create(native,[0,0,400,0]));
+        Assert.Throws<InvalidDataException>(()=>ALineProjectEvidenceStorage.Create(native,[0,0,double.PositiveInfinity,0]));
+        ALineProjectEvidenceStorage.Validate(ALineProjectEvidenceStorage.Create(native,[0,0,401,0]));
     }}
 

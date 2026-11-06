@@ -47,6 +47,23 @@ public sealed class DocumentHistory
         // historical source and placed geometry, including their marks and grainlines.
         if (document.NestingSnapshot?.RotationTrace is { } trace)
             points += Pieces(trace.SourcePieces) + Pieces(trace.LayoutPieces);
+        // A V11 entry owns three arrays and retains the (immutable) embedded JSON
+        // and digest strings. Charge 16-byte geometry units conservatively per
+        // snapshot, even where immutable strings are shared by clones. Include
+        // fixed object/list overhead; this is a budget estimate, not a heap cap.
+        if(document.ALineEvidence is { } evidence)
+        {
+            foreach(var item in evidence)
+            {
+                if(item is null || item.CandidateEvidenceJson is null || item.IntegritySha256 is null ||
+                   item.TranslationMm is null || item.FrontPlacedCoordinatesMm is null || item.BackPlacedCoordinatesMm is null)return long.MaxValue;
+                long bytes=256L+2L*item.CandidateEvidenceJson.Length+2L*item.IntegritySha256.Length+
+                    8L*(item.TranslationMm.LongLength+item.FrontPlacedCoordinatesMm.LongLength+item.BackPlacedCoordinatesMm.LongLength);
+                var units=(bytes+15)/16;
+                if(points>long.MaxValue-units)return long.MaxValue;
+                points+=units;
+            }
+        }
         return points;
     }
     public ProjectDocument? Undo(ProjectDocument current) => UndoState(current)?.Document;

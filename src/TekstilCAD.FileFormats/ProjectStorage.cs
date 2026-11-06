@@ -505,7 +505,7 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if(project.ALineEvidence is not null) { project=project.Clone();Validate(project,cancellationToken); }
+        if(project.ALineEvidence is not null) { Validate(project,cancellationToken);project=project.Clone();Validate(project,cancellationToken); }
         var version=GetProjectFormatVersion(project);
         var text=version==0 ? JsonSerializer.Serialize(project,Options) : JsonSerializer.Serialize<object[]>([version,project],Options);
         // Never replace a usable project with bytes this version cannot reopen.
