@@ -142,6 +142,14 @@ try
     if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(2,2),new(-1,0)])!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle crossing falsely cleared");
     if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(1,1),new(2,0)])!=CircleSeparation.Verdict.Unresolved)throw new Exception("Two arc endpoints falsely cleared");
     if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(2,0),new(3,0)])!=CircleSeparation.Verdict.Unresolved)throw new Exception("Additional circle intersection falsely cleared");
+    // At t=1/2 this curve touches the circle at (1,1); its derivative
+    // is horizontal there. An interior tangency is not an endpoint proof.
+    var interiorTangent=new[]{new CircleSeparation.Point(0,0),new CircleSeparation.Point(.75,2),new CircleSeparation.Point(2.5,0)};
+    if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,interiorTangent,20,10000)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Interior circle tangency falsely cleared");
+    // This genuinely endpoint-only curve requires subdivision: the initial
+    // Bernstein coefficients have mixed signs. Small budgets fail closed.
+    var needsSubdivision=new[]{new CircleSeparation.Point(0,0),new CircleSeparation.Point(-2,-2),new CircleSeparation.Point(-1.75,3.75)};
+    if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,needsSubdivision,0,4096)!=CircleSeparation.Verdict.Unresolved || CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,needsSubdivision,8,1)!=CircleSeparation.Verdict.Unresolved || CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,needsSubdivision,8,4096)!=CircleSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Circle proof budget or subdivision failure");
     if(CircleSeparation.Compare(new(0,0),new(2,0),.5,[new(0,0),new(-.5,.5),new(-1,0)],false)==CircleSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Circle endpoint allowed without authorization");
     try {CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(-.5,.5),new(-1,0)],25,10);throw new Exception("Invalid proof depth accepted");}catch(ArgumentException) { }
     var oppositeA=new[]{new ExactBezierSeparation.Point(-2,-2),new ExactBezierSeparation.Point(0,0)};

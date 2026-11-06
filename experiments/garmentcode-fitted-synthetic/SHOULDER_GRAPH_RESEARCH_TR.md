@@ -11,6 +11,8 @@ Tam rasyonel Bernstein kontrolü omuz kuadratiği ile yaka yayının destek çem
 
 Tablodaki uçlar yaklaşık gösterimdir. Omuz hedefinin asıl sınaması daha dar dyadik uzunluk aralığının 0,0001 cm sayısal bant içinde olmasıdır; bu fiziksel dikiş toleransı değildir. Aşağıdaki grafik aralıkları daha kaba derinlik 6 ile hesaplanır; ayrık olmamaları eşitlik kanıtı değildir. Diğer 21 kuralın tam temsil edilen projeksiyon aralıklarının değişmediği otomatik sınanır. Sonuç `unresolved` / `Unverified`: kalan 8/6 ayrık kural ve tüm fiziksel doğrulama eksikleri nedeniyle gerçek ölçü, üretim, kompozisyon ve plotter kapalıdır.
 
+[Birleşik aday incelemesi](COMBINED_CANDIDATE_REVIEW_TR.md), kalan pens ilişkilerini, omuz sapmasını, kaynak kimlik bağını ve ölçüm varsayımlarını ayrı değerlendirir.
+
 ## 23 kuralın iki örnekte önce ve sonra kaydı
 
 Nokta ondalık ayraçtır; köşeli parantez içindeki virgül alt/üst sınırı ayırır. Görüntülenen uçlar yuvarlatılmıştır; `disjoint` kararı tam tamsayı/kesir aralıklarına dayanır.
