@@ -49,6 +49,27 @@ internal static partial class DesktopVerification
             Check(window.LoadWorkForVerification(candidatePath,()=>true) && window.StatusForVerification.Text.Contains("yeniden hesaplandı") &&
                 window.BalanceCanvasForVerification.Visibility==Visibility.Collapsed && !window.BalanceAcceptForVerification.IsEnabled && window.AgreementForVerification.IsChecked!=true && window.ConfirmationForVerification.IsChecked!=true,
                 "Loading a candidate recomputes it and never restores prior approval",checks);
+            window.ConfirmUnitConversionForVerification=()=>false;window.UnitForVerification.SelectedIndex=1;
+            Check(window.UnitForVerification.SelectedIndex==0 && window.FieldsForVerification.Select(f=>f.Text).SequenceEqual(values),
+                "Declining candidate unit conversion keeps unit and fields",checks);
+            var canceledConversionPath=Path.Combine(folder,"candidate-canceled-unit"+ALineWorkDraftStorage.Extension);
+            window.SaveWorkForVerification(canceledConversionPath);var afterCancel=ALineWorkDraftStorage.Load(canceledConversionPath);
+            Check(afterCancel.Balance is not null && afterCancel.Balance.Original.SequenceEqual(candidateDraft.Balance!.Original) &&
+                afterCancel.Balance.Candidate.SequenceEqual(candidateDraft.Balance.Candidate) && window.LoadWorkForVerification(canceledConversionPath,()=>true) &&
+                window.StatusForVerification.Text.Contains("yeniden hesaplandı") && window.BalanceCanvasForVerification.Visibility==Visibility.Collapsed,
+                "V3 load, canceled conversion, save and reload retain the unapproved candidate",checks);
+            window.UnitForVerification.SelectedIndex=-1;
+            window.ConfirmUnitConversionForVerification=()=> { window.UnitForVerification.SelectedIndex=1;return false; };window.UnitForVerification.SelectedIndex=1;
+            var reentrantPath=Path.Combine(folder,"candidate-reentrant-unit"+ALineWorkDraftStorage.Extension);window.SaveWorkForVerification(reentrantPath);
+            Check(window.UnitForVerification.SelectedIndex==0 && ALineWorkDraftStorage.Load(reentrantPath).Balance is not null,
+                "Invalid or reentrant unit attempts leave the candidate available to save",checks);
+            var wrongSourcePath=Path.Combine(folder,"candidate-wrong-source"+ALineWorkDraftStorage.Extension);
+            ALineWorkDraftStorage.SaveNew(wrongSourcePath,candidateDraft with { SourceHash=new string('B',64) });
+            Check(!window.TryOpenWork(()=>wrongSourcePath,()=>throw new InvalidOperationException("Different source must be rejected before approval")) &&
+                window.StatusForVerification.Text.Contains("farklı bir isteğe bağlı") && window.StatusForVerification.Text.Contains("aynı kaynak istekle") &&
+                window.FieldsForVerification.Select(f=>f.Text).SequenceEqual(values),
+                "A candidate from a different request is rejected with a concrete explanation and no form changes",checks);
+            window.ConfirmUnitConversionForVerification=()=>true;
             window.AgreementForVerification.IsChecked=true;Click(window.ReviewForVerification);window.ConfirmationForVerification.IsChecked=true;Click(window.DrawForVerification);Click(window.BalanceExploreForVerification);
             Check(window.BalanceAcceptForVerification.IsEnabled && window.BalanceCanvasForVerification.Visibility==Visibility.Collapsed,
                 "Loaded candidate requires fresh review and approval before separate display",checks);

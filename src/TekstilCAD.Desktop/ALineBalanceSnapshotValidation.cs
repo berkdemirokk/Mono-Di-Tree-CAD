@@ -15,8 +15,9 @@ internal static class ALineBalanceSnapshotValidation
     }
     internal static ALineSideBalance.Result Validate(ALineWorkDraft draft,string sourceHash)
     {
-        if(draft.Balance is not { } saved || draft.SourceHash!=sourceHash || saved.Method!=ALineWorkDraftStorage.BalanceMethod)
-            throw new InvalidDataException("Adayın istek kaynağı veya yöntemi uyuşmuyor; çalışma değiştirilmedi.");
+        if(draft.Balance is not { } saved || saved.Method!=ALineWorkDraftStorage.BalanceMethod)
+            throw new InvalidDataException("Aday kaydı veya yöntem sürümü uyuşmuyor; çalışma değiştirilmedi.");
+        if(draft.SourceHash!=sourceHash)throw new InvalidDataException("Aday farklı bir isteğe bağlı; bu aday kaydı yalnız aynı kaynak istekle açılabilir. İlgili isteği açıp yeniden deneyin; mevcut çalışma değiştirilmedi.");
         try
         {
             var unit=draft.Unit switch { "cm"=>ALineLengthUnit.Centimeter,"mm"=>ALineLengthUnit.Millimeter,_=>throw new InvalidDataException("Aday birimi eksik.") };

@@ -296,13 +296,12 @@ internal sealed class ALinePanelPreviewWindow : Window
         unit.SelectionChanged+=(_,_)=>
         {
             if(restoringUnit)return;
-            retainedCandidateWork=null;var requested=unit.SelectedIndex;
+            var requested=unit.SelectedIndex;
             if(!loadingWork && committedUnit>=0 && requested!=committedUnit && fields.Any(f=>f.Text.Length>0))
             {
                 restoringUnit=true;try { unit.SelectedIndex=committedUnit; } finally { restoringUnit=false; }
-                Clear();RefreshProposal();RefreshWaistComparison();
                 if(unitConfirmation || requested is not (0 or 1)) { status.Text="Birim değiştirilmedi; form korundu.";return; }
-                var before=fields.Select(f=>f.Text).ToArray();int old=committedUnit;long version=editVersion;
+                var before=fields.Select(f=>f.Text).ToArray();int old=committedUnit;long version=editVersion;var sourceRevision=SourceRevision();var sourceBefore=CurrentSource();
                 try
                 {
                     var converted=ConvertUnitFields(before,old==0 ? ALineLengthUnit.Centimeter : ALineLengthUnit.Millimeter,requested==0 ? ALineLengthUnit.Centimeter : ALineLengthUnit.Millimeter);
@@ -310,7 +309,7 @@ internal sealed class ALinePanelPreviewWindow : Window
                     bool approved;
                     try { approved=ConfirmUnitConversionForVerification?.Invoke() ?? MessageBox.Show(this,$"Dolu alanlar {(old==0?"cm":"mm")} biriminden {(requested==0?"cm":"mm")} birimine kayıpsız dönüştürülecek. Boş alanlar boş kalır. Önceki ölçü onayı ve önizleme sıfırlanır. Devam edilsin mi?","Birim dönüşümü",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes; }
                     finally { unitConfirmation=false; }
-                    if(!approved || closed || editVersion!=version || committedUnit!=old || unit.SelectedIndex!=old || !before.SequenceEqual(fields.Select(f=>f.Text))) { status.Text="Dönüşüm iptal edildi veya form değişti; değerler korunuyor.";return; }
+                    if(!approved || closed || editVersion!=version || committedUnit!=old || unit.SelectedIndex!=old || !SourceAvailable() || SourceRevision()!=sourceRevision || CurrentSource()!=sourceBefore || !before.SequenceEqual(fields.Select(f=>f.Text))) { status.Text="Dönüşüm iptal edildi veya form değişti; değerler korunuyor.";return; }
                     restoringUnit=true;
                     try { unit.SelectedIndex=requested;committedUnit=requested;for(int i=0;i<fields.Count;i++)fields[i].Text=converted[i]; }
                     finally { restoringUnit=false; }
@@ -319,7 +318,7 @@ internal sealed class ALinePanelPreviewWindow : Window
                 catch(Exception ex) when(ex is ArgumentException or OverflowException) { status.Text="Birim değişmedi; alanlar korundu. "+ex.Message; }
                 return;
             }
-            committedUnit=requested;Clear();RefreshProposal();RefreshWaistComparison();
+            if(requested!=committedUnit)retainedCandidateWork=null;committedUnit=requested;Clear();RefreshProposal();RefreshWaistComparison();
         };
         agreement.Checked+=(_,_)=>Clear();agreement.Unchecked+=(_,_)=>Clear();
         confirm.Unchecked+=(_,_)=> { editVersion++;ResetBalance();canvas.Children.Clear();blockers.Text=""; };
