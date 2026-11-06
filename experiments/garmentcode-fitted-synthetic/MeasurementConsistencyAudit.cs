@@ -5,6 +5,13 @@ namespace FittedResearch;
 // conditional relationships, not diagnoses, anatomical validity, or fit.
 internal static class MeasurementConsistencyAudit
 {
+    // Twenty fields are required; 26 known research fields exist. Two copies
+    // of that larger set allow existing duplicate diagnostics while bounding
+    // the enumeration. The 53rd item is read only to detect overflow.
+    internal const int MaxInputEntries=52;
+    static readonly ImmutableArray<string> ReviewCodes=ImmutableArray.Create(
+        "review_armhole_vs_back_length","review_bum_points_vs_circumference","review_bust_points_vs_circumference",
+        "review_front_path_order","review_head_vs_height","review_hips_line_vs_height","review_neck_vs_shoulders","review_vertical_bust_vs_height");
     internal sealed record Review(string Code,ImmutableArray<string> Fields);
     internal sealed class Report
     {
@@ -22,7 +29,21 @@ internal static class MeasurementConsistencyAudit
     internal static Report Assess(IEnumerable<KeyValuePair<string,decimal?>> input,string? lengthUnit,string? angleUnit)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var pairs=input.ToArray();var original=MeasurementContractAudit.Assess(pairs,lengthUnit,angleUnit);
+        var buffer=new List<KeyValuePair<string,decimal?>>(MaxInputEntries);bool overflow;
+        using(var enumerator=input.GetEnumerator()) {
+            while(buffer.Count<MaxInputEntries&&enumerator.MoveNext())buffer.Add(enumerator.Current);
+            overflow=buffer.Count==MaxInputEntries&&enumerator.MoveNext();
+        }
+        if(overflow) {
+            // The unread suffix might contain duplicates or invalidate any
+            // prior finding. Do not classify the prefix as a complete input.
+            var incomplete=MeasurementContractAudit.Assess(Array.Empty<KeyValuePair<string,decimal?>>(),lengthUnit,angleUnit).Issues
+                .Where(i=>i.Severity==MeasurementContractAudit.Kind.Unverified||i.Code is "length_unit_not_cm" or "angle_unit_not_degree")
+                .Append(new MeasurementContractAudit.Issue("input_limit_exceeded",MeasurementContractAudit.Kind.Blocking,ImmutableArray<string>.Empty))
+                .OrderBy(i=>i.Code,StringComparer.Ordinal).ToImmutableArray();
+            return new(incomplete,ImmutableArray<Review>.Empty,ReviewCodes);
+        }
+        var pairs=buffer.ToArray();var original=MeasurementContractAudit.Assess(pairs,lengthUnit,angleUnit);
         var contract=original.Issues.ToList();
         var values=new Dictionary<string,decimal>(StringComparer.Ordinal);
         foreach(var group in pairs.Where(p=>p.Key is not null).GroupBy(p=>p.Key,StringComparer.Ordinal)) {

@@ -60,6 +60,29 @@ internal static class MeasurementConsistencyTests
         Need(Signature(orderA).SequenceEqual(Signature(orderB)),"input order changed diagnostic report");
         var one=Assess(With("bust_points",51m));var first=one.ReviewIssues.Single(i=>i.Code=="review_bust_points_vs_circumference");
         Need(first.Fields.SequenceEqual(new[]{"bust_points","bust"})&&!one.HasBlockingIssues&&one.NeedsReview,"review must remain distinct from blocking");
+        Need(required.Length==20&&ResearchBody.Fields.Length==26&&MeasurementConsistencyAudit.MaxInputEntries==52,"input budget contract");
+        var fullBody=ResearchBody.Fields.Select(k=>new KeyValuePair<string,decimal?>(k,body[k]));
+        var fullReport=Assess(fullBody);Need(!fullReport.HasBlockingIssues&&fullReport.ReviewCoverageComplete,"known optional fields regressed");
+        var atLimit=baseline.Concat(Enumerable.Repeat(new KeyValuePair<string,decimal?>("bust",100m),32)).ToArray();
+        var atLimitReport=Assess(atLimit);
+        Need(atLimit.Length==52&&!Block(atLimitReport,"input_limit_exceeded")&&Block(atLimitReport,"duplicate_field"),"exact input limit or duplicate handling");
+        var aboveLimit=Assess(atLimit.Append(new KeyValuePair<string,decimal?>("bust",100m)));
+        Need(Block(aboveLimit,"input_limit_exceeded")&&aboveLimit.HasBlockingIssues&&!aboveLimit.ReviewCoverageComplete&&aboveLimit.SkippedReviewCodes.Length==8&&!aboveLimit.NeedsReview&&aboveLimit.ReviewIssues.Length==0&&aboveLimit.ContractIssues.All(x=>x.Code is not ("missing_measurement" or "duplicate_field"))&&!aboveLimit.Accepted&&!aboveLimit.ProductionAllowed&&!aboveLimit.ExportAllowed,"over-limit prefix must fail closed");
+        Need(aboveLimit.SkippedReviewCodes.SequenceEqual(Assess(baseline,"mm").SkippedReviewCodes),"overflow review coverage mismatch");
+        var overWithReview=Assess(With("bust_points",51m).Concat(Enumerable.Repeat(new KeyValuePair<string,decimal?>("bust",100m),33)));
+        Need(Block(overWithReview,"input_limit_exceeded")&&overWithReview.ReviewIssues.Length==0&&overWithReview.SkippedReviewCodes.Length==8,"overflow leaked partial reviews");
+        var aboveBadUnits=Assess(atLimit.Append(new KeyValuePair<string,decimal?>("bust",100m)),"mm","rad");
+        Need(Block(aboveBadUnits,"input_limit_exceeded")&&Block(aboveBadUnits,"length_unit_not_cm")&&Block(aboveBadUnits,"angle_unit_not_degree"),"over-limit unit diagnostics");
+        int visited=0;bool disposed=false;
+        IEnumerable<KeyValuePair<string,decimal?>> Infinite() {
+            try {while(true) {visited++;yield return new("bust",100m);}}
+            finally {disposed=true;}
+        }
+        var endless=Assess(Infinite());
+        Need(visited==53&&disposed&&Block(endless,"input_limit_exceeded")&&!endless.ReviewCoverageComplete&&!endless.Accepted,"infinite input consumption or disposal");
+        int bigVisited=0;
+        IEnumerable<KeyValuePair<string,decimal?>> Large() {for(int i=0;i<1000000;i++){bigVisited++;yield return new("unknown",1m);}}
+        var oversized=Assess(Large());Need(bigVisited==53&&Block(oversized,"input_limit_exceeded"),"large input consumption");
         Console.WriteLine("PASS: conditional measurement reviews, boundary, missing, duplicate, invalid unit and independent-field cases; research only.");
     }
 }
