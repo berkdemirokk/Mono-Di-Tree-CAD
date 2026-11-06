@@ -36,9 +36,14 @@ public sealed class RotatedProjectValidationTests
         {
             ProjectStorage.Save(layout,path);var loaded=ProjectStorage.Load(path);Assert.True(DocumentSession.ContentEquals(layout,loaded));
             Assert.All(loaded.NestingSnapshot!.RotationTrace!.SourcePieces,p=>Assert.NotNull(p.ExperimentalALine));
-            var json=File.ReadAllText(path);var versionOffset=json.IndexOf("10,",StringComparison.Ordinal);Assert.True(versionOffset>=0);
-            var downgrade=json.Remove(versionOffset,2).Insert(versionOffset,"7");File.WriteAllText(Path.Combine(folder,"old.tcad"),downgrade);
-            Assert.Throws<InvalidDataException>(()=>ProjectStorage.Load(Path.Combine(folder,"old.tcad")));
+            var json=File.ReadAllText(path);
+            foreach(var oldVersion in new[]{7,8,9})
+            {
+                var node=JsonNode.Parse(json)!.AsArray();node[0]=oldVersion;
+                foreach(var visible in node[1]!["Pieces"]!.AsArray())visible!.AsObject().Remove("ExperimentalALine");
+                var oldPath=Path.Combine(folder,"old-"+oldVersion+".tcad");File.WriteAllText(oldPath,node.ToJsonString());
+                var error=Assert.Throws<InvalidDataException>(()=>ProjectStorage.Load(oldPath));Assert.Contains("sürüm 10",error.Message);
+            }
             foreach(var piece in layout.Pieces)piece.ExperimentalALine=null;
             Assert.Equal(10,ProjectStorage.GetProjectFormatVersion(layout));
             ProjectStorage.Save(layout,Path.Combine(folder,"historical.tcad"));

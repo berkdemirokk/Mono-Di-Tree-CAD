@@ -2157,6 +2157,7 @@ public class MainWindow : Window
             throw new IOException("Açık proje dosyası dışarıda değişti; dosyayı yeniden açın veya farklı adla kaydedin.");
         SaveToCore(path,approvedVersion);
     }
+    internal static bool RequiresExperimentalFormat(ProjectDocument project)=>ProjectStorage.GetProjectFormatVersion(project)==10;
     internal const string ExperimentalALineCompatibilityNotice="Deneysel A kesim taslağı proje biçimi sürüm 10 gerektirir. Önceki TekstilCAD ve bu biçimi desteklemeyen Apple sürümleri dosyayı açamaz. Eski dosyayı korumak için farklı adla kaydedin. Taslak üretim veya kalıp onayı değildir.";
     internal enum GradingSaveChoice { Cancel, SaveCurrent, SaveAs }
     internal Func<bool,GradingSaveChoice>? ChooseCompatibilityForVerification { get; set; }
@@ -2167,7 +2168,7 @@ public class MainWindow : Window
         var prompt=new Window { Owner=this,Title="Proje biçimi uyumluluğu",Width=530,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner };
         StudioTheme.Apply(prompt);
         var panel=new StackPanel { Margin=new Thickness(20) };prompt.Content=panel;
-        var description=ProjectStorage.GetProjectFormatVersion(Document)==10 ? ExperimentalALineCompatibilityNotice
+        var description=RequiresExperimentalFormat(Document) ? ExperimentalALineCompatibilityNotice
             : Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true
             ? "Düzlem perspektifli fotoğraf geçmişi proje biçimi sürüm 9 gerektirir. Önceki TekstilCAD sürümleri bu dosyayı açamaz. Fotoğraf projeye eklenmez; eski dosyayı korumak için farklı adla kaydedin."
             : Document.PhotoTraceHistory is { Count:>0 }

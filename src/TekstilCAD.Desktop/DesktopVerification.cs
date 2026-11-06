@@ -18,6 +18,7 @@ using System.Windows.Threading;
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
 using TekstilCAD.MachineGateway;
+using TekstilCAD.Nesting;
 
 namespace TekstilCAD.Desktop;
 
@@ -13833,6 +13834,7 @@ internal static partial class DesktopVerification
         }
         finally { studio.ChooseCompatibilityForVerification=null; }
         VerifySaveDialogReentrancy(studio,path,work,checks);
+        VerifyHistoricalExperimentalSaveCompatibility(studio,path,work,checks);
     }
 
     private static void VerifySaveDialogReentrancy(MainWindow studio,string v9Path,string work,List<string> checks)
@@ -13866,6 +13868,43 @@ internal static partial class DesktopVerification
             Check(File.ReadAllBytes(v9Path).SequenceEqual(original),"Save rejects source file version changes during upgrade confirmation",checks);
         }
         finally { studio.SavePathForVerification=null;studio.ConfirmSaveReplacementForVerification=null;studio.ChooseCompatibilityForVerification=null;studio.OpenProjectFile(v9Path);if(File.Exists(target))File.Delete(target); }
+    }
+    private static void VerifyHistoricalExperimentalSaveCompatibility(MainWindow studio,string v9Path,string work,List<string> checks)
+    {
+        var sourcePiece=new PatternPiece { Name="Tarihsel kaynak",Points=[new(0,0),new(6,0),new(6,4),new(0,4)],
+            Grainline=new Grainline { Start=new(1,1),End=new(1,2) },Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=2 } };
+        var source=new ProjectDocument { Pieces=[sourcePiece] };var angles=new Dictionary<(Guid,int),int> { [(sourcePiece.Id,1)]=0,[(sourcePiece.Id,2)]=90 };
+        var result=PerCopyOrthogonalNesting.Arrange(source,[sourcePiece.Id],angles,100,1,100,0,GrainDirectionPolicy.Direction.TwoWay,90);
+        var record=RotatedNestingRecord.Capture(source,[sourcePiece.Id],angles,result,GrainDirectionPolicy.Direction.TwoWay,90,100,1,0,100);
+        var trace=record.ToTrace();var layout=result.Plan.Nesting.Layout.Clone();
+        layout.NestingSnapshot=new NestingSnapshot { FabricWidth=100,Gap=1,EdgeMargin=0,UsedLength=result.Plan.Nesting.UsedLength,
+            LayoutFingerprint=trace.LayoutFingerprint,Placements=result.Plan.Placements.Select(p=>new NestingPlacementSnapshot(p.SourcePieceId,p.CopyNumber,p.PlacedPieceId)).ToList(),RotationTrace=trace };
+        var photo=ProjectStorage.Load(v9Path).PhotoTraceHistory!;
+        try
+        {
+            foreach(var previousVersion in new[]{7,9})
+            {
+                var input=layout.Clone();if(previousVersion==9)input.PhotoTraceHistory=photo.Select(p=>p.Clone()).ToList();
+                var path=Path.Combine(work,"historical-upgrade-"+previousVersion+"-"+Guid.NewGuid().ToString("N")+".tcad");
+                ProjectStorage.Save(input,path);Check(ProjectStorage.GetProjectFormatVersion(input)==previousVersion,"Historical fixture starts in expected old version",checks);
+                var before=File.ReadAllBytes(path);studio.OpenProjectFile(path);
+                studio.Commit("Tarihsel deneysel kaynak",()=> {
+                    var history=studio.Document.NestingSnapshot!.RotationTrace!;
+                    foreach(var p in history.SourcePieces.Concat(history.LayoutPieces))p.ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front");
+                    history.SourceFingerprint=NestingSnapshot.ComputeLayoutFingerprint(new ProjectDocument { Pieces=history.SourcePieces });
+                    history.LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(new ProjectDocument { Pieces=history.LayoutPieces });
+                    studio.Document.NestingSnapshot.LayoutFingerprint=history.LayoutFingerprint;
+                });
+                Check(studio.Document.Pieces.All(p=>p.ExperimentalALine is null) && MainWindow.RequiresExperimentalFormat(studio.Document),
+                    "Historical-only marker selects the version 10 compatibility notice",checks);
+                var prompts=0;bool selector=false;studio.ChooseCompatibilityForVerification=_=> { prompts++;return MainWindow.GradingSaveChoice.Cancel; };
+                studio.SavePathForVerification=_=> { selector=true;return Path.Combine(work,"must-not-write.tcad"); };
+                typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);studio.SaveAsForVerification();
+                Check(prompts==2 && !selector && File.ReadAllBytes(path).SequenceEqual(before),
+                    "Save and Save As cancellation preserve the old project when only historical provenance requires version 10",checks);
+            }
+        }
+        finally { studio.ChooseCompatibilityForVerification=null;studio.SavePathForVerification=null; }
     }
     private static void VerifyExperimentalSaveCompatibility(MainWindow studio,string work,List<string> checks)
     {
