@@ -21,11 +21,25 @@ public static class ALineCandidateEvidenceStorage
     private static bool Same(double a,double b)=>BitConverter.DoubleToInt64Bits(a)==BitConverter.DoubleToInt64Bits(b);
     private static bool Same(IReadOnlyList<double> a,IReadOnlyList<double> b)=>a.Count==b.Count && a.Zip(b).All(pair=>Same(pair.First,pair.Second));
 
+    // All callers must keep supplied collections and documents stable until capture
+    // completes. Every later validation, comparison and serialization uses only copies.
+    private static double[] CopyExact(IReadOnlyList<double> values,int count)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        if(values.Count!=count)throw new InvalidDataException("Aday alan sayısı geçersiz.");
+        var copy=new double[count];for(var i=0;i<count;i++)copy[i]=values[i];return copy;
+    }
+    private static ALineCandidateEvidence Capture(ALineCandidateEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+        return evidence with { InputsMm=CopyExact(evidence.InputsMm,11),OriginalEaseMm=CopyExact(evidence.OriginalEaseMm,4),CandidateEaseMm=CopyExact(evidence.CandidateEaseMm,4),
+            FrontCoordinatesMm=CopyExact(evidence.FrontCoordinatesMm,10),BackCoordinatesMm=CopyExact(evidence.BackCoordinatesMm,10) };
+    }
     public static ALineCandidateEvidence Create(Guid frontId,Guid backId,string sourceSha256,IReadOnlyList<double> inputs,IReadOnlyList<double> oldEase,IReadOnlyList<double> candidateEase,IReadOnlyList<double> frontCoordinates,IReadOnlyList<double> backCoordinates)
     {
         ArgumentNullException.ThrowIfNull(inputs);ArgumentNullException.ThrowIfNull(oldEase);ArgumentNullException.ThrowIfNull(candidateEase);ArgumentNullException.ThrowIfNull(frontCoordinates);ArgumentNullException.ThrowIfNull(backCoordinates);
         var evidence=new ALineCandidateEvidence(frontId,backId,sourceSha256,ALineExperimentalProvenance.CurrentAlgorithm,ALineWorkDraftStorage.BalanceMethod,Assumptions,
-            inputs.ToArray(),oldEase.ToArray(),candidateEase.ToArray(),frontCoordinates.ToArray(),backCoordinates.ToArray(),"");
+            CopyExact(inputs,11),CopyExact(oldEase,4),CopyExact(candidateEase,4),CopyExact(frontCoordinates,10),CopyExact(backCoordinates,10),"");
         ValidateShape(evidence);return evidence with { IntegritySha256=ComputeHash(evidence) };
     }
     private static void ValidateShape(ALineCandidateEvidence e)
@@ -53,7 +67,15 @@ public static class ALineCandidateEvidenceStorage
            e.InputsMm[0]+w.Front>e.InputsMm[2]+h.Front || e.InputsMm[1]+w.Back>e.InputsMm[3]+h.Back ||
            e.InputsMm[10]/4<=(e.InputsMm[2]+h.Front)/2 || e.InputsMm[10]/4<=(e.InputsMm[3]+h.Back)/2)
             throw new InvalidDataException("Adayın deneysel geometri sınırları sağlanmıyor.");
-        Geometry.ValidateContour(ToPoints(e.FrontCoordinatesMm));Geometry.ValidateContour(ToPoints(e.BackCoordinatesMm));
+        var originalFront=ToPoints(Panel(e.InputsMm[0]+e.OriginalEaseMm[0],e.InputsMm[2]+e.OriginalEaseMm[2]));
+        var originalBack=ToPoints(Panel(e.InputsMm[1]+e.OriginalEaseMm[1],e.InputsMm[3]+e.OriginalEaseMm[3]));
+        Geometry.ValidateContour(originalFront);Geometry.ValidateContour(originalBack);
+        var frontPoints=ToPoints(e.FrontCoordinatesMm);var backPoints=ToPoints(e.BackCoordinatesMm);
+        Geometry.ValidateContour(frontPoints);Geometry.ValidateContour(backPoints);
+        var frontUpper=Geometry.Distance(frontPoints[1],frontPoints[2]);var backUpper=Geometry.Distance(backPoints[1],backPoints[2]);
+        var frontLower=Geometry.Distance(frontPoints[2],frontPoints[3]);var backLower=Geometry.Distance(backPoints[2],backPoints[3]);
+        var bound=1e-10*Math.Max(1,Math.Max(frontUpper+frontLower,backUpper+backLower));
+        if(Math.Abs(frontUpper-backUpper)>bound || Math.Abs(frontLower-backLower)>bound)throw new InvalidDataException("Aday yan aralıkları sayısal kontrolde eşleşmedi.");
     }
     private static Point2[] ToPoints(double[] xy)=>Enumerable.Range(0,xy.Length/2).Select(i=>new Point2(xy[2*i],xy[2*i+1])).ToArray();
     private static string ComputeHash(ALineCandidateEvidence e)
@@ -67,27 +89,46 @@ public static class ALineCandidateEvidenceStorage
         }
         return Convert.ToHexString(SHA256.HashData(memory.ToArray()));
     }
-    public static void Validate(ALineCandidateEvidence evidence)
+    public static void Validate(ALineCandidateEvidence evidence)=>ValidateSnapshot(Capture(evidence));
+    private static void ValidateSnapshot(ALineCandidateEvidence evidence)
     {
         ValidateShape(evidence);
         if(!Hash(evidence.IntegritySha256) || evidence.IntegritySha256!=ComputeHash(evidence))throw new InvalidDataException("Aday kanıtının bütünlük özeti uyuşmuyor.");
     }
-    /// <summary>Exact source, input, candidate and both current panel coordinates must match. Edits invalidate the association.</summary>
+    private sealed record PanelSnapshot(Guid Id,bool Closed,ALineExperimentalProvenance? Marker,Point2[] Points);
+    /// <summary>The caller must keep inputs and document stable during capture. Later comparison uses only detached copies.</summary>
     public static bool Matches(ALineCandidateEvidence evidence,ProjectDocument document,string sourceSha256,IReadOnlyList<double> inputs,IReadOnlyList<double> candidateEase)
+        =>MatchesCore(evidence,document,sourceSha256,inputs,candidateEase,null);
+    internal static bool MatchesForVerification(ALineCandidateEvidence evidence,ProjectDocument document,string sourceSha256,IReadOnlyList<double> inputs,IReadOnlyList<double> candidateEase,Action afterCapture)
+        =>MatchesCore(evidence,document,sourceSha256,inputs,candidateEase,afterCapture);
+    private static bool MatchesCore(ALineCandidateEvidence evidence,ProjectDocument document,string sourceSha256,IReadOnlyList<double> inputs,IReadOnlyList<double> candidateEase,Action? afterCapture)
     {
-        Validate(evidence);ArgumentNullException.ThrowIfNull(document);ArgumentNullException.ThrowIfNull(inputs);ArgumentNullException.ThrowIfNull(candidateEase);
-        if(sourceSha256!=evidence.SourceSha256 || !Same(inputs,evidence.InputsMm) || !Same(candidateEase,evidence.CandidateEaseMm) || document.Pieces is null)return false;
-        bool Panel(Guid id,string side,double[] coordinates)
+        var captured=Capture(evidence);ArgumentNullException.ThrowIfNull(document);
+        var capturedInputs=CopyExact(inputs,11);var capturedEase=CopyExact(candidateEase,4);
+        if(document.Pieces is null || document.Pieces.Count>ProjectStorage.MaximumPieces)return false;
+        PanelSnapshot? Panel(Guid id)
         {
-            var found=document.Pieces.Where(p=>p is not null && p.Id==id).ToArray();if(found.Length!=1)return false;var p=found[0];
-            return p.Closed && p.ExperimentalALine is { } marker && marker.Algorithm==evidence.Algorithm && marker.SourceSha256==sourceSha256 && marker.Side==side &&
-                p.Points is not null && p.Points.Count==coordinates.Length/2 && p.Points.SelectMany(q=>new[]{q.X,q.Y}).Zip(coordinates).All(pair=>Same(pair.First,pair.Second));
+            PatternPiece? match=null;
+            foreach(var p in document.Pieces) { if(p is null)return null;if(p.Id!=id)continue;if(match is not null)return null;match=p; }
+            if(match?.Points is not { Count:5 })return null;
+            var points=new Point2[5];for(var i=0;i<points.Length;i++)points[i]=match.Points[i];
+            return new(match.Id,match.Closed,match.ExperimentalALine,points);
         }
-        return Panel(evidence.FrontPieceId,"front",evidence.FrontCoordinatesMm) && Panel(evidence.BackPieceId,"back",evidence.BackCoordinatesMm);
+        var front=Panel(captured.FrontPieceId);var back=Panel(captured.BackPieceId);afterCapture?.Invoke();
+        ValidateSnapshot(captured);
+        if(sourceSha256!=captured.SourceSha256 || !Same(capturedInputs,captured.InputsMm) || !Same(capturedEase,captured.CandidateEaseMm))return false;
+        bool MatchPanel(PanelSnapshot? panel,string side,double[] coordinates)=>panel is not null && panel.Closed &&
+            panel.Marker is { } marker && marker.Algorithm==captured.Algorithm && marker.SourceSha256==sourceSha256 && marker.Side==side &&
+            panel.Points.SelectMany(q=>new[]{q.X,q.Y}).Zip(coordinates).All(pair=>Same(pair.First,pair.Second));
+        return MatchPanel(front,"front",captured.FrontCoordinatesMm) && MatchPanel(back,"back",captured.BackCoordinatesMm);
     }
-    public static string Serialize(ALineCandidateEvidence evidence)
+    /// <summary>The caller must keep the supplied arrays stable until capture completes.</summary>
+    public static string Serialize(ALineCandidateEvidence evidence)=>SerializeCore(evidence,null);
+    internal static string SerializeForVerification(ALineCandidateEvidence evidence,Action afterCapture)=>SerializeCore(evidence,afterCapture);
+    private static string SerializeCore(ALineCandidateEvidence evidence,Action? afterCapture)
     {
-        Validate(evidence);var json=JsonSerializer.Serialize(new { format=Format,version=1,evidence });
+        var captured=Capture(evidence);afterCapture?.Invoke();ValidateSnapshot(captured);
+        var json=JsonSerializer.Serialize(new { format=Format,version=1,evidence=captured });
         if(Encoding.UTF8.GetByteCount(json)>MaximumBytes)throw new InvalidDataException("Aday kanıtı boyut sınırını aşıyor.");return json;
     }
     public static ALineCandidateEvidence Deserialize(string json)
