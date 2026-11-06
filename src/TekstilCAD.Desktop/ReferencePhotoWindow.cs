@@ -21,7 +21,7 @@ internal sealed class ReferencePhotoWindow : Window
     internal Func<bool>? ConfirmTraceTargetForVerification { get; private set; }
     internal Func<bool>? TraceSourceCurrentForVerification { get; private set; }
 
-    internal ReferencePhotoWindow(Window owner,byte[] source,Func<bool>? confirmTraceTarget=null,Func<bool>? traceSourceCurrent=null)
+    internal ReferencePhotoWindow(Window owner,byte[] source,Func<bool>? confirmTraceTarget=null,Func<bool>? traceSourceCurrent=null,bool ownTrace=false)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(source);
         TraceSourceCurrentForVerification=traceSourceCurrent;ConfirmTraceTargetForVerification=confirmTraceTarget;data=(byte[])source.Clone();Owner=owner;Title="Referans görseli";Width=640;Height=640;MinWidth=360;MinHeight=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;
@@ -39,7 +39,7 @@ internal sealed class ReferencePhotoWindow : Window
             if(studio is null || decodedPreview is not { } captured) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
             if(confirmTraceTarget is not null && !confirmTraceTarget()) { StatusForVerification.Text="Çizime geçiş iptal edildi veya kaynak değişti; istek ve fotoğraf korundu.";return; }
             var stamp=studio.CapturePhotoTrace();if(stamp is null) { StatusForVerification.Text="Çizime geçilemedi; ana penceredeki durumu kontrol edin.";return; }
-            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation,traceSourceCurrent);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
+            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation,traceSourceCurrent,ownTrace ? this : null);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
         };
         AutomationProperties.SetName(StatusForVerification,"Görsel önizleme durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         StatusForVerification.Text="Görsel açılıyor…";DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
@@ -48,6 +48,7 @@ internal sealed class ReferencePhotoWindow : Window
         AutomationProperties.SetName(photo,"Seçilen referans görselinin önizlemesi");
         AutomationProperties.SetHelpText(photo,"Görüntü içeriği otomatik açıklanmaz; önizleme ölçü doğrulaması değildir.");
         root.Children.Add(new Border { Background=DesignRequestWindow.Surface,BorderBrush=DesignRequestWindow.BorderColor,BorderThickness=new Thickness(1),Child=photo });
+        if(ownTrace)Closing+=(_,e)=> { if(traceWindow is not null) { e.Cancel=true;StatusForVerification.Text="Önce açık fotoğraf taslağını kapatın; taslak korunuyor.";traceWindow.Activate(); } };
         Closed+=(_,_)=>closed=true;Loaded+=async (_,_)=>await LoadPhotoAsync();
     }
     private async Task LoadPhotoAsync()

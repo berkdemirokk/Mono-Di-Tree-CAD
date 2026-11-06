@@ -860,7 +860,8 @@ internal sealed class DesignRequestWindow : Window
         { SetStatus("İstek veya görsel onay sırasında değişti; işlemi yeniden başlatın.");return false; }
         return true;
     }
-    private void OnClosing(object? sender,CancelEventArgs e) { if(!ConfirmDiscard())e.Cancel=true; }
+    private readonly HashSet<ReferencePhotoWindow> unsavedPhotoPreviews=[];
+    private void OnClosing(object? sender,CancelEventArgs e) { if(unsavedPhotoPreviews.Count>0) { e.Cancel=true;SetStatus("Önce açık fotoğraf inceleme pencerelerini ve varsa taslağı kapatın; istek korunuyor.");return; } if(!ConfirmDiscard())e.Cancel=true; }
     private void RemoveReference()
     {
         referenceRevision++;
@@ -1012,7 +1013,8 @@ internal sealed class DesignRequestWindow : Window
             }
             finally { preparingDrawingTarget=false; }
         }
-        return new ReferencePhotoWindow(this,request.Reference!.Data,ConfirmTarget,Current);
+        var preview=new ReferencePhotoWindow(this,request.Reference!.Data,ConfirmTarget,Current,ownTrace:true);
+        unsavedPhotoPreviews.Add(preview);preview.Closed+=(_,_)=>unsavedPhotoPreviews.Remove(preview);return preview;
     }
     private async Task ObservePhotoAsync()
     {

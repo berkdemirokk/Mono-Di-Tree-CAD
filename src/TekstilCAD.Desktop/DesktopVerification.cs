@@ -11814,7 +11814,7 @@ internal static partial class DesktopVerification
                 unsaved.LoadForVerification(new DesignRequest("Özgün tarif","72 cm",new DesignReference("foto.png","image/png",bytes)));
                 unsaved.PromptForVerification.Text="Kaydedilmemiş tarif";
                 unsaved.ConfirmDiscardForVerification=_=>true;
-                var preview=unsaved.CreateUnsavedPhotoPreview()!;
+                var preview=unsaved.CreateUnsavedPhotoPreview()!;var previewClosed=false;preview.Closed+=(_,_)=>previewClosed=true;
                 try
                 {
                     unsaved.ConfirmDrawingTargetForVerification=_=>false;
@@ -11825,7 +11825,8 @@ internal static partial class DesktopVerification
                         "Changing request during photo trace target confirmation rejects stale snapshot and preserves edits",checks);
                     unsaved.MeasurementsForVerification.Text="72 cm";
                     Check(!preview.TraceSourceCurrentForVerification!(),"Restoring old request values does not revive stale photo source",checks);
-                    var stalePreview=unsaved.CreateUnsavedPhotoPreview()!;
+                    Check(!unsaved.ClosingAllowedForVerification(),"Open photo preview prevents source request from closing",checks);
+                    var stalePreview=unsaved.CreateUnsavedPhotoPreview()!;var stalePreviewClosed=false;stalePreview.Closed+=(_,_)=>stalePreviewClosed=true;
                     try
                     {
                         var stamp=studio.CapturePhotoTrace()!;
@@ -11833,16 +11834,18 @@ internal static partial class DesktopVerification
                         var trace=new PhotoTraceWindow(studio,bitmap,stamp,sourceCurrent:stalePreview.TraceSourceCurrentForVerification);
                         try
                         {
-                            unsaved.Close();trace.TryApply();
+                            Check(!preview.IsVisible && !unsaved.IsVisible,"Unsaved photo preview verification does not show windows",checks);
+                            var ownedTrace=new PhotoTraceWindow(studio,bitmap,stamp,windowOwner:stalePreview);
+                            Check(ReferenceEquals(ownedTrace.Owner,stalePreview),"Photo trace can belong to the modal preview chain",checks);ownedTrace.Close();
+                            stalePreview.Close();preview.Close();unsaved.Close();trace.TryApply();
                             Check(trace.StatusForVerification.Text.Contains("kapandı") && DocumentSession.ContentEquals(before,studio.Document),
                                 "Closing source request prevents applying its photo trace without changing CAD",checks);
                         }
                         finally { trace.Close(); }
                     }
-                    finally { stalePreview.Close(); }
-                    Check(!preview.IsVisible && !unsaved.IsVisible,"Unsaved photo preview verification does not show windows",checks);
+                    finally { if(!stalePreviewClosed)stalePreview.Close(); }
                 }
-                finally { preview.Close();if(!unsavedClosed)unsaved.Close(); }
+                finally { if(!previewClosed)preview.Close();if(!unsavedClosed)unsaved.Close(); }
                 var directNotes=new RequestNotesWindow(studio,new DesignRequest("Deneme","",new DesignReference("foto.png","image/png",bytes)));
                 using var entered=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
                 directNotes.DecodeForVerification=data=> { entered.Set();release.Wait();return ReferencePhotoDecoder.DecodeWithGeometry(data); };
