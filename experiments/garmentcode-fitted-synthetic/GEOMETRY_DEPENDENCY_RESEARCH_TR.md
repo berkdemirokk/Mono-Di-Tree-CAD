@@ -54,3 +54,19 @@ Dolayısıyla bu taramada herhangi bir alan için “kaynak türetmesi tamamen e
 C# doğrulaması 20 alan/tekil kayıt/Δ, altı panel çıktısı, değişen snapshot ve kapalı üretim bayraklarını denetler; kaynak iziyle panel kümelerini karşılaştırır. Yinelenmiş alan, golden başlangıcı bozulması ve iki küçük farkın yapay büyütülmesi reddedilir. Kaynak yakalama, aynı ortamda yeniden çalıştırılarak kaydedilen sonuçlarla karşılaştırıldı. Bu karşılaştırmalar tek sentetik bedende iki çalıştırmanın gözlemidir; kimlik/kapsam hataları, optimizer başarısızlıkları, tüm olası uç değerler, gerçek ölçü alma, dikiş payı, kumaş veya prova doğrulaması değildir.
 
 İz ve golden fixture C# doğrulamasında sabit SHA-256 özetlerine bağlıdır; Python yakalaması da fixture özetini ve kaynak HEAD/dosya manifestini kontrol eder. Özet, sürümlenmiş gözlemin değiştirilmediğini kontrol eder; kaynağın bu ortamda gerçekten çalıştırıldığını bağımsız olarak kanıtlayan imza veya köken belgesi değildir. C# baseline bayraklarını kendisi geometriyle yeniden hesaplamaz. İz veya fixture bilinçli güncellenirse sabit özetlerin ve ilgili gözlemlerin ayrıca incelenmesi gerekir.
+
+## Ek araştırma: farklı sentetik bedenlerde arka bel ve pens
+
+[Kaynak yakalaması](capture_back_multibody.py), sabitlenmiş Python checkout ve dosya manifesti üzerinden beş uydurma ölçü kombinasyonunun sağ arka panelini üretir. [İz](back-multibody-source.json) C# doğrulamasında sabit özete bağlıdır. C# testi aynı ölçülerle `BackBodiceCandidate.CreateFromBody` çağırır; ilk yedi bel/pens kenarının sırasını, türünü, uçlarını ve eğri göreli kontrollerini kaynakla karşılaştırır. Aşağıdaki uç farkı koordinat düzleminde iki karşılık gelen uç arasındaki en büyük Öklid uzaklığı, kontrol farkı ise boyutsuz göreli kontrol uzaklığıdır. Bunlar kaynak ve aday arasındaki farklardır; tolerans veya fiziksel uygunluk sınırı değildir.
+
+| Sentetik örnek | Omuz açısı | En büyük uç farkı (cm) | En büyük göreli kontrol farkı |
+|---|---:|---:|---:|
+| angle5 | 5° | 0,00004595 | 0,00003010 |
+| angle18_narrow | 18° | 0,00018882 | 0,00003900 |
+| angle30 | 30° | 0,01428234 | 0,00207226 |
+| angle35_wide | 35° | 0,04621207 | 0,00612745 |
+| angle40 | 40° | 0,12480602 | 0,01502485 |
+
+Dar ve geniş örnekler ayrıca sırt genişliği, arka bel genişliği ve kalça noktasını değiştirir. Önceki sekiz açılık optimizer izinde, aynı teğet yönünü sağlayan kontrol noktalarının yarıçapı Python BFGS sonucunda değişiyordu. Başlangıç x koordinatını sabit tutan başka bir analitik teğet seçimi 30° ve 40° farkını azaltsa da 10°, 18° ve 22° kontrol farklarını artırdı. Bu nedenle o seçim bir optimizer portu veya genel düzeltme değildir. Kontur farkları yalnız teğet optimizasyonundan kaynaklanıyor diye de çıkarım yapılamaz; pens kesme ve eğri uzunluğu optimizasyonları da farklıdır.
+
+Bu çalışma farkı genel olarak gidermedi. SciPy BFGS ve çizgi aramasının davranışı ile eğriye pens kesiminin bağımsız taşınması ve daha geniş, eğitim dışı sentetik karşılaştırmaları sonraki açık iştir. İz, yerel kaynak çalıştırmasının kaydıdır; özet imzalı köken kanıtı değildir. Gerçek ölçü, üretim, dışa aktarma ve plotter kapıları değişmedi.
