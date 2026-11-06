@@ -2296,6 +2296,7 @@ public static class DxfFormat
         cancellationToken.ThrowIfCancellationRequested();
         return new(fingerprint,layers,omissions.ToImmutable());
     }
+    /// <summary>Writes a detached snapshot; callers must prevent source mutation until capture completes.</summary>
     public static void Export(ProjectDocument project, string path) => ExportCore(project, path, null);
     /// <summary>Export only if the selected destination still matches its captured version.</summary>
     public static void Export(ProjectDocument project, string path, ProjectFileVersion expectedVersion)
@@ -2309,8 +2310,15 @@ public static class DxfFormat
         ArgumentNullException.ThrowIfNull(expectedVersion);
         ExportCore(project,path,expectedVersion,flipY:true);
     }
-    private static void ExportCore(ProjectDocument project, string path, ProjectFileVersion? expectedVersion, bool flipY=false)
+    internal static void ExportForVerification(ProjectDocument project,string path,Action afterCapture)=>ExportCore(project,path,null,false,afterCapture);
+    private static void ExportCore(ProjectDocument project, string path, ProjectFileVersion? expectedVersion, bool flipY=false,Action? afterCaptureForVerification=null)
     {
+        ArgumentNullException.ThrowIfNull(project);
+        // The caller must keep the source stable through validation and cloning.
+        // Every subsequent guard, layer mapping and emitted coordinate uses this copy.
+        ProjectStorage.ValidateForDxfExport(project);
+        project=project.Clone();afterCaptureForVerification?.Invoke();
+        ProjectStorage.ValidateForDxfExport(project);
         ExperimentalOutputGuard.EnsureAllowed(project.Pieces);
         var layers = PlanLayers(project);
         GrainlineExportGuard.EnsureSupported(project);

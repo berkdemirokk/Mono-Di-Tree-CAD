@@ -65,6 +65,21 @@ public sealed class ALineExperimentalProvenanceTests
         }
         finally { Directory.Delete(folder,true); }
     }
+    [Fact] public void DxfExportGuardsAndWritesOneDetachedSnapshot()
+    {
+        var folder=Path.Combine(Path.GetTempPath(),"aline-dxf-snapshot-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+        try
+        {
+            var source=Document();var marker=source.Pieces[0].ExperimentalALine;source.Pieces[0].ExperimentalALine=null;
+            var initial=source.Pieces[0].Points.ToArray();var safePath=Path.Combine(folder,"captured.dxf");
+            DxfFormat.ExportForVerification(source,safePath,()=> { source.Pieces[0].ExperimentalALine=marker;source.Pieces[0].Points[1]=new Point2(90,0); });
+            var output=DxfFormat.Import(safePath,1).Project;Assert.Single(output.Pieces);Assert.Equal(initial,output.Pieces[0].Points);
+            var blocked=Path.Combine(folder,"blocked.dxf");
+            Assert.Throws<InvalidOperationException>(()=>DxfFormat.ExportForVerification(source,blocked,()=>source.Pieces[0].ExperimentalALine=null));
+            Assert.False(File.Exists(blocked));
+        }
+        finally { Directory.Delete(folder,true); }
+    }
     [Fact] public void SelectedDxfReviewChecksIncludedPiecesWithoutBlockingUnselectedDraft()
     {
         var doc=Document();var restricted=doc.Pieces[0];restricted.Notches=[new NotchMark { VertexIndex=0,Position=restricted.Points[0] }];
