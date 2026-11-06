@@ -79,5 +79,45 @@ public static class ALineProjectEvidenceStorage
             return xy.Zip(coordinates).All(pair=>Same(pair.First,pair.Second));
         }
         return Match(candidate.FrontPieceId,"front",e.FrontPlacedCoordinatesMm) && Match(candidate.BackPieceId,"back",e.BackPlacedCoordinatesMm);
+    }
+    /// <summary>
+    /// Conservative preflight only, not authorization. Callers must keep both inputs
+    /// stable throughout capture and must later recheck the actual monotonic target
+    /// revision, source, approval and capacity in the atomic commit transaction.
+    /// A touching box counts as a collision; false positives are intentional.
+    /// </summary>
+    public static void EnsureTargetClear(ALineProjectEvidence evidence,ProjectDocument target)
+    {
+        var captured=Capture(evidence);var candidate=ValidateAndRead(captured);
+        ArgumentNullException.ThrowIfNull(target);ProjectStorage.Validate(target);
+        var snapshot=target.Clone();ProjectStorage.Validate(snapshot);
+        if(snapshot.NestingSnapshot is not null)throw new InvalidOperationException("Pastal geçmişi olan hedefte otomatik yerleşim desteklenmiyor.");
+        if(snapshot.Pieces.Count>ProjectStorage.MaximumPieces-2 || snapshot.Pieces.Sum(p=>(long)p.Points.Count)>ProjectStorage.MaximumTotalPoints-10)
+            throw new InvalidOperationException("İki panel için hedef kapasitesi yetersiz.");
+        if(snapshot.ALineEvidence is { } history)
+        {
+            if(history.Count>=128)throw new InvalidOperationException("A kesim kanıt geçmişi kapasitesi dolu.");
+            foreach(var historical in history)
+            {
+                var previous=ValidateAndRead(historical);
+                if(previous.FrontPieceId==candidate.FrontPieceId || previous.FrontPieceId==candidate.BackPieceId ||
+                   previous.BackPieceId==candidate.FrontPieceId || previous.BackPieceId==candidate.BackPieceId)
+                    throw new InvalidOperationException("Panel kimliği hedefin kanıt geçmişinde zaten kullanılıyor.");
+            }
+        }
+        if(snapshot.Pieces.Any(p=>p.Id==candidate.FrontPieceId || p.Id==candidate.BackPieceId))
+            throw new InvalidOperationException("Panel kimliği hedefte zaten kullanılıyor.");
+        static Bounds2 Bounds(double[] xy)=>Geometry.Bounds(Enumerable.Range(0,5).Select(i=>new Point2(xy[i*2],xy[i*2+1])).ToArray());
+        static bool Clear(Bounds2 a,Bounds2 b)=>a.MaxX<b.MinX || b.MaxX<a.MinX || a.MaxY<b.MinY || b.MaxY<a.MinY;
+        var front=Bounds(captured.FrontPlacedCoordinatesMm);var back=Bounds(captured.BackPlacedCoordinatesMm);
+        foreach(var piece in snapshot.Pieces)
+        {
+            // Include grainline endpoints as well as every contour point; open
+            // paths and degenerate boxes deliberately receive the same treatment.
+            var points=piece.Points.ToList();
+            if(piece.Grainline is { } grainline) { points.Add(grainline.Start);points.Add(grainline.End); }
+            var bounds=Geometry.Bounds(points);
+            if(!Clear(front,bounds) || !Clear(back,bounds))throw new InvalidOperationException("Panel yerleşimi hedefteki bir parçaya değiyor veya çakışıyor.");
+        }
     }}
 

@@ -90,5 +90,46 @@ public sealed class ALineProjectEvidenceTests
         Assert.Throws<InvalidDataException>(()=>ALineProjectEvidenceStorage.Create(native,[0,0,400,0]));
         Assert.Throws<InvalidDataException>(()=>ALineProjectEvidenceStorage.Create(native,[0,0,double.PositiveInfinity,0]));
         ALineProjectEvidenceStorage.Validate(ALineProjectEvidenceStorage.Create(native,[0,0,401,0]));
+    }    [Fact] public void TargetPreflightRejectsBothPanelsTouchingExistingPiecesAndDuplicateIds()
+    {
+        var (project,evidence)=Fixture();
+        static PatternPiece Box(double x)=>new() { Name="Mevcut",Closed=true,Points=[new(x,0),new(x+10,0),new(x+10,10),new(x,10)] };
+        var target=new ProjectDocument { Pieces=[Box(2000)] };
+        ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target);
+        target.Pieces=[Box(400)];Assert.Throws<InvalidOperationException>(()=>ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target));
+        target.Pieces=[Box(1000)];Assert.Throws<InvalidOperationException>(()=>ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target));
+        target.Pieces=[Box(2000)];target.Pieces[0].Id=project.Pieces[0].Id;
+        Assert.Throws<InvalidOperationException>(()=>ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target));
+        target.Pieces[0].Id=Guid.NewGuid();target.ALineEvidence=[evidence.Copy()];Assert.Throws<InvalidOperationException>(()=>ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target));
+        target.ALineEvidence=null;target.Pieces[0].Grainline=new() { Start=new(2000,1),End=new(400,1) };
+        Assert.Throws<InvalidOperationException>(()=>ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target));
+    }
+    [Fact] public void EditedDeletedPanelsAndHistoryOnlyUndoRemainStaleUntilRestored()
+    {
+        var (project,_)=Fixture();var session=new DocumentSession(project);
+        Assert.True(session.Execute(d=>d.Pieces[0].Points[0]=new Point2(1,0),ProjectStorage.Validate));
+        Assert.False(ALineProjectEvidenceStorage.Matches(session.Document.ALineEvidence![0],session.Document));
+        Assert.True(session.Execute(d=>d.Pieces.Clear(),ProjectStorage.Validate));
+        Assert.False(ALineProjectEvidenceStorage.Matches(session.Document.ALineEvidence![0],session.Document));
+        Assert.Equal(11,ProjectStorage.GetProjectFormatVersion(session.Document));
+        var restored=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(session.Document)));
+        Assert.False(ALineProjectEvidenceStorage.Matches(restored.ALineEvidence![0],restored));
+        Assert.True(session.Undo());Assert.False(ALineProjectEvidenceStorage.Matches(session.Document.ALineEvidence![0],session.Document));
+        Assert.True(session.Undo());Assert.True(ALineProjectEvidenceStorage.Matches(session.Document.ALineEvidence![0],session.Document));
+        Assert.True(session.Redo());Assert.False(ALineProjectEvidenceStorage.Matches(session.Document.ALineEvidence![0],session.Document));
+        Assert.True(session.Redo());Assert.Empty(session.Document.Pieces);Assert.NotNull(session.Document.ALineEvidence);
+    }
+    [Fact] public void MaximumHistoryOnlyEvidenceSurvivesUndoAndCountsTowardBudget()
+    {
+        var (_,evidence)=Fixture();var candidate=ALineCandidateEvidenceStorage.Deserialize(evidence.CandidateEvidenceJson);
+        var entries=Enumerable.Range(0,128).Select(_=>ALineProjectEvidenceStorage.Create(
+            ALineCandidateEvidenceStorage.Create(Guid.NewGuid(),Guid.NewGuid(),candidate.SourceSha256,candidate.InputsMm,candidate.OriginalEaseMm,candidate.CandidateEaseMm,candidate.FrontCoordinatesMm,candidate.BackCoordinatesMm),[0,0,1000,0])).ToList();
+        var project=new ProjectDocument { ALineEvidence=entries };ProjectStorage.Validate(project);
+        var history=new DocumentHistory();history.Record(project);Assert.True(history.StoredPointCount>128*24/2);
+        var session=new DocumentSession(project);Assert.True(session.Execute(d=>d.Name="changed",ProjectStorage.Validate));
+        Assert.True(session.Undo());Assert.Equal(128,session.Document.ALineEvidence!.Count);
+        Assert.True(session.Redo());Assert.Equal(128,session.Document.ALineEvidence!.Count);
+        Assert.All(session.Document.ALineEvidence!,entry=>Assert.False(ALineProjectEvidenceStorage.Matches(entry,session.Document)));
+        Assert.Throws<InvalidDataException>(()=> { project.ALineEvidence!.Add(entries[0].Copy());ProjectStorage.Validate(project); });
     }}
 
