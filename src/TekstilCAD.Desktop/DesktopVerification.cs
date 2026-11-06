@@ -11185,7 +11185,7 @@ internal static partial class DesktopVerification
                 var before=workspace.Document.Clone();int undoBefore=session.UndoCount;
                 trace.TryApplyAndContinue();
                 Check(DocumentSession.ContentEquals(before,workspace.Document) && session.UndoCount==undoBefore && canvas.Points.SequenceEqual(draft) &&
-                    trace.StatusForVerification.Text.Contains(scenario.StartsWith("source",StringComparison.Ordinal) ? "Kaynak istek" : "değişti"),
+                    trace.StatusForVerification.Text.Contains(scenario.StartsWith("source",StringComparison.Ordinal) ? "Kaynak değişti" : "değişti"),
                     "Photo continuation rejects stale "+scenario+" and preserves document and draft",checks);
             }
             finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close();typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close(); }
