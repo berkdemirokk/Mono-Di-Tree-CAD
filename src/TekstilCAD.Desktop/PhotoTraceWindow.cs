@@ -50,6 +50,8 @@ internal sealed class PhotoTraceWindow : Window
     private CancellationTokenSource? pathCancellation;
     private CancellationTokenSource? sessionCancellation;
     private PhotoRegionWindow.Continuation? regionContinuation;
+    internal Func<PhotoRegionWindow,bool?>? RegionDialogForVerification { get; set; }
+    internal void OpenRegionSuggestionForVerification()=>OpenRegionSuggestion();
 
     internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1,Func<bool>? sourceCurrent=null,Window? windowOwner=null)
     {
@@ -265,8 +267,7 @@ internal sealed class PhotoTraceWindow : Window
             if(!closed && revision==DraftRevision && SourcePurpose==purpose)StatusForVerification.Text="Giysi bölgesi yalnız incelendi; ölçü, kalıp veya CAD değişikliği yapılmadı.";
             return;
         }
-        var accepted=dialog.ShowDialog()==true;
-        regionContinuation=null;
+        var accepted=(RegionDialogForVerification is { } show ? show(dialog) : dialog.ShowDialog())==true;
         if(!accepted || dialog.SelectedContour is not { } contour)return;
         if(closed || revision!=DraftRevision || !CanvasForVerification.SetRegionContourSuggestion(contour))
         { StatusForVerification.Text="Taslak değişti veya sınır geçersiz; öneri kullanılmadı.";return; }

@@ -11204,6 +11204,38 @@ internal static partial class DesktopVerification
             Check(approximate.GetAwaiter().GetResult() && window.SelectedContour is { Length:>=3 and <=508 } && window.SelectedContourMaximumDeviation is double deviation && deviation<=1,
                 "Explicit approximation produces a bounded photo contour preview",checks);
             var continuation=window.CaptureContinuation();
+            var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!);
+            try {
+                trace.SourcePurposeForVerification.SelectedIndex=1;
+                trace.RegionDialogForVerification=dialog=> {
+                    dialog.ConfirmCloseForVerification=()=>true;
+                    try {
+                        if(!dialog.RestoreContinuation(continuation!))return false;
+                        dialog.Regions.SelectedIndex=0;
+                        var select=dialog.TrySelectContourAsync(true);PumpUntil(()=>select.IsCompleted);
+                        return select.GetAwaiter().GetResult();
+                    } finally { dialog.Close(); }
+                };
+                trace.OpenRegionSuggestionForVerification();
+                var proposal=trace.CanvasForVerification.PathSuggestion?.ToArray();
+                var draftRevision=trace.DraftRevision;
+                trace.RegionDialogForVerification=dialog=> {
+                    dialog.ConfirmCloseForVerification=()=>true;
+                    try {
+                        Check(dialog.CopyMaskForVerification()!.SequenceEqual(window.CopyMaskForVerification()!),
+                            "Previously accepted mask is available before cancellation",checks);
+                        return false;
+                    } finally { dialog.Close(); }
+                };
+                trace.OpenRegionSuggestionForVerification();
+                var afterCancel=trace.CreateRegionWindow()!;afterCancel.ConfirmCloseForVerification=()=>true;
+                try {
+                    Check(afterCancel.CopyMaskForVerification() is { } retained && retained.SequenceEqual(window.CopyMaskForVerification()!) &&
+                        afterCancel.Regions.SelectedIndex==-1 && afterCancel.SelectedContour is null && proposal is not null &&
+                        trace.CanvasForVerification.PathSuggestion!.SequenceEqual(proposal) && trace.DraftRevision==draftRevision,
+                        "Cancel preserves the accepted mask and existing suggestion without selecting a boundary",checks);
+                } finally { afterCancel.Close(); }
+            } finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close(); }
             var reopened=new PhotoRegionWindow(workspace,bitmap) { ConfirmCloseForVerification=()=>true };
             try {
                 Check(continuation is not null && reopened.RestoreContinuation(continuation) && reopened.Regions.Items.Count==window.Regions.Items.Count &&
