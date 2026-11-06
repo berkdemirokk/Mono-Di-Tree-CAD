@@ -1070,6 +1070,7 @@ internal static partial class DesktopVerification
             VerifyOptInRealMarkedBulkCleanup(studio,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
+            VerifyExperimentalSaveCompatibility(studio,work,checks);
             VerifyPlaneSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyMarkedGrading(studio,checks);
@@ -13833,6 +13834,34 @@ internal static partial class DesktopVerification
         finally { studio.ChooseCompatibilityForVerification=null; }
     }
 
+    private static void VerifyExperimentalSaveCompatibility(MainWindow studio,string work,List<string> checks)
+    {
+        var source=new PatternPiece { Name="Deneysel uyumluluk",Points=[new(0,0),new(10,0),new(0,10)] };
+        var path=Path.Combine(work,"experimental-compatibility-"+Guid.NewGuid().ToString("N")+".tcad");
+        ProjectStorage.Save(new ProjectDocument { Pieces=[source] },path);var oldBytes=File.ReadAllBytes(path);
+        studio.OpenProjectFile(path);studio.Commit("Deneysel işaret",()=>studio.Document.Pieces[0].ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front"));
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            Check(MainWindow.ExperimentalALineCompatibilityNotice.Contains("sürüm 10") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("Apple") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("onayı değildir"),
+                "Version 10 compatibility notice identifies old readers and the experimental limit",checks);
+            var prompts=0;studio.ChooseCompatibilityForVerification=existing=> { if(existing)prompts++;return MainWindow.GradingSaveChoice.Cancel; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(prompts==1 && File.ReadAllBytes(path).SequenceEqual(oldBytes) && session.UndoCount>0,
+                "Declining experimental format upgrade preserves file and undo history",checks);
+            studio.ChooseCompatibilityForVerification=_=> { prompts++;studio.Commit("Onay sırasında değişiklik",()=>studio.Document.Name="Güncel çalışma");return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(prompts==2 && File.ReadAllBytes(path).SequenceEqual(oldBytes) && studio.Document.Name=="Güncel çalışma" && session.UndoCount>0,
+                "Changing the project during version upgrade confirmation blocks save and preserves undo",checks);
+            studio.ChooseCompatibilityForVerification=_=> { prompts++;return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            using var saved=JsonDocument.Parse(File.ReadAllBytes(path));
+            Check(prompts==3 && saved.RootElement[0].GetInt32()==10 && DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(path)),
+                "Approved experimental upgrade writes and reopens version 10",checks);
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);Check(prompts==3,"Saving an existing version 10 does not repeat the upgrade prompt",checks);
+        }
+        finally { studio.ChooseCompatibilityForVerification=null; }
+    }
     private static void VerifyNotchSaveCompatibility(MainWindow studio,string work,List<string> checks)
     {
         var piece=new PatternPiece { Name="Kaydetme testi",Points=[new(0,0),new(10,0),new(0,10)] };
