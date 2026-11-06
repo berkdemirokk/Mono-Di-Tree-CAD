@@ -6,6 +6,8 @@ Sabit kaynak: https://github.com/maria-korosteleva/GarmentCode/tree/d44962997902
 
 [Ölçüm kanıtı matrisi](MEASUREMENT_EVIDENCE_TR.md), sabit tasarımın 20 alanını kaynak kodu, daha sonraki 3B ölçüm araştırması ve resmi antropometri örnekleriyle karşılaştırır; gerçek kişiler için açık kalan protokol ve yöntem farklarını belirtir.
 
+[Deterministik ölçü tutarlılığı](MEASUREMENT_CONSISTENCY_TR.md), model kapsamı retlerini koşullu gözden geçirme sinyallerinden ayırır; gerçek kişi veri girişi veya ölçü doğruluğu onayı sağlamaz.
+
 [Gerçek ürün engelleri ve sayısal dikiş tanısı](REAL_PRODUCT_BARRIERS_TR.md), iki sentetik örneğin 23 kuralındaki aralık belirsizliğini ve ölçüm/prova kanıtı eksiklerini açıklar.
 
 `generate.py`, kaynak HEAD, proje Python dosyaları, tasarım YAML ve sabit sentetik dosya özetlerini denetler; yalnız belirlenen iki sentetik bedeni oluşturur. Ağ çağrılarını Python seviyesinde engellemek işletim sistemi düzeyinde sandbox değildir. `MetaGarment` gerçek nesnesini seçili kaynak varsayılanlarıyla, `FittedShirt` + `PencilSkirt`, kemersiz olarak kurar. Bütün erişilen alt bileşen ve panel nesnelerini dolaşır; her yerel kenarın başlangıç/bitişini, göreli Bézier kontrol noktalarını veya dairesel kenarın göreli kontrol değerini, kaynak örneklerini ve iç içe dikiş arayüzlerinin kenar referansları, yön bayrakları ve büzgü bölümlerini kaydeder. Kaynak nesne yapısından çıkarılan ilişkilerdir; etiketleri yorumlayarak üretilmiş üretim talimatı değildir. Kaynak varsayılanı kolsuzdur: bu iki örnekte ayrı kol paneli ya da kol bağlantısı yoktur; yaka çizgileri gövde konturlarında bulunur. Dikiş tipleri için isimlerden kesin semantik çıkarılmadı.
