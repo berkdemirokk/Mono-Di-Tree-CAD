@@ -482,6 +482,12 @@ public sealed class DxfImportProvenance
         SourceByteLength=SourceByteLength, MillimetersPerUnit=MillimetersPerUnit, Warnings=[.. Warnings], PieceIds=[.. PieceIds] };
 
     /// <summary>Validate bounded, untrusted historical data at a persistence or import boundary.</summary>
+    public static ALineExperimentalProvenance? Merge(ALineExperimentalProvenance? first,ALineExperimentalProvenance? second)
+    {
+        if(first is null)return second;if(second is null)return first;
+        if(first!=second)throw new InvalidOperationException("Farklı deneysel A kesim kaynakları birleştirilemiyor; kısıtlı kaynak bilgisi kaybolamaz.");
+        return first;
+    }
     public void Validate()
     {
         static bool ValidText(string? text, int maximum)

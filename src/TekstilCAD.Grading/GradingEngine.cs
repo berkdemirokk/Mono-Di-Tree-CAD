@@ -242,7 +242,7 @@ public static class GradingEngine
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
-        return new PatternPiece { Id = Guid.NewGuid(), Name = $"{basePiece.Name} · {sizeName.Trim()}", Points = result, Closed = basePiece.Closed, Grainline = grainline, Notches = resultMarks };
+        return new PatternPiece { Id = Guid.NewGuid(), Name = $"{basePiece.Name} · {sizeName.Trim()}", Points = result, Closed = basePiece.Closed, Grainline = grainline, Notches = resultMarks, ExperimentalALine=basePiece.ExperimentalALine };
     }
 
     private static double GradeCoordinate(double source, double increment, double steps, int index, string axis)

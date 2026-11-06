@@ -34,7 +34,7 @@ public static class ContourPathExtraction
             if(map.TryGetValue(mark.VertexIndex,out var mapped))marks.Add(new NotchMark { VertexIndex=mapped,Position=mark.Position });
         }
         token.ThrowIfCancellationRequested();
-        var result=new PatternPiece { Name="Kontur kenarı · "+source.Id.ToString("N"),Closed=false,Points=path,Notches=marks.Count==0 ? null : marks };
+        var result=new PatternPiece { Name="Kontur kenarı · "+source.Id.ToString("N"),Closed=false,Points=path,Notches=marks.Count==0 ? null : marks,ExperimentalALine=source.ExperimentalALine };
         return new(result,start,end,(source.Notches?.Count ?? 0)-marks.Count,end<start,reverse);
     }
     /// <summary>Copy a bit-matched saved rule to exactly the extracted interval.</summary>

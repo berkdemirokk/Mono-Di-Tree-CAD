@@ -1722,7 +1722,7 @@ public class MainWindow : Window
         var duplicate=new PatternPiece { Id=Guid.NewGuid(),Name=sourcePiece.Name[..length]+suffix,
             Points=[..sourcePiece.Points],Closed=sourcePiece.Closed,Metadata=choice.Value.CopyMetadata ? sourcePiece.Metadata?.Clone() : null,
             Grainline=choice.Value.CopyGrainline ? sourcePiece.Grainline?.Clone() : null,
-            Notches=sourcePiece.Notches?.Select(mark=>mark.Clone()).ToList() };
+            Notches=sourcePiece.Notches?.Select(mark=>mark.Clone()).ToList(),ExperimentalALine=sourcePiece.ExperimentalALine };
         var copiedRule=choice.Value.CopyGrading ? sourceRule!.Clone() : null;
         if(copiedRule is not null)copiedRule.SourcePieceId=duplicate.Id;
         var committed=false;

@@ -1,5 +1,8 @@
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
+using TekstilCAD.Patterns;
+using TekstilCAD.Nesting;
+using TekstilCAD.Grading;
 
 namespace TekstilCAD.Tests;
 
@@ -17,6 +20,18 @@ public sealed class ALineExperimentalProvenanceTests
         Assert.NotNull(session.Document.Pieces[0].ExperimentalALine);Assert.True(session.Undo());Assert.NotNull(session.Document.Pieces[0].ExperimentalALine);
         Assert.True(session.Redo());Assert.NotNull(session.Document.Pieces[0].ExperimentalALine);
         Assert.Throws<InvalidOperationException>(()=>ExperimentalOutputGuard.EnsureAllowed(session.Document.Pieces));
+    }
+    [Fact] public void DerivationsRetainRestrictionAndIncompatibleSourcesCannotMerge()
+    {
+        var closed=Document().Pieces[0];var provenance=closed.ExperimentalALine;
+        Assert.Equal(provenance,OrthogonalRotation.Rotate(closed,90).ExperimentalALine);
+        Assert.Equal(provenance,GradingEngine.Generate(closed,Enumerable.Repeat(new Point2(0,0),closed.Points.Count).ToArray(),1,"M").ExperimentalALine);
+        var path=ContourPathExtraction.Extract(closed,0,3).Piece;Assert.Equal(provenance,path.ExperimentalALine);
+        var split=OpenPathSplit.Split(path,1);Assert.Equal(provenance,split.First.ExperimentalALine);Assert.Equal(provenance,split.Second.ExperimentalALine);
+        var joined=OpenPathJoin.Join(split.First,split.Second,0).Piece;Assert.Equal(provenance,joined.ExperimentalALine);
+        Assert.Equal(provenance,OpenPathClosure.Close(joined,200).Piece.ExperimentalALine);
+        Assert.Equal(provenance,ALineExperimentalProvenance.Merge(null,provenance));
+        Assert.Throws<InvalidOperationException>(()=>ALineExperimentalProvenance.Merge(provenance,provenance! with { Side="back" }));
     }
     [Fact] public void VersionedRoundTripRejectsDowngradeAndIncompleteOrUnknownMarker()
     {

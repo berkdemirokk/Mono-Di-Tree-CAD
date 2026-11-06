@@ -23,7 +23,7 @@ public static class OpenPathSplit
         }
         cancellationToken.ThrowIfCancellationRequested();
         var prefix=source.Id.ToString("N");
-        return (new PatternPiece { Name="Açık bölüm A · "+prefix,Closed=false,Points=first,Notches=firstMarks.Count==0 ? null : firstMarks },
-            new PatternPiece { Name="Açık bölüm B · "+prefix,Closed=false,Points=second,Notches=secondMarks.Count==0 ? null : secondMarks });
+        return (new PatternPiece { Name="Açık bölüm A · "+prefix,Closed=false,Points=first,Notches=firstMarks.Count==0 ? null : firstMarks,ExperimentalALine=source.ExperimentalALine },
+            new PatternPiece { Name="Açık bölüm B · "+prefix,Closed=false,Points=second,Notches=secondMarks.Count==0 ? null : secondMarks,ExperimentalALine=source.ExperimentalALine });
     }
 }
