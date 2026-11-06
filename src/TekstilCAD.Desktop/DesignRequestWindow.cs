@@ -993,8 +993,8 @@ internal sealed class DesignRequestWindow : Window
     {
         if(closed || referenceLoadRunning || referenceSelectionPending || reference is null || Owner is not MainWindow studio)
         { if(!closed)SetStatus("Önce fotoğraf seçimini tamamlayın ve ana çizim penceresini kontrol edin.");return null; }
-        var request=Capture();var revision=referenceRevision;var chat=chatInput.Text;var wasDirty=dirty;
-        bool Current()=>!closed && !referenceLoadRunning && !referenceSelectionPending && revision==referenceRevision &&
+        var request=Capture();var revision=referenceRevision;var question=questionRevision;var chatVersion=chatRevision;var modelVersion=modelRevision;var chat=chatInput.Text;var wasDirty=dirty;
+        bool Current()=>!closed && !referenceLoadRunning && !referenceSelectionPending && revision==referenceRevision && question==questionRevision && chatVersion==chatRevision && modelVersion==modelRevision &&
             chat==chatInput.Text && wasDirty==dirty && SameRequest(request,Capture());
         bool ConfirmTarget()
         {
@@ -1012,7 +1012,7 @@ internal sealed class DesignRequestWindow : Window
             }
             finally { preparingDrawingTarget=false; }
         }
-        return new ReferencePhotoWindow(this,request.Reference!.Data,ConfirmTarget);
+        return new ReferencePhotoWindow(this,request.Reference!.Data,ConfirmTarget,Current);
     }
     private async Task ObservePhotoAsync()
     {
@@ -1093,4 +1093,5 @@ internal sealed class DesignRequestWindow : Window
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
         (a.Reference is null ? b.Reference is null : b.Reference is not null && a.Reference.Name==b.Reference.Name && a.Reference.MediaType==b.Reference.MediaType && a.Reference.Data.AsSpan().SequenceEqual(b.Reference.Data));
 }
+
 

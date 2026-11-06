@@ -18,6 +18,7 @@ internal sealed class PhotoTraceWindow : Window
 {
     private readonly MainWindow workspace;
     private readonly MainWindow.PhotoTraceStamp stamp;
+    private readonly Func<bool>? sourceCurrent;
     private readonly BitmapSource image;
     private readonly int sourceWidth,sourceHeight;
     private readonly string? sourceSha256;
@@ -49,9 +50,9 @@ internal sealed class PhotoTraceWindow : Window
     private CancellationTokenSource? pathCancellation;
     private CancellationTokenSource? sessionCancellation;
 
-    internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1)
+    internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1,Func<bool>? sourceCurrent=null)
     {
-        this.workspace=workspace;this.stamp=stamp;image=bitmap;this.sourceWidth=sourceWidth==0 ? bitmap.PixelWidth : sourceWidth;this.sourceHeight=sourceHeight==0 ? bitmap.PixelHeight : sourceHeight;this.sourceSha256=sourceSha256;this.sourceByteLength=sourceByteLength;this.sourceOrientation=sourceOrientation;Owner=workspace;Title="Fotoğrafta elle taslak çiz";Width=820;Height=760;MinWidth=560;MinHeight=480;
+        this.workspace=workspace;this.stamp=stamp;this.sourceCurrent=sourceCurrent;image=bitmap;this.sourceWidth=sourceWidth==0 ? bitmap.PixelWidth : sourceWidth;this.sourceHeight=sourceHeight==0 ? bitmap.PixelHeight : sourceHeight;this.sourceSha256=sourceSha256;this.sourceByteLength=sourceByteLength;this.sourceOrientation=sourceOrientation;Owner=workspace;Title="Fotoğrafta elle taslak çiz";Width=820;Height=760;MinWidth=560;MinHeight=480;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(12) };Content=root;
@@ -463,6 +464,7 @@ internal sealed class PhotoTraceWindow : Window
     }
     internal void TryApply()
     {
+        if(sourceCurrent is not null && !sourceCurrent()) { StatusForVerification.Text="Kaynak istek veya fotoğraf değişti ya da kapandı; taslak projeye eklenmedi.";return; }
         if(SourcePurpose!=PhotoSourcePurpose.FlatPattern) { StatusForVerification.Text="CAD'e ölçekli taslak eklemek için düz serilmiş kalıp görselini seçin; giysi/model referansı kalıp değildir.";return; }
         try
         {
@@ -501,6 +503,7 @@ internal sealed class PhotoTraceWindow : Window
             var approvedRevision=DraftRevision;
             var confirmed=ConfirmForVerification?.Invoke(question) ?? (MessageBox.Show(this,question,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!confirmed) { StatusForVerification.Text="İşlem iptal edildi; proje değiştirilmedi.";return; }
+            if(sourceCurrent is not null && !sourceCurrent()) { StatusForVerification.Text="Kaynak istek veya fotoğraf değişti ya da kapandı; taslak projeye eklenmedi.";return; }
             if(DraftRevision!=approvedRevision) { StatusForVerification.Text="Fotoğraf noktaları veya değerleri değişti; taslak eklenmedi.";return; }
             if(!workspace.ApplyPhotoTrace(stamp,trace,history,out var addedId)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
             allowClose=true;Close();

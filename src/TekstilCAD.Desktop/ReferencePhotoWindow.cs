@@ -19,11 +19,12 @@ internal sealed class ReferencePhotoWindow : Window
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };
     private bool closed;
     internal Func<bool>? ConfirmTraceTargetForVerification { get; private set; }
+    internal Func<bool>? TraceSourceCurrentForVerification { get; private set; }
 
-    internal ReferencePhotoWindow(Window owner,byte[] source,Func<bool>? confirmTraceTarget=null)
+    internal ReferencePhotoWindow(Window owner,byte[] source,Func<bool>? confirmTraceTarget=null,Func<bool>? traceSourceCurrent=null)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(source);
-        ConfirmTraceTargetForVerification=confirmTraceTarget;data=(byte[])source.Clone();Owner=owner;Title="Referans görseli";Width=640;Height=640;MinWidth=360;MinHeight=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        TraceSourceCurrentForVerification=traceSourceCurrent;ConfirmTraceTargetForVerification=confirmTraceTarget;data=(byte[])source.Clone();Owner=owner;Title="Referans görseli";Width=640;Height=640;MinWidth=360;MinHeight=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         StudioTheme.Apply(this);Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });
         Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(14) };Content=root;
@@ -38,7 +39,7 @@ internal sealed class ReferencePhotoWindow : Window
             if(studio is null || decodedPreview is not { } captured) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
             if(confirmTraceTarget is not null && !confirmTraceTarget()) { StatusForVerification.Text="Çizime geçiş iptal edildi veya kaynak değişti; istek ve fotoğraf korundu.";return; }
             var stamp=studio.CapturePhotoTrace();if(stamp is null) { StatusForVerification.Text="Çizime geçilemedi; ana penceredeki durumu kontrol edin.";return; }
-            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
+            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation,traceSourceCurrent);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
         };
         AutomationProperties.SetName(StatusForVerification,"Görsel önizleme durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         StatusForVerification.Text="Görsel açılıyor…";DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
@@ -64,5 +65,7 @@ internal sealed class ReferencePhotoWindow : Window
         }
     }
 }
+
+
 
 
