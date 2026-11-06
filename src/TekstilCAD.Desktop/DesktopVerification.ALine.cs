@@ -216,7 +216,7 @@ internal static partial class DesktopVerification
                     sideDisplay.BalanceTextForVerification.Text.Contains("değişti"),"Form change during candidate approval prevents stale display",checks);
                 Fill(sideDisplay,false);sideDisplay.FieldsForVerification[0].Text="300";sideDisplay.FieldsForVerification[1].Text="500";
                 sideDisplay.FieldsForVerification[4].Text="0";sideDisplay.FieldsForVerification[5].Text="0";ReviewAndDraw(sideDisplay);Click(sideDisplay.BalanceExploreForVerification);
-                Check(!sideDisplay.BalanceAcceptForVerification.IsEnabled && sideDisplay.BalanceTextForVerification.Text.Contains("Negatif"),
+                Check(!sideDisplay.BalanceAcceptForVerification.IsEnabled && sideDisplay.BalanceTextForVerification.Text.Contains("Bel: Negatif") && sideDisplay.BalanceTextForVerification.Text.Contains("kaynak istekte kendiniz düzeltin") && sideDisplay.BalanceTextForVerification.Text.Contains("beden uyumu önerisi değildir"),
                     "Candidate is unavailable when nonnegative ease cannot balance the arcs",checks);
                 Fill(sideDisplay,false);ReviewAndDraw(sideDisplay);Click(sideDisplay.BalanceExploreForVerification);sideDisplay.ConfirmBalanceForVerification=()=>true;
                 var beforeCandidate=sideDisplay.FieldsForVerification.Select(f=>f.Text).ToArray();Click(sideDisplay.BalanceAcceptForVerification);

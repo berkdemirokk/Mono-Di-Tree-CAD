@@ -30,10 +30,23 @@ public static class ALineSideBalance
         }
         var waist=Balance(input.FrontWaistArc,input.BackWaistArc,input.FrontWaistEase,input.BackWaistEase);
         var hip=Balance(input.FrontHipArc,input.BackHipArc,input.FrontHipEase,input.BackHipEase);
-        if(!double.IsFinite(waist.Front) || !double.IsFinite(waist.Back) || !double.IsFinite(hip.Front) || !double.IsFinite(hip.Back) ||
-           waist.Front<0 || waist.Back<0 || hip.Front<0 || hip.Back<0 ||
-           waist.Front>10000 || waist.Back>10000 || hip.Front>10000 || hip.Back>10000)
-            return new(input,null,"Negatif veya sınır dışı bolluk gerekeceğinden bu yöntemle aday bulunamadı; kaynak ölçüler korunuyor.");
+        if(!double.IsFinite(waist.Front) || !double.IsFinite(waist.Back) || !double.IsFinite(hip.Front) || !double.IsFinite(hip.Back))
+            return new(input,null,"Sayısal hesap geçersiz; hiçbir değer değiştirilmedi. Ölçü ve birimleri kontrol edip yeniden deneyin.");
+        var issues=new List<string>();
+        static void Describe(string area,double frontArc,double backArc,double frontEase,double backEase,(double Front,double Back) proposed,List<string> issues)
+        {
+            if(proposed.Front<0 || proposed.Back<0)
+            {
+                var available=frontEase+backEase;var required=Math.Abs(frontArc-backArc);var deficit=required-available;
+                issues.Add($"{area}: Negatif {(proposed.Front<0 ? "ön" : "arka")} bolluk gerekir. Ön/arka beden yayı farkı yaklaşık {required:G17} mm; girilen toplam bolluk yaklaşık {available:G17} mm, bu yöntemde eksik toplam yaklaşık {deficit:G17} mm.");
+            }
+            if(proposed.Front>10000 || proposed.Back>10000)
+                issues.Add($"{area}: Hesaplanan {(proposed.Front>10000 ? "ön" : "arka")} bolluk 10000 mm sınırını aşıyor.");
+        }
+        Describe("Bel",input.FrontWaistArc,input.BackWaistArc,input.FrontWaistEase,input.BackWaistEase,waist,issues);
+        Describe("Kalça",input.FrontHipArc,input.BackHipArc,input.FrontHipEase,input.BackHipEase,hip,issues);
+        if(issues.Count>0)
+            return new(input,null,string.Join(Environment.NewLine,issues)+"\nBu sayılar yalnız bu eşit genişlik varsayımının matematiksel sınırıdır; bolluk artırma veya beden uyumu önerisi değildir. İlgili ön/arka beden yayı ve bolluk alanlarını ölçü kaynağınızla karşılaştırın; yanlış değeri formda veya kaynak istekte kendiniz düzeltin, ardından ölçü özetini ve simetriyi yeniden inceleyip onaylayın. Otomatik değişiklik yapılmadı; başka dağılımların imkânsızlığı kanıtlanmadı.");
         var candidate=input with { FrontWaistEase=waist.Front,BackWaistEase=waist.Back,FrontHipEase=hip.Front,BackHipEase=hip.Back };
         ALinePanelPreview preview;
         try { preview=ALinePanelPreview.Create(candidate); }
