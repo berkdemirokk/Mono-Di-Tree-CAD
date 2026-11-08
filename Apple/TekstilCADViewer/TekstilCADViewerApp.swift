@@ -4005,7 +4005,7 @@ private struct ExperimentalDesignBriefView: View {
                 focusedStepHeading = newStep
             }
     }
-    private var requestPresentationCore: some View {
+    private var requestPresentationBase: some View {
             ScrollViewReader { requestScroll in
             requestFormView(requestScroll: requestScroll)
             }
@@ -4062,6 +4062,9 @@ private struct ExperimentalDesignBriefView: View {
                 PhotoObservationView(request: request, apply: { request, selection in applyPhotoObservation(request, selection: selection) },
                                      edit: { request, plan in editPhotoObservation(request, plan: plan) })
             }
+    }
+    private var requestPresentationImports: some View {
+            requestPresentationBase
             .fileImporter(isPresented: $showingPortableRequestImport, allowedContentTypes: [.json]) { result in
                 do {
                     guard canOpenImport else { localStatus = "Bekleyen ölçüler veya görsel işlemi var; dosya açılmadı ve girişler korundu."; return }
@@ -4175,6 +4178,9 @@ private struct ExperimentalDesignBriefView: View {
                     }
                 }
             }
+    }
+    private var requestPresentationCore: some View {
+            requestPresentationImports
             .confirmationDialog("Model önerisini inceleyin", isPresented: $showModelSuggestion, titleVisibility: .visible) {
                 Button("Önerilen modeli seç") { applyModelSuggestion() }
                 Button("Vazgeç", role: .cancel) { modelSuggestion = nil }
