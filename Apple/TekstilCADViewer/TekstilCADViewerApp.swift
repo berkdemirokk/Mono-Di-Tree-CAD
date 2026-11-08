@@ -4005,7 +4005,7 @@ private struct ExperimentalDesignBriefView: View {
                 focusedStepHeading = newStep
             }
     }
-    private var requestPresentation: some View {
+    private var requestPresentationCore: some View {
             ScrollViewReader { requestScroll in
             requestFormView(requestScroll: requestScroll)
             }
@@ -4249,6 +4249,9 @@ private struct ExperimentalDesignBriefView: View {
                     ?? "Kayıt değişti; paylaşımı yeniden kontrol edin.")
             }
             #endif
+    }
+    private var requestPresentation: some View {
+            requestPresentationCore
             .confirmationDialog("İstek dosyası biçimi", isPresented: $choosingRequestVersion, titleVisibility: .visible) {
                 Button("V1: Windows ile uyumlu kopya") { if requestExportVersion != 1 { referenceRevision.changed() }; requestExportVersion = 1; prepareExport() }
                 Button("V2: model kimliğini koru (deneysel)") { if requestExportVersion != 2 { referenceRevision.changed() }; requestExportVersion = 2; prepareExport() }
