@@ -417,9 +417,13 @@ struct ExperimentalV7PieceReader {
 
     #if DEBUG
     var retainedEntriesForTesting: Int {
-        pieces.count + (piece == nil ? 0 : 1) + (mappingToken == nil ? 0 : 1) + sourceGeometry.count + historyGeometry.count + sourceFingerprintPieces.count + historyFingerprintPieces.count +
-        sourceQuantities.count + sourceOrder.count + sourceIDs.count + historyIDs.count + selectionIDs.count + rotationAngles.count +
-        placementMappings.count + traceMappings.count
+        let pending: Int = (piece == nil ? 0 : 1) + (mappingToken == nil ? 0 : 1)
+        let geometry: Int = pieces.count + sourceGeometry.count + historyGeometry.count
+        let fingerprints: Int = sourceFingerprintPieces.count + historyFingerprintPieces.count
+        let sources: Int = sourceQuantities.count + sourceOrder.count + sourceIDs.count
+        let history: Int = historyIDs.count + selectionIDs.count + rotationAngles.count
+        let mappings: Int = placementMappings.count + traceMappings.count
+        return pending + geometry + fingerprints + sources + history + mappings
     }
     #endif
 
