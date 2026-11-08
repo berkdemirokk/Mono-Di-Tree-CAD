@@ -143,9 +143,7 @@ private struct ContentView: View {
     @State private var notchSelectionRevision = UUID()
     @State private var modelReadCancellation: ModelReadCancellation?
 
-    var body: some View {
-        ScrollView {
-        VStack(spacing: 12) {
+    private var projectHeader: some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
@@ -176,6 +174,12 @@ private struct ContentView: View {
             .padding(16)
             .background(Color(red: 0.29, green: 0.08, blue: 0.14).opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    var body: some View {
+        ScrollView {
+        VStack(spacing: 12) {
+            projectHeader
             Text(interfaceEnglish ? "Open a source project to prepare an A4 marker preview in the workshop. Production approval and direct plotter output are not available." : "Kaynak projeyi açarak atölyede A4 pastal önizlemesi hazırlayabilirsiniz. Üretim onayı ve doğrudan plotter çıktısı desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
             if loadedModel.load.isLoading {
@@ -2014,7 +2018,15 @@ struct Drawing {
             if metadataEmpty { warning.append("Üretim bilgileri boş") }
             if roleUnreadable { warning.append("Parça türü okunamadı veya geçersiz") }
             if textMetadataUnreadable { warning.append("Beden veya malzeme okunamadı veya geçersiz") }
-            return (["Parça \(index + 1)"] + (id.map { ["Kimlik: \($0.uuidString)"] } ?? []) + [closed ? "Kapalı kontur" : "Açık kontur", "\(points.count) nokta"] + fields + dimensions + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
+            var details = ["Parça \(index + 1)"]
+            if let id { details.append("Kimlik: \(id.uuidString)") }
+            details.append(closed ? "Kapalı kontur" : "Açık kontur")
+            details.append("\(points.count) nokta")
+            details.append(contentsOf: fields)
+            details.append(contentsOf: dimensions)
+            details.append(contentsOf: warning)
+            if !notches.isEmpty { details.append("\(notches.count) köşe işareti") }
+            return details.joined(separator: " · ")
         }
 
         var rawSearchText: String {
