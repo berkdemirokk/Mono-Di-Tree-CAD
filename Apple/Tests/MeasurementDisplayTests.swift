@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class MeasurementDisplayTests: XCTestCase {
     func testZeroAndSmallNonzeroRemainDistinct() throws {

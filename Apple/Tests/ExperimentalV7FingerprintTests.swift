@@ -1,5 +1,5 @@
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class ExperimentalV7FingerprintTests: XCTestCase {
     private func point(_ x: Double, _ y: Double) -> ExperimentalV7Fingerprint.Point { .init(x: x.bitPattern, y: y.bitPattern) }

@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class ExperimentalJSONStreamTests: XCTestCase {
     private func validate(_ input: Data, chunkSize: Int) throws {

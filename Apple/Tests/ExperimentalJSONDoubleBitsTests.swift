@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class ExperimentalJSONDoubleBitsTests: XCTestCase {
     private func bits(_ token: String) throws -> UInt64 { try ExperimentalJSONDoubleBits.parse(Data(token.utf8)) }

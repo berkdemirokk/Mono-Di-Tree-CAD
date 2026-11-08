@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class ExperimentalV7PieceReaderTests: XCTestCase {
     private var minimalSnapshot: String {

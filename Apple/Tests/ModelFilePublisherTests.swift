@@ -1,7 +1,7 @@
 import Foundation
 import Darwin
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class FilePickerCancellationTests: XCTestCase {
     func testOnlyCocoaUserCancellationIsIgnored() {

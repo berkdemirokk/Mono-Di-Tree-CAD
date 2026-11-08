@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class ExperimentalPieceRenameTests: XCTestCase {
     private let first = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!

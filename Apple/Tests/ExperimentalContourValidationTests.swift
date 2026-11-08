@@ -1,5 +1,5 @@
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class ExperimentalContourValidationTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ExperimentalContourValidation.Point { .init(x: x, y: y) }

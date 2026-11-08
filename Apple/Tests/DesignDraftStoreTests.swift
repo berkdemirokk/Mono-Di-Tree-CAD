@@ -2,7 +2,7 @@ import XCTest
 import ImageIO
 import CoreGraphics
 import UIKit
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 private func makeTestRequest(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
     try ExperimentalDesignBrief.make(.init(style: .describe, description: prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: measurements, image: image, imageName: imageName))

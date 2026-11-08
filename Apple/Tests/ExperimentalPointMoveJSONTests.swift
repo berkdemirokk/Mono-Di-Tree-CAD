@@ -1,5 +1,5 @@
 import XCTest
-@testable import TekstilCADViewer_iOS
+@testable import TekstilCADViewer
 
 final class ExperimentalPointMoveJSONTests: XCTestCase {
     #if DEBUG
