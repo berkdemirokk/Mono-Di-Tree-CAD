@@ -251,6 +251,33 @@ struct BodyMeasurementNotesView: View {
                     }
                 }
     }
+    private func measurementFooter(proxy: ScrollViewProxy) -> some View {
+                VStack(spacing: 6) {
+                    if !status.isEmpty {
+                        Text(status).font(.caption).frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Ölçü uyarısı: " + status)
+                        if let index = statusFieldIndex, let group = BodyMeasurementNotes.groupIndex(forField: index) {
+                            Button("İlgili ölçü alanına git") {
+                                focusedIndex = nil; fieldJumpRevision = UUID()
+                                if groupIndex == group { scrollToField(index, group: group, proxy: proxy) }
+                                else { pendingFieldJump = index; groupIndex = group }
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityHint(BodyMeasurementNotes.fields[index].label + " alanını gösterir.")
+                        }
+                    }
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 16) { groupActions }.fixedSize(horizontal: true, vertical: false)
+                        VStack(spacing: 4) { groupActions }
+                    }.frame(maxWidth: .infinity)
+                    Button("Girilenleri gözden geçir ve ekle") {
+                        focusedIndex = nil; rememberForm()
+                        pendingAddition = .init(form: .init(values: values, unit: unit), revision: revision,
+                                                notes: notes, existingNotes: measurementsWithNotes(notes), savedForm: savedForm)
+                        confirm = true
+                    }
+                        .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.borderedProminent)
+                }.padding(8).background(.regularMaterial)
+    }
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
@@ -294,31 +321,7 @@ struct BodyMeasurementNotesView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 6) {
-                    if !status.isEmpty {
-                        Text(status).font(.caption).frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Ölçü uyarısı: " + status)
-                        if let index = statusFieldIndex, let group = BodyMeasurementNotes.groupIndex(forField: index) {
-                            Button("İlgili ölçü alanına git") {
-                                focusedIndex = nil; fieldJumpRevision = UUID()
-                                if groupIndex == group { scrollToField(index, group: group, proxy: proxy) }
-                                else { pendingFieldJump = index; groupIndex = group }
-                            }
-                            .frame(minHeight: 44)
-                            .accessibilityHint(BodyMeasurementNotes.fields[index].label + " alanını gösterir.")
-                        }
-                    }
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 16) { groupActions }.fixedSize(horizontal: true, vertical: false)
-                        VStack(spacing: 4) { groupActions }
-                    }.frame(maxWidth: .infinity)
-                    Button("Girilenleri gözden geçir ve ekle") {
-                        focusedIndex = nil; rememberForm()
-                        pendingAddition = .init(form: .init(values: values, unit: unit), revision: revision,
-                                                notes: notes, existingNotes: measurementsWithNotes(notes), savedForm: savedForm)
-                        confirm = true
-                    }
-                        .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.borderedProminent)
-                }.padding(8).background(.regularMaterial)
+                measurementFooter(proxy: proxy)
             }
             .tint(colorScheme == .dark ? Color(red: 1, green: 0.72, blue: 0.78) : Color(red: 0.29, green: 0.08, blue: 0.14))
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Klavyeyi kapat") { focusedIndex = nil } } }

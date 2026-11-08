@@ -3691,23 +3691,7 @@ private struct ExperimentalDesignBriefView: View {
 
                 }
     }
-    var body: some View {
-        NavigationStack {
-            ScrollViewReader { requestScroll in
-            Form {
-                Section {
-                    HStack {
-                        Text(briefStepTitle).font(.headline).accessibilityAddTraits(.isHeader)
-                            .accessibilityLabel("\(briefStepTitle), adım \(step + 1), toplam dört adım")
-                            .accessibilityFocused($focusedStepHeading, equals: step)
-                        Spacer()
-                        Text("\(step + 1) / 4").font(.caption.weight(.semibold))
-                            .accessibilityHidden(true)
-                    }.id("request-step-start")
-                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
-                    Text(briefStepGuidance).font(.subheadline).foregroundStyle(.secondary)
-                }
-                if step == 0 {
+    private func modelSelectionSection(requestScroll: ScrollViewProxy) -> some View {
                 Section {
                     Text("ATÖLYE PROJESİ · YENİ ÇALIŞMA").font(.caption.weight(.semibold)).foregroundStyle(plum).padding(.horizontal, 10).padding(.vertical, 5).background(plum.opacity(0.10), in: Capsule())
                     Text("Modelini seç").font(.system(.largeTitle, design: .serif)).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
@@ -3783,6 +3767,25 @@ private struct ExperimentalDesignBriefView: View {
                         } }
                     }
                 }
+    }
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { requestScroll in
+            Form {
+                Section {
+                    HStack {
+                        Text(briefStepTitle).font(.headline).accessibilityAddTraits(.isHeader)
+                            .accessibilityLabel("\(briefStepTitle), adım \(step + 1), toplam dört adım")
+                            .accessibilityFocused($focusedStepHeading, equals: step)
+                        Spacer()
+                        Text("\(step + 1) / 4").font(.caption.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }.id("request-step-start")
+                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
+                    Text(briefStepGuidance).font(.subheadline).foregroundStyle(.secondary)
+                }
+                if step == 0 {
+                modelSelectionSection(requestScroll: requestScroll)
                 Section {
                     let overview = ExperimentalDesignBrief.AtelierOverview(draft)
                     let summary = ExperimentalDesignBrief.RequestSummary(draft)
