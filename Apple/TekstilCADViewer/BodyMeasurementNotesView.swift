@@ -278,9 +278,7 @@ struct BodyMeasurementNotesView: View {
                         .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.borderedProminent)
                 }.padding(8).background(.regularMaterial)
     }
-    var body: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
+    private func measurementFormView(proxy: ScrollViewProxy) -> some View {
             Form {
                 Section {
                     Text("Bildiğiniz ölçüleri girin; bilinmeyenleri boş bırakın. Uzunluklarda cm veya mm seçin; omuz eğimi derecedir. Bu form kalıp oluşturmaz. Girişler yalnız onayla notlara eklenir. Henüz eklenmemiş değerler yerel taslağa kaydedilmeye çalışılır; ani kapanışta son değişiklikler kaybolabilir.")
@@ -328,6 +326,11 @@ struct BodyMeasurementNotesView: View {
             .navigationTitle("Beden ölçüleri")
             .interactiveDismissDisabled(true)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { if values.contains(where: { !$0.isEmpty }) { discard = true } else { dismiss() } } } }
+    }
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+            measurementFormView(proxy: proxy)
             .onAppear {
                 fieldJumpLifetime.appear()
                 initialNotes = notes

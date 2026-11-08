@@ -3768,9 +3768,7 @@ private struct ExperimentalDesignBriefView: View {
                     }
                 }
     }
-    var body: some View {
-        NavigationStack {
-            ScrollViewReader { requestScroll in
+    private func requestFormView(requestScroll: ScrollViewProxy) -> some View {
             Form {
                 Section {
                     HStack {
@@ -4267,6 +4265,11 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Tarif ve ölçüleri gözden geçir") { desktopWarningSnapshot = nil; step = measurementReviewStartStep }
                 Button("Vazgeç", role: .cancel) { desktopWarningSnapshot = nil }
             } message: { Text("Tarifteki ölçüler ile soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler masaüstünde farklı değerlendirilebilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
+    }
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { requestScroll in
+            requestFormView(requestScroll: requestScroll)
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in
                 if !shown {
