@@ -258,7 +258,7 @@ private struct ContentView: View {
                 Button("Test: ikinci bozuk dosya") {
                     let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tcad")
                     do { try Data("[6,{".utf8).write(to: file); openModel(file, imported: true) }
-                    catch { error = error.localizedDescription }
+                    catch { self.error = error.localizedDescription }
                 }
             }
             #endif
