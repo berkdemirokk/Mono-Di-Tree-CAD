@@ -1,0 +1,261 @@
+[
+  11,
+  {
+    "Name": "Pastal \u00B7 deterministik raf yerle\u015Fimi",
+    "Pieces": [
+      {
+        "Id": "7f846efc-cb17-1fb3-b8c8-3c55eb0e67ee",
+        "Name": "Changed after confirmation",
+        "Points": [
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 100,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 100,
+            "Y": 150,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 150,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "36",
+          "Material": "Tela",
+          "Quantity": 1
+        }
+      },
+      {
+        "Id": "901017b6-480e-4680-7261-433dd00aa944",
+        "Name": "Sentetik tela 38",
+        "Points": [
+          {
+            "X": 105,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 205,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 205,
+            "Y": 150,
+            "IsFinite": true
+          },
+          {
+            "X": 105,
+            "Y": 150,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "38",
+          "Material": "Tela",
+          "Quantity": 1
+        }
+      },
+      {
+        "Id": "a333f869-f2c4-b6fe-54fc-e4aea3a85c42",
+        "Name": "Sentetik tela 38",
+        "Points": [
+          {
+            "X": 210,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 310,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 310,
+            "Y": 150,
+            "IsFinite": true
+          },
+          {
+            "X": 210,
+            "Y": 150,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "38",
+          "Material": "Tela",
+          "Quantity": 1
+        }
+      },
+      {
+        "Id": "5c3cc862-407a-30bd-e041-5d47fb34b70d",
+        "Name": "Sentetik tela 40",
+        "Points": [
+          {
+            "X": 315,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 415,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 415,
+            "Y": 150,
+            "IsFinite": true
+          },
+          {
+            "X": 315,
+            "Y": 150,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "40",
+          "Material": "Tela",
+          "Quantity": 1
+        }
+      },
+      {
+        "Id": "31574e5a-5655-75ca-67f5-d7f6d6a96189",
+        "Name": "Sentetik tela 42",
+        "Points": [
+          {
+            "X": 420,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 520,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 520,
+            "Y": 150,
+            "IsFinite": true
+          },
+          {
+            "X": 420,
+            "Y": 150,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "42",
+          "Material": "Tela",
+          "Quantity": 1
+        }
+      }
+    ],
+    "GradingRules": [],
+    "NestingSnapshot": {
+      "FabricWidth": 800,
+      "UsedLength": 150,
+      "Gap": 5,
+      "EdgeMargin": 0,
+      "Algorithm": "deterministic-shelf-v1",
+      "LayoutFingerprint": "8B9070108C3A4579FB721CC0268226D892CC14E7111EDEF7F147407152420885",
+      "Placements": [
+        {
+          "SourcePieceId": "80ab02c8-15b7-4579-837f-d7857c093e36",
+          "CopyNumber": 1,
+          "PlacedPieceId": "7f846efc-cb17-1fb3-b8c8-3c55eb0e67ee"
+        },
+        {
+          "SourcePieceId": "74b28a83-8c0c-46f7-aa4e-8038e4131cd9",
+          "CopyNumber": 1,
+          "PlacedPieceId": "901017b6-480e-4680-7261-433dd00aa944"
+        },
+        {
+          "SourcePieceId": "74b28a83-8c0c-46f7-aa4e-8038e4131cd9",
+          "CopyNumber": 2,
+          "PlacedPieceId": "a333f869-f2c4-b6fe-54fc-e4aea3a85c42"
+        },
+        {
+          "SourcePieceId": "a8257663-3464-4121-b500-2ce5d426ced8",
+          "CopyNumber": 1,
+          "PlacedPieceId": "5c3cc862-407a-30bd-e041-5d47fb34b70d"
+        },
+        {
+          "SourcePieceId": "74361212-9368-4abc-9b10-020178dc0057",
+          "CopyNumber": 1,
+          "PlacedPieceId": "31574e5a-5655-75ca-67f5-d7f6d6a96189"
+        }
+      ],
+      "WorkOrderHistory": {
+        "ModelCode": "1-2-3052",
+        "SourceText": "Model 1-2-3052, sizes 36 38 40 42, one set each, interfacing width 80 cm, 30 seconds, send to plotter.",
+        "SizeQuantities": [
+          {
+            "Size": 36,
+            "Sets": 1
+          },
+          {
+            "Size": 38,
+            "Sets": 1
+          },
+          {
+            "Size": 40,
+            "Sets": 1
+          },
+          {
+            "Size": 42,
+            "Sets": 1
+          }
+        ],
+        "PieceQuantities": [
+          {
+            "SourcePieceId": "80ab02c8-15b7-4579-837f-d7857c093e36",
+            "Size": 36,
+            "CutQuantityPerSet": 1,
+            "EffectiveQuantity": 1
+          },
+          {
+            "SourcePieceId": "74b28a83-8c0c-46f7-aa4e-8038e4131cd9",
+            "Size": 38,
+            "CutQuantityPerSet": 2,
+            "EffectiveQuantity": 2
+          },
+          {
+            "SourcePieceId": "a8257663-3464-4121-b500-2ce5d426ced8",
+            "Size": 40,
+            "CutQuantityPerSet": 1,
+            "EffectiveQuantity": 1
+          },
+          {
+            "SourcePieceId": "74361212-9368-4abc-9b10-020178dc0057",
+            "Size": 42,
+            "CutQuantityPerSet": 1,
+            "EffectiveQuantity": 1
+          }
+        ],
+        "Source": {
+          "SourcePath": "C:\\Projects\\TekstilCAD\\work\\marker-order-verification\\fa07bc40f40a4d9a909a1716f576752b\\bound-source.tcad",
+          "SourceSha256": "74AE6CD81DC1070D4B263834E9F877EE4502B195D2EF6C8C0401C0590E22315E"
+        }
+      }
+    }
+  }
+]

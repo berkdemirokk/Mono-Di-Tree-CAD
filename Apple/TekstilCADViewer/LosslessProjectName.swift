@@ -195,11 +195,12 @@ enum LosslessProjectName {
                       keys.insert(key).inserted else { throw Failure.invalid }
                 let isName = project && key == "Name"
                 try take(58); try whitespace()
-                if nestingSnapshot && key == "RotationTrace" && strictVersion != 7 { throw Failure.invalid }
-                if strictV6 && (key == "VertexIndex" || (strictVersion == 10 && key == "Quantity")) {
+                if nestingSnapshot && key == "RotationTrace" && strictVersion != 7 && strictVersion != 11 { throw Failure.invalid }
+                let historyInteger = strictVersion == 11 && ["Size", "Sets", "CutQuantityPerSet", "EffectiveQuantity", "CopyNumber", "Quantity"].contains(key)
+                if strictV6 && (key == "VertexIndex" || (strictVersion == 10 && key == "Quantity") || historyInteger && (i >= bytes.count || bytes[i] != 34)) {
                     let start = i; try value(depth: depth + 1)
                     guard let token = String(bytes: bytes[start..<i], encoding: .utf8),
-                          (key == "Quantity" && token == "null") ||
+                          ((key == "Quantity" || strictVersion == 11 && key == "Size") && token == "null") ||
                           (!token.isEmpty && token.allSatisfy({ $0 >= "0" && $0 <= "9" }) &&
                            (token == "0" || token.first != "0") && Int32(token) != nil) else { throw Failure.invalid }
                 } else if project && key == "NestingSnapshot" && i < bytes.count && bytes[i] == 123 {

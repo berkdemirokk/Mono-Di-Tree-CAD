@@ -6,6 +6,11 @@
       - path: Tests/ModelFilePublisherTests.swift
       - path: Tests/ModelLoadStateTests.swift
       - path: Tests/DesignDraftStoreTests.swift
+      - path: Tests/MarkerWorkOrderTests.swift
+      - path: Tests/MarkerHistoryPreviewTests.swift
+      - path: Tests/ReferenceMeasurementsTests.swift
+      - path: Tests/Fixtures/desktop-marker-work-order-v11.tcad
+        buildPhase: resources
       - path: Tests/Fixtures/portable-desktop-and-v1.json
         buildPhase: resources
       - path: Tests/Fixtures/synthetic-orientation-6.jpg
@@ -95,6 +100,7 @@
     platform: iOS
     sources:
       - path: Tests/ViewerUITests.swift
+      - path: Tests/StudioUITests.swift
       - path: Tests/Fixtures
         buildPhase: resources
     dependencies:

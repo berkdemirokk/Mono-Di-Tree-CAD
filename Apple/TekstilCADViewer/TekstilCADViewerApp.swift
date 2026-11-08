@@ -81,6 +81,7 @@ struct PointEditSnapshot: Identifiable {
 }
 #endif
 private struct ContentView: View {
+    @AppStorage("interfaceEnglish") private var interfaceEnglish = false
     @State private var showingDesignBrief = false
     @State private var showingImporter = false
     @State private var showingPendingRawNotice = false
@@ -149,12 +150,13 @@ private struct ContentView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("MONO DI TREE").font(.caption.weight(.semibold)).tracking(1.2)
-                        Text("CAD Atölyesi").font(.system(.title2, design: .serif))
+                        Text(interfaceEnglish ? "CAD Workshop" : "CAD Atölyesi").font(.system(.title2, design: .serif))
                     }
                     Spacer()
                     if let project { Text(ModelStore.safeLabel(project.name)).font(.caption).lineLimit(2) }
                 }
-                Text("Modelini seç, isteğini hazırla.").font(.subheadline).foregroundStyle(.secondary)
+                Text(interfaceEnglish ? "Choose your model and prepare your request." : "Modelini seç, isteğini hazırla.").font(.subheadline).foregroundStyle(.secondary)
+                StudioToolsView(drawing: project, sourceData: sourceData, english: $interfaceEnglish)
                 Button { showingDesignBrief = true } label: {
                     Label("Elbise isteği oluştur", systemImage: "plus")
                         .frame(maxWidth: .infinity, minHeight: 48)
@@ -174,7 +176,7 @@ private struct ContentView: View {
             .padding(16)
             .background(Color(red: 0.29, green: 0.08, blue: 0.14).opacity(0.06))
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            Text("Proje adını yeni bir kopyada değiştirebilirsiniz. Pastal ve üretim çıktıları desteklenmez.")
+            Text(interfaceEnglish ? "Open a source project to prepare an A4 marker preview in the workshop. Production approval and direct plotter output are not available." : "Kaynak projeyi açarak atölyede A4 pastal önizlemesi hazırlayabilirsiniz. Üretim onayı ve doğrudan plotter çıktısı desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
             if loadedModel.load.isLoading {
                 ProgressView("Proje açılıyor…")
@@ -2027,6 +2029,7 @@ struct Drawing {
     let historyPieceIDsDiffer: Bool
     let insufficientContourCount: Int
     let collapsedContourCount: Int
+    var markerHistory: MarkerHistoryPreview? = nil
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -2119,11 +2122,11 @@ struct Drawing {
         return true
     }
 
-    private static func hasV7ProjectFields(_ object: [String: Any], cancelled: () -> Bool) throws -> Bool {
+    private static func hasV7ProjectFields(_ object: [String: Any], workOrder: Bool = false, cancelled: () -> Bool) throws -> Bool {
         if cancelled() { throw CancellationError() }
         guard let rules = object["GradingRules"] as? [[String: Any]], rules.count <= 10_000,
               let snapshot = object["NestingSnapshot"] as? [String: Any],
-              Set(snapshot.keys) == Set(["FabricWidth", "UsedLength", "Gap", "EdgeMargin", "Algorithm", "LayoutFingerprint", "Placements", "RotationTrace"]),
+              (workOrder || Set(snapshot.keys) == Set(["FabricWidth", "UsedLength", "Gap", "EdgeMargin", "Algorithm", "LayoutFingerprint", "Placements", "RotationTrace"])),
               snapshot["Algorithm"] as? String == "deterministic-shelf-v1",
               let fingerprint = snapshot["LayoutFingerprint"] as? String, fingerprint.utf8.count == 64,
               fingerprint.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) }),
@@ -2189,6 +2192,7 @@ struct Drawing {
         if digit == 0x31 {
             guard let next = nextNonWhitespace() else { return nil }
             if next == 0x30 { return nextNonWhitespace() == 0x2c ? 10 : nil }
+            if next == 0x31 { return nextNonWhitespace() == 0x2c ? 11 : nil }
             return next == 0x2c ? 1 : nil
         }
         guard (0x32...0x37).contains(digit), nextNonWhitespace() == 0x2c else { return nil }
@@ -2224,12 +2228,23 @@ struct Drawing {
         if cancelled() { throw CancellationError() }
         let object: [String: Any]
         let formatVersion: Int
+        var markerHistory: MarkerHistoryPreview?
         if let array = root as? [Any], array.count == 2,
            let version = envelopeVersion(data), let body = array[1] as? [String: Any] {
             object = body; formatVersion = version
         } else if let body = root as? [String: Any] { object = body; formatVersion = 0 }
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
-        if formatVersion == 10 {
+        if formatVersion == 11 {
+            markerHistory = try MarkerHistoryPreview.load(data, cancelled: cancelled)
+            guard try hasV7ProjectFields(object, workOrder: true, cancelled: cancelled) else {
+                throw ViewerError.message("Pastal geçmişi veya serileme bilgileri desteklenmiyor.")
+            }
+            if let snapshot = object["NestingSnapshot"] as? [String: Any], let trace = snapshot["RotationTrace"] {
+                guard try hasKnownRotationTrace(trace, cancelled: cancelled) else {
+                    throw ViewerError.message("Döndürme geçmişi desteklenmiyor.")
+                }
+            }
+        } else if formatVersion == 10 {
             guard data.count <= LosslessProjectName.maximumEditBytes,
                   let decoded = String(data: data, encoding: .utf8), !LosslessProjectName.hasNonUTF8BOM(data) else {
                 throw ViewerError.message("Sürüm 10 önizlemesi yalnız 8 MB altındaki UTF-8 dosyalarını destekler.")
@@ -2287,7 +2302,7 @@ struct Drawing {
         var experimentalCount = 0
         for raw in rawPieces {
             if cancelled() { throw CancellationError() }
-            if formatVersion == 7 || formatVersion == 10 {
+            if formatVersion == 7 || formatVersion == 10 || formatVersion == 11 {
                 guard let id = raw["Id"] as? String, UUID(uuidString: id) != nil, raw["Name"] is String else {
                     throw ViewerError.message("Sürüm \(formatVersion) parça kimliği veya adı eksik; dosya önizlenmedi.")
                 }
@@ -2411,7 +2426,7 @@ struct Drawing {
             } else {
                 grainStatus = "İplik yönü: Okunamadı"
             }
-            if (formatVersion == 7 || formatVersion == 10) && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı") {
+            if (formatVersion == 7 || formatVersion == 10 || formatVersion == 11) && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı") {
                 throw ViewerError.message("Sürüm \(formatVersion) parça bilgisi veya iplik yönü geçersiz; dosya önizlenmedi.")
             }
             let id = (raw["Id"] as? String).flatMap { UUID(uuidString: $0) }
@@ -2420,7 +2435,7 @@ struct Drawing {
                 if let id, id.uuidString != "00000000-0000-0000-0000-000000000000", pieceIDs.insert(id).inserted { }
                 else { pieceRenameIdentitiesValid = false }
             }
-            if (formatVersion == 7 || formatVersion == 10) && !pieceRenameIdentitiesValid {
+            if (formatVersion == 7 || formatVersion == 10 || formatVersion == 11) && !pieceRenameIdentitiesValid {
                 throw ViewerError.message("Sürüm \(formatVersion) parça kimliği yinelenmiş veya geçersiz; dosya önizlenmedi.")
             }
             let hasMinimum = ContourMeasure.hasMinimumContourPoints(points, closed: closed)
@@ -2453,7 +2468,7 @@ struct Drawing {
         return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid,
                        formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data), historyPieceIDsDiffer: historyPieceIDsDiffer,
                        insufficientContourCount: pieces.filter { !$0.hasMinimumContourPoints }.count,
-                       collapsedContourCount: pieces.filter { $0.isCollapsed }.count)
+                       collapsedContourCount: pieces.filter { $0.isCollapsed }.count, markerHistory: markerHistory)
     }
 }
 
