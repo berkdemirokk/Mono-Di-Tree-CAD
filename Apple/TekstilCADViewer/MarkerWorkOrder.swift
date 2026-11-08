@@ -51,6 +51,11 @@ enum MarkerWorkOrderParser {
         text = replace(#"\bhalf\s+(?:a\s+)?minute\b"#, text, "0.5 dakika")
         text = replace(#"\byarim\s+dakika\b"#, text, "0.5 dakika")
         text = replace(#"\bone\s+set\s+(?:each|per\s+size)\b"#, text, "her bedenden 1")
+        // Protect the explicitly labelled size field before interpreting decimal quantities.
+        // In "sizes 36/38,2 sets per size", 38 belongs to the slash-delimited size
+        // list. A fractional quantity such as "sizes 36/38,2,5 sets per size"
+        // still stays 2,5 and is rejected below; it must never become 5 sets.
+        text = replace(#"\b(sizes?\s*[:=]?\s*\d{2}(?:\s*/\s*\d{2})*)\s*,\s*("# + number + #")\s+sets?\s+(?:each|per\s+size)\b"#, text, "$1; her bedenden $2")
         text = replace("(" + number + #")\s+sets?\s+(?:each|per\s+size)\b"#, text, "her bedenden $1")
         text = replace(#"\beach\s+size\s+(\d+)\s+sets?\b"#, text, "her bedenden $1")
         text = replace(#"\bsize\s+(\d+)\s+(\d+)\s+sets?\b"#, text, "$1 beden $2 takim")

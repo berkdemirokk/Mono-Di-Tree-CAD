@@ -41,8 +41,16 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(data, snapshot: Data(), pieceID: id, index: 0, to: .init(x: 1, y: 1)))
         XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: UUID(), index: 0, to: .init(x: 1, y: 1)))
         XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: id, index: 1, to: .init(x: 0, y: 4)))
-        for field in [#""GradingRules":[{}],"#, #""NestingSnapshot":null,"#, #""ImportProvenance":null,"#, #""Unknown":{},"#] {
-            let unsafe = Data(input.replacingOccurrences(of: #"{"Name":"Model"#, with: "{" + field + #""Name":"Model"#).utf8)
+        let unsafeProjects = [
+            input.replacingOccurrences(of: #""GradingRules":[]"#, with: #""GradingRules":[{}]"#)
+        ] + [#""NestingSnapshot":null,"#, #""ImportProvenance":null,"#, #""Unknown":{},"#].map { field in
+            input.replacingOccurrences(of: #""Name":"Model"#, with: field + #""Name":"Model"#)
+        }
+        for text in unsafeProjects {
+            // GradingRules precedes Name in this fixture; a missing replacement
+            // anchor must not accidentally exercise the valid source again.
+            let unsafe = Data(text.utf8)
+            XCTAssertNotEqual(unsafe, data)
             XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(unsafe, snapshot: unsafe, pieceID: id, index: 0, to: .init(x: 1, y: 1)))
         }
         let duplicate = Data(input.replacingOccurrences(of: #""Y":0,"X":0"#, with: #""Y":0,"X":0,"X":0"#).utf8)
@@ -110,14 +118,17 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         }
     }
 
-    func testGeometryDependenciesFailClosedRatherThanBecomeStale() {
+    func testUnsupportedOrMalformedGeometryDependenciesFailClosed() {
         let grading = #""GradingRules":[{"SourcePieceId":"11111111-1111-1111-1111-111111111111","SourceClosed":true,"SourcePoints":[{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":4}],"Deltas":[{"X":0,"Y":0},{"X":0,"Y":0},{"X":0,"Y":0}]}]"#
         let grain = #", "Grainline":{"Start":{"X":0,"Y":0},"End":{"X":1,"Y":0},"NeedsReview":false}"#
         let variants = [
             input.replacingOccurrences(of: #""GradingRules":[]"#, with: grading.replacingOccurrences(of: #""SourceClosed":true"#, with: #""SourceClosed":1"#)),
             input.replacingOccurrences(of: #""Name":"Model"#, with: #""NestingSnapshot":{},"Name":"Model"#),
             input.replacingOccurrences(of: #""Name":"Model"#, with: #""ImportProvenance":{},"Name":"Model"#),
-            input.replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true"# + grain)
+            // Valid selected grainlines are supported and marked NeedsReview
+            // (covered below); an unrecognized dependency must still fail.
+            input.replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true"# +
+                grain.replacingOccurrences(of: #""NeedsReview":false"#, with: #""NeedsReview":false,"DerivedFromContour":true"#))
         ]
         for text in variants {
             let bytes = Data(text.utf8)
@@ -215,11 +226,11 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         let source = try Data(contentsOf: url)
         let text = try XCTUnwrap(String(data: source, encoding: .utf8))
         let newline = text.contains("\r\n") ? "\r\n" : "\n"
-        let vertex = "\"X\": 0," + newline + "          \"Y\": 0"
+        let vertex = "\"X\": 0," + newline + "            \"Y\": 0"
         let notch = "\"X\": 0," + newline + "              \"Y\": 0"
         XCTAssertEqual(text.components(separatedBy: vertex).count, 3)
         XCTAssertEqual(text.components(separatedBy: notch).count, 2)
-        let expected = text.replacingOccurrences(of: vertex, with: "\"X\": 0," + newline + "          \"Y\": 2.0")
+        let expected = text.replacingOccurrences(of: vertex, with: "\"X\": 0," + newline + "            \"Y\": 2.0")
             .replacingOccurrences(of: notch, with: "\"X\": 0," + newline + "              \"Y\": 2.0")
         let sourceID = try XCTUnwrap(UUID(uuidString: "c393b219-2be8-41e7-8665-ed900a1cbf5e"))
         for index in [0, 3] {

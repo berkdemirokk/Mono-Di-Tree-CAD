@@ -62,6 +62,10 @@ final class ExperimentalPieceRenameTests: XCTestCase {
     func testPreservesBOMAndUnrelatedEscapes() throws {
         let prefix = "\u{FEFF}{\"Pieces\":[{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\": "
         let suffix = ",\"Extra\":\"\\u0041\\/\"}]}\r\n"
-        XCTAssertEqual(try edit(prefix + "\"old\"" + suffix), prefix + "\"Yeni \\\"ad\\\"\"" + suffix)
+        let input = Data((prefix + "\"old\"" + suffix).utf8)
+        let output = try ExperimentalPieceRename.replacing(in: input, snapshot: input, pieceID: second, with: "Yeni \"ad\"")
+        // String(data:encoding:) can consume the BOM; the contract is exact bytes.
+        XCTAssertEqual(output, Data((prefix + "\"Yeni \\\"ad\\\"\"" + suffix).utf8))
+        XCTAssertTrue(output.starts(with: [0xEF, 0xBB, 0xBF]))
     }
 }

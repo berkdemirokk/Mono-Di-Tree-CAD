@@ -57,6 +57,7 @@ final class MarkerWorkOrderTests: XCTestCase {
         }
         for phrase in ["2.5 sets per size", "2,5 sets per size", "0 sets per size"] {
             XCTAssertFalse(MarkerWorkOrderParser.parse("model 1-2-3, sizes 36, \(phrase), interfacing, width 90 cm, 30 seconds").complete)
+            XCTAssertFalse(MarkerWorkOrderParser.parse("model 1-2-3,sizes 36/38,\(phrase),interfacing,width 90 cm,30 seconds").complete)
         }
     }
     func testParserRejectsLimitsNegationsAndPartialNumbers() {

@@ -16,7 +16,7 @@ final class ModelFilePublisherTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let staging = root.appendingPathComponent(".\(UUID().uuidString).partial")
+        let staging = root.appendingPathComponent(".\(UUID().uuidString).partial", isDirectory: true)
         let destination = root.appendingPathComponent("saved.tcad")
         let bytes = Data("unvalidated input".utf8)
         XCTAssertThrowsError(try ModelFilePublisher.publish(bytes, staging: staging, destination: destination, beforePublish: {

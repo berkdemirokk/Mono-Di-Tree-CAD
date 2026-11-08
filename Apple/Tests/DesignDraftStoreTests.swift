@@ -29,7 +29,9 @@ final class DesignDraftStoreTests: XCTestCase {
         let encoded = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(encoded as CFMutableData, "public.heic" as CFString, 1, nil) else { throw XCTSkip("HEIC encoder unavailable") }
         let metadata: [CFString: Any] = [kCGImagePropertyOrientation: 6,
-            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 41.0, kCGImagePropertyGPSLongitude: 29.0]]
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 41.0, kCGImagePropertyGPSLongitude: 29.0],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifDateTimeOriginal: "2026:11:08 12:34:56",
+                                           kCGImagePropertyExifUserComment: "Private reference photo"]]
         CGImageDestinationAddImage(destination, image, metadata as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw XCTSkip("HEIC encoder unavailable") }
         let source = encoded as Data
@@ -51,7 +53,14 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(props[kCGImagePropertyPixelWidth] as? Int, 32)
         XCTAssertEqual(props[kCGImagePropertyPixelHeight] as? Int, 64)
         XCTAssertNil(props[kCGImagePropertyGPSDictionary])
-        XCTAssertNil(props[kCGImagePropertyExifDictionary])
+        // ImageIO can generate these three nonpersonal EXIF fields when writing PNG.
+        // Source timestamps, comments and any other EXIF fields must still be absent.
+        let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+        let generatedKeys: Set<CFString> = [kCGImagePropertyExifColorSpace,
+            kCGImagePropertyExifPixelXDimension, kCGImagePropertyExifPixelYDimension]
+        XCTAssertTrue(Set(exif.keys).isSubset(of: generatedKeys), "Unexpected EXIF keys: \(exif.keys)")
+        XCTAssertNil(exif[kCGImagePropertyExifDateTimeOriginal])
+        XCTAssertNil(exif[kCGImagePropertyExifUserComment])
         XCTAssertNoThrow(try ExperimentalDesignBrief.validateV2Image(output))
         XCTAssertEqual(encoded as Data, source)
     }
@@ -1675,6 +1684,38 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: 1.0)))
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: 1.5)))
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed("9"))
+    }
+    func testRawJPEGOrientationRejectsInvalidEXIFBeforeImageIONormalization() throws {
+        let bundle = Bundle(for: Self.self)
+        let url = try XCTUnwrap(bundle.url(forResource: "v2-jpeg-orientation-9", withExtension: "json"))
+        let doc = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))
+        let invalid = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(doc.reference).dataBase64))
+        // The shared fixture stores little-endian SHORT orientation 9 in IFD0.
+        XCTAssertEqual(Array(invalid.prefix(10)), [255,216,255,225,0,34,69,120,105,102])
+        XCTAssertEqual(Array(invalid[22..<34]), [18,1,3,0,1,0,0,0,9,0,0,0])
+        XCTAssertThrowsError(try ReferenceImageMetadata.validateJPEGOrientation(invalid))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.validateV2Image(invalid))
+        for orientation in UInt8(1)...UInt8(8) {
+            var valid = invalid
+            valid[30] = orientation
+            XCTAssertNoThrow(try ReferenceImageMetadata.validateJPEGOrientation(valid))
+            XCTAssertNoThrow(try ExperimentalDesignBrief.validateV2Image(valid))
+        }
+        var zero = invalid; zero[30] = 0
+        XCTAssertThrowsError(try ReferenceImageMetadata.validateJPEGOrientation(zero))
+        // Big-endian EXIF must enforce the same range and inline SHORT encoding.
+        var bigEndian = invalid
+        bigEndian.replaceSubrange(12..<38, with: [77,77,0,42,0,0,0,8,0,1,1,18,0,3,0,0,0,1,0,9,0,0,0,0,0,0])
+        XCTAssertThrowsError(try ReferenceImageMetadata.validateJPEGOrientation(bigEndian))
+        bigEndian[31] = 6
+        XCTAssertNoThrow(try ReferenceImageMetadata.validateJPEGOrientation(bigEndian))
+        var wrongType = invalid; wrongType[24] = 4
+        XCTAssertThrowsError(try ReferenceImageMetadata.validateJPEGOrientation(wrongType))
+        var wrongCount = invalid; wrongCount[26] = 2
+        XCTAssertThrowsError(try ReferenceImageMetadata.validateJPEGOrientation(wrongCount))
+        var invalidIFD = invalid; invalidIFD[16] = 255
+        XCTAssertThrowsError(try ReferenceImageMetadata.validateJPEGOrientation(invalidIFD))
+        XCTAssertThrowsError(try ReferenceImageMetadata.validateJPEGOrientation(Data(invalid.prefix(37))))
     }
     func testV2PNGAnimationChunkBoundaries() throws {
         let bundle = Bundle(for: Self.self)

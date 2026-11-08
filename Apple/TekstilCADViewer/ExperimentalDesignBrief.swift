@@ -693,6 +693,7 @@ enum ExperimentalDesignBrief {
               v2ImageGeometryAllowed(width: width, height: height, frames: CGImageSourceGetCount(source)),
               ((CGImageSourceGetType(source) as String?) != "public.jpeg" || v2ImageOrientationAllowed(properties[kCGImagePropertyOrientation])),
               CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { throw Error.invalidImage }
+        if (CGImageSourceGetType(source) as String?) == "public.jpeg" { try ReferenceImageMetadata.validateJPEGOrientation(data) }
         if (CGImageSourceGetType(source) as String?) == "public.png", try v2PNGHasAnimationControl(data) { throw Error.invalidImage }
     }
     enum V2ImageReview: Equatable {
