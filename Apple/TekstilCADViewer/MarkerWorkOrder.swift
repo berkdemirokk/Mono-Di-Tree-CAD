@@ -108,7 +108,7 @@ enum MarkerWorkOrderParser {
         text = replace(#"\bbirer\b"#, text, "her bedenden 1")
         text = replace("(" + number + #")\s*'?\s*er\b"#, text, "her bedenden $1")
         text = replace(#"\bbeden(?:lerden|den)?\s+("# + number + #")\s*(?:adet|takim)\b"#, text, "beden her bedenden $1")
-        let quantityPattern = #"\bher\s+bedenden\s+("# + number + #")(?![0-9.,])"#
+        let quantityPattern = #"\bher\s+bedenden\s+("# + number + #")(?![0-9.]|,\d)"#
         let quantities = matches(quantityPattern, text).compactMap { numeric(group($0, 1, text)) }
         if !order.sizeQuantities.isEmpty && !quantities.isEmpty { issue("Genel ve beden bazlı adet birlikte kullanılamaz.", "Use either per-size quantities or a common quantity, not both.") }
         if order.sizeQuantities.isEmpty || !quantities.isEmpty, let q = unique(quantities, "Takım adedi", "Set quantity") {
@@ -116,8 +116,9 @@ enum MarkerWorkOrderParser {
             else { issue("Takım adedi 1–1.000 tam sayı olmalı.", "Set quantity must be a whole number from 1–1,000.") }
         }
         text = replace(quantityPattern, text, " ")
-        text = replace(#"\bbeden(?:ler|leri)?\s*[:=]?\s*(\d{2}(?:\s*[/,]\s*\d{2})*)(?![0-9.,])"#, text, "$1 beden")
-        let sizePattern = #"(?<![0-9.,-])(\d{2}(?:\s*(?:[/,]|\s)\s*\d{2})*)\s*beden\b"#
+        // A comma followed by a field separator is punctuation; a decimal suffix is not.
+        text = replace(#"\bbeden(?:ler|leri)?\s*[:=]?\s*(\d{2}(?:\s*[/,]\s*\d{2})*)(?![0-9.]|,\d)"#, text, "$1 beden")
+        let sizePattern = #"(?<![0-9.-])(?<![0-9],)(\d{2}(?:\s*(?:[/,]|\s)\s*\d{2})*)\s*beden\b"#
         var lists: [[Int]] = []
         for match in matches(sizePattern, text) {
             let raw = group(match, 1, text)

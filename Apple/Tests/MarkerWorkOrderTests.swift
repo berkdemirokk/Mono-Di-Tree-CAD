@@ -34,6 +34,31 @@ final class MarkerWorkOrderTests: XCTestCase {
             XCTAssertFalse(MarkerWorkOrderParser.parse(bad).complete, bad)
         }
     }
+    func testEnglishPrefixSizeListsAcceptFieldPunctuationButRejectDecimals() {
+        for field in ["sizes 36,", "sizes: 36;", "sizes 36/38,", "sizes 36,38,", "sizes 36, 38;"] {
+            let order = MarkerWorkOrderParser.parse("model 1-2-3, \(field) 2 sets per size, interfacing, width 90 cm, 30 seconds")
+            XCTAssertTrue(order.complete, "\(field): " + order.issues.map(\.en).joined(separator: ";"))
+            XCTAssertEqual(order.sizes, field.contains("38") ? [36, 38] : [36])
+        }
+        for field in ["sizes 38.5,", "sizes 38,5,", "sizes 36,38.5,", "sizes 36,38,5,"] {
+            XCTAssertFalse(MarkerWorkOrderParser.parse("model 1-2-3, \(field) 2 sets per size, interfacing, width 90 cm, 30 seconds").complete, field)
+        }
+    }
+    func testEnglishQuantityPhrasesConsumeCompletePunctuatedRequests() {
+        for (phrase, count) in [("2 sets per size", 2), ("one set each", 1), ("each size 2 sets", 2)] {
+            for separator in [", ", ",", "; "] {
+                let text = ["model 1-2-3", "sizes 36/38", phrase, "interfacing", "width 90 cm", "30 seconds"].joined(separator: separator)
+                let order = MarkerWorkOrderParser.parse(text)
+                XCTAssertTrue(order.complete, "\(text): " + order.issues.map(\.en).joined(separator: ";"))
+                XCTAssertEqual(order.model, "1-2-3"); XCTAssertEqual(order.sizes, [36, 38])
+                XCTAssertEqual(order.sets, count); XCTAssertEqual(order.material, "Tela")
+                XCTAssertEqual(order.width, 900); XCTAssertEqual(order.seconds, 30)
+            }
+        }
+        for phrase in ["2.5 sets per size", "2,5 sets per size", "0 sets per size"] {
+            XCTAssertFalse(MarkerWorkOrderParser.parse("model 1-2-3, sizes 36, \(phrase), interfacing, width 90 cm, 30 seconds").complete)
+        }
+    }
     func testParserRejectsLimitsNegationsAndPartialNumbers() {
         for bad in [String(repeating: "x", count: 12_001), request.replacingOccurrences(of: "2 takım", with: "1001 takım"), request.replacingOccurrences(of: "90 cm", with: "-90 cm"), request.replacingOccurrences(of: "30 saniye", with: "0.5 saniye"), request + " değil", request + " 123"] {
             XCTAssertFalse(MarkerWorkOrderParser.parse(bad).complete)

@@ -2084,10 +2084,10 @@ final class ViewerUITests: XCTestCase {
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Pamuk")
         let result = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: 10)); result.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["Arka Beden kontur önizlemesi"].waitForExistence(timeout: 10))
-        let result = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10))
         XCTAssertTrue((result.value as? String ?? "").contains("Eşleşen parça: Arka Beden"))
+        result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Arka Beden kontur önizlemesi"].waitForExistence(timeout: 10))
     }
     func testRenamedCopyWithLongSpecialNameCanBeFoundReopenedAndDeleted() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
