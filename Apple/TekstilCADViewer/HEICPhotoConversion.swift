@@ -45,7 +45,7 @@ enum HEICPhotoConversion {
         try Task.checkCancellation()
         let output = Output()
         var callbacks = CGDataConsumerCallbacks(putBytes: { info, buffer, count in
-            guard let info, let buffer else { return 0 }
+            guard let info else { return 0 }
             return Unmanaged<Output>.fromOpaque(info).takeUnretainedValue().append(buffer, count: count)
         }, releaseConsumer: nil)
         guard let consumer = CGDataConsumer(info: Unmanaged.passUnretained(output).toOpaque(), cbks: &callbacks),
