@@ -4004,6 +4004,11 @@ private struct ExperimentalDesignBriefView: View {
                 requestScroll.scrollTo("request-step-start", anchor: .top)
                 focusedStepHeading = newStep
             }
+    }
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { requestScroll in
+            requestFormView(requestScroll: requestScroll)
             }
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Klavyeyi kapat") { focusedInput = nil } } }
             .safeAreaInset(edge: .top) {
@@ -4265,11 +4270,6 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Tarif ve ölçüleri gözden geçir") { desktopWarningSnapshot = nil; step = measurementReviewStartStep }
                 Button("Vazgeç", role: .cancel) { desktopWarningSnapshot = nil }
             } message: { Text("Tarifteki ölçüler ile soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler masaüstünde farklı değerlendirilebilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
-    }
-    var body: some View {
-        NavigationStack {
-            ScrollViewReader { requestScroll in
-            requestFormView(requestScroll: requestScroll)
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in
                 if !shown {
