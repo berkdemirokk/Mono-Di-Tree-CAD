@@ -177,420 +177,541 @@ private struct ContentView: View {
     }
 
     var body: some View {
+        editorPresentation
+        .sheet(isPresented: $showingLibrary) {
+            ModelLibrary(search: $librarySearch, sortOrder: $librarySortOrder,
+                         libraryFilter: $libraryFilter, searchContents: $librarySearchContents,
+                         pendingRawRecovery: rawSaveNeedsRetry) { entry, match in
+                showingLibrary = false
+                openModel(ModelStore.payloadURL(entry.url), imported: false, listedEntry: entry, matchedPiece: match)
+            }
+        }
+        #if DEBUG && targetEnvironment(simulator)
+        .onAppear { installUITestFixture() }
+        #endif
+        .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("Tamam", role: .cancel) { error = nil }
+        } message: { Text(error ?? "") }
+    }
+
+    private var projectScrollView: some View {
         ScrollView {
-        VStack(spacing: 12) {
-            projectHeader
-            Text(interfaceEnglish ? "Open a source project to prepare an A4 marker preview in the workshop. Production approval and direct plotter output are not available." : "Kaynak projeyi açarak atölyede A4 pastal önizlemesi hazırlayabilirsiniz. Üretim onayı ve doğrudan plotter çıktısı desteklenmez.")
-                .font(.caption).foregroundStyle(.secondary)
-            if loadedModel.load.isLoading {
-                ProgressView("Proje açılıyor…")
-                Button("Açmayı iptal et") {
-                    modelReadCancellation?.cancel()
-                    loadedModel.load.invalidate()
-                    saveNotice = "Model açma iptal edildi."
-                }
-                .accessibilityHint("Önceki açık modeli korur")
-            }
-            if let saveNotice { Text(saveNotice).font(.caption).foregroundStyle(.secondary) }
-            if rawSaveNeedsRetry, let rawImport {
-                Text("Kaydedilemeyen ham kopya: \(ModelStore.safeLabel(rawImport.name))")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                Text("Kopya geçici olarak bellekte tutuluyor. Başka bir dosya açmadan önce kopyayı kaydedin veya ham kopyadan vazgeçin; uygulama kapanırsa yeniden seçmeniz gerekir.")
+            VStack(spacing: 12) {
+                projectHeader
+                Text(interfaceEnglish ? "Open a source project to prepare an A4 marker preview in the workshop. Production approval and direct plotter output are not available." : "Kaynak projeyi açarak atölyede A4 pastal önizlemesi hazırlayabilirsiniz. Üretim onayı ve doğrudan plotter çıktısı desteklenmez.")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
-                    .disabled(isSaving || loadedModel.load.isLoading)
-                Button("Ham kopyayı dışa aktar…") {
-                    rawExportDocument = ProjectExportDocument(data: rawImport.data)
-                    rawExportName = ModelStore.newRawExportName(source: rawImport.name)
-                    showingRawExportWarning = true
-                }
-                .disabled(isSaving || loadedModel.load.isLoading)
-                #if DEBUG && targetEnvironment(simulator)
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-integrity"),
-                   let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_EXPECTED_RAW"],
-                   let expected = Data(base64Encoded: encoded) {
-                    Text(rawImport.data == expected ? "Test: ham baytlar aynı" : "Test: ham baytlar değişti")
-                        .accessibilityIdentifier("raw-integrity-status")
-                }
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-picker-lifecycle") {
-                    Button("Test: seçim iptal") { handlePickerFailure(CocoaError(.userCancelled)) }
-                    Button("Test: geçersiz seçim") { handlePickerFailure(ViewerError.message("Test: geçersiz seçim.")) }
-                    Button("Test: okunamayan dosya") { openModel(FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), imported: true) }
-                    Button("Test: ikinci bozuk dosya") {
-                        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tcad")
-                        do { try Data("[6,{".utf8).write(to: file); openModel(file, imported: true) }
-                        catch { error = error.localizedDescription }
-                    }
-                }
-                #endif
-            }
-            if importedData != nil {
-                Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
-                    .disabled(isSaving || loadedModel.load.isLoading)
-                Button("Telefona farklı adla kaydet…") {
-                    guard let data = importedData else { return }
-                    librarySaveSnapshot = (data, loadedModel.load.request)
-                    libraryName = project?.name ?? ""
-                    showingLibraryNameEditor = true
-                }
-                .disabled(isSaving || loadedModel.load.isLoading)
-            }
-            if let project {
-                if project.formatVersion == 10 {
-                    Text("Sürüm 10: Deneysel A kesim içeren proje yalnız görüntülenir; üretim için onaylanmamıştır. Düzenleme ve geometri çıktısı desteklenmez; özgün dosya aynen paylaşılabilir.")
-                        .font(.callout).foregroundStyle(.orange)
-                }
-                if project.formatVersion == 7 {
-                    Text("Sürüm 7: Yalnız görünür konturlar ve işaretler önizlenir. Döndürme geçmişi, eşleşmeler ve üretime uygunluk bu telefonda doğrulanmaz; masaüstünde kontrol edin. Özgün dosya baytları korunur.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if project.historyPieceIDsDiffer {
-                        Text("Pastal geçmişindeki parça kimlikleri görünür parçalarla eşleşmiyor; geçmiş güncel yerleşimi temsil etmiyor. Masaüstünde yeniden kontrol edin.")
-                            .font(.caption).foregroundStyle(.orange)
-                    }
-                }
-                Button("Açık modeli dışa aktar…") {
-                    guard let data = sourceData else { return }
-                    // Capture the loaded bytes before presenting the system picker.
-                    exportDocument = ProjectExportDocument(data: data)
-                    exportName = exportFileName(project.name)
-                    saveNotice = nil
-                    showingExportWarning = true
-                }.disabled(isSaving || loadedModel.load.isLoading || sourceData == nil)
-                Button("Proje adını değiştir ve kopya kaydet") {
-                    showingNameEditor = true
-                }.disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 6 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
-                if project.formatVersion >= 6 {
-                    Text("Sürüm \(project.formatVersion) projelerinde proje adını değiştirip kopya kaydetme henüz desteklenmiyor. Açık modeli dışa aktarabilirsiniz.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if project.formatVersion < 6 && project.hasNonUTF8BOM {
-                    Text("UTF-16 veya UTF-32 dosyalarında proje adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if let sourceData, sourceData.count > LosslessProjectName.maximumEditBytes {
-                    Text("Proje adını değiştirmek için dosya 8 MB veya daha küçük olmalı.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if project.insufficientContourCount > 0 {
-                    Text("\(project.insufficientContourCount) parça asgari nokta sayısını karşılamıyor. Kapalı kontur için üç farklı köşe gerekir; tekrarlanan noktalar ayrı sayılmaz. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                if project.collapsedContourCount > 0 {
-                    Text("Uyarı: \(project.collapsedContourCount) parçanın tüm noktaları üst üste geliyor. Bu konturların geometrisini masaüstünde kontrol edin.")
-                        .font(.caption).foregroundStyle(.orange)
-                }
-                if project.pieces.contains(where: { !$0.notches.isEmpty }) {
-                    Text("Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("İşaret koordinatları yaklaşık gösterilir; kesin değerler kaynak dosyada korunur.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("Sürüm \(project.formatVersion) önizlemesinde dosya ve doğrulama metni en fazla 8 MB olabilir. UTF-8 ve BOM'lu UTF-16/UTF-32 desteklenir; tüm masaüstü proje kuralları doğrulanmaz.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
-                        .disabled(loadedModel.load.isLoading)
-                        .sheet(isPresented: $showingNotches) {
-                            NotchPicker(pieces: project.pieces) { piece, point in
-                                selectedPiece = piece
-                                selectedNotch = (piece, point)
-                                notchSelectionRevision = UUID()
-                                showingNotches = false
-                            }
-                        }
-                    if let selectedNotch, selectedNotch.piece == selectedPiece {
-                        let piece = project.pieces[selectedNotch.piece]
-                        let point = piece.points[selectedNotch.point]
-                        let coordinates = NotchSearch.label(index: selectedNotch.point, x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y))
-                        Text(piece.hasMinimumContourPoints
-                             ? "Seçili köşe işareti: \(coordinates). Önizlemede sarı halka ile gösterilir."
-                             : "Seçili köşe işareti: \(coordinates). Konturda yeterli nokta olmadığı için önizleme gösterilemiyor.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if NotchSearch.exceedsDrawingLimit(project.pieces.enumerated().map { index, piece in
-                        (visible: piece.hasMinimumContourPoints && (selectedPiece == nil || selectedPiece == index), count: piece.notches.count)
-                    }, limit: DrawingView.maximumVisibleNotches) {
-                        Text("Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if !project.pieces.isEmpty {
-                    Button { showingPieces = true } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Gösterilen parça").font(.caption).foregroundStyle(.secondary)
-                                Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
-                                    .font(.headline).lineLimit(1)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(loadedModel.load.isLoading)
-                    .accessibilityHint("Parçaları aramak veya seçmek için açın")
-                    .sheet(isPresented: $showingPieces) {
-                        PiecePicker(pieces: project.pieces, selection: Binding(
-                            get: { selectedPiece },
-                            set: { newSelection in
-                                if newSelection != selectedPiece { selectedNotch = nil }
-                                selectedPiece = newSelection
-                            }
-                        ))
-                    }
-                    Button("İki parçayı karşılaştır…") {
-                        guard project.formatVersion != 10 else { return }
-                        showingPieceComparison = true
-                    }
-                        .disabled(loadedModel.load.isLoading || project.pieces.count < 2 || project.formatVersion == 10)
-                        .sheet(isPresented: $showingPieceComparison) {
-                            PieceComparisonView(pieces: project.pieces, projectName: project.name, initialIndex: selectedPiece)
-                        }
-                    HStack {
-                        Button("Önceki parça") {
-                            guard let current = selectedPiece, current > 0 else { return }
-                            selectedNotch = nil
-                            selectedPiece = current - 1
-                        }
-                        .disabled(loadedModel.load.isLoading || selectedPiece == nil || selectedPiece == 0)
-                        Spacer()
-                        Text(selectedPiece.map { "\($0 + 1) / \(project.pieces.count)" } ?? "Tüm parçalar")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .accessibilityLabel(selectedPiece.map { "Parça \($0 + 1), toplam \(project.pieces.count)" } ?? "Tüm parçalar gösteriliyor")
-                        Spacer()
-                        Button("Sonraki parça") {
-                            let next = selectedPiece.map { $0 + 1 } ?? 0
-                            guard next < project.pieces.count else { return }
-                            selectedNotch = nil
-                            selectedPiece = next
-                        }
-                        .disabled(loadedModel.load.isLoading || selectedPiece == project.pieces.count - 1)
-                    }
-                    .buttonStyle(.bordered)
-                    if let selectedPiece, !project.pieces[selectedPiece].notches.isEmpty {
-                        let notches = project.pieces[selectedPiece].notches
-                        let current = selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
-                        HStack {
-                            Button("Önceki işaret") {
-                                if let point = NotchSearch.adjacent(in: notches, current: current, forward: false) {
-                                    selectedNotch = (selectedPiece, point)
-                                    notchSelectionRevision = UUID()
-                                }
-                            }
-                            .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: false) == nil)
-                            Spacer()
-                            Button("Sonraki işaret") {
-                                if let point = NotchSearch.adjacent(in: notches, current: current, forward: true) {
-                                    selectedNotch = (selectedPiece, point)
-                                    notchSelectionRevision = UUID()
-                                }
-                            }
-                            .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: true) == nil)
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityHint("Seçili parçanın işaretleri arasında dosya sırasıyla gezinin")
-                    }
-                    if let selectedPiece {
-                        Button("İki nokta arasını ölç…") { showingPointDistance = true }
-                            .disabled(loadedModel.load.isLoading || project.pieces[selectedPiece].points.count < 2)
-                            .sheet(isPresented: $showingPointDistance) {
-                                PointDistanceView(piece: project.pieces[selectedPiece], name: project.pieces[selectedPiece].displayName(index: selectedPiece))
-                            }
-                        #if DEBUG
-                        Button("Deneysel nokta düzenle…") {
-                            guard project.formatVersion < 7, let data = sourceData, let id = project.pieces[selectedPiece].id,
-                                  let identity = loadedModel.editIdentity() else { return }
-                            loadedModel.pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
-                                index: selectedPiece, projectName: project.name, identity: identity)
-                        }
-                            .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
-                            .sheet(item: Binding(get: { loadedModel.pointEditSnapshot }, set: { _ in })) { snapshot in
-                                ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
-                                    isCurrent: { loadedModel.isCurrent(snapshot.identity, data: snapshot.data) },
-                                    invalidateForTesting: { loadedModel.load.invalidate() },
-                                    onSessionClosed: { loadedModel.closePointEditSession(snapshot.id) })
-                                    .id(snapshot.id)
-                            }
-                        Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if project.formatVersion >= 7 {
-                            Text("Sürüm \(project.formatVersion) dosyalarında nokta ve parça adı düzenleme desteklenmiyor; özgün dosya dışa aktarılabilir.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        if project.hasNonUTF8BOM {
-                            Text("UTF-16 veya UTF-32 dosyalarında nokta düzenleme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Button("Parça adını değiştir ve kopya kaydet") {
-                            guard project.formatVersion < 7, let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
-                            // Keep a failed edit available for retry on the same snapshot.
-                            if pieceRenameSnapshot?.data != data || pieceRenameSnapshot?.index != selectedPiece {
-                                editedPieceName = name
-                            }
-                            pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
-                            showingPieceNameEditor = true
-                        }
-                        .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 7 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
-                        if project.hasNonUTF8BOM {
-                            Text("UTF-16 veya UTF-32 dosyalarında parça adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        if !project.pieceRenameIdentitiesValid {
-                            Text("Parça adını değiştirmek için tüm parçaların adı ve varsa geçerli, benzersiz kimliği olmalı.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        #endif
-                        if project.pieces[selectedPiece].hasMinimumContourPoints {
-                            PieceDetails(piece: project.pieces[selectedPiece])
-                        }
-                    }
-                    if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
-                        Text("Bu parça asgari nokta sayısını karşılamıyor; kontur çizimi ve ölçüsü gösterilemiyor.")
-                            .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if project.pieces.contains(where: { $0.hasMinimumContourPoints }) {
-                        Button("Konturu büyük görünümde incele") { showingFullScreenDrawing = true }
-                            .disabled(loadedModel.load.isLoading)
-                        DrawingView(
-                        pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
-                        label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
-                        highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
-                        selectionRevision: notchSelectionRevision, showGrain: $showGrain
-                        )
-                        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
-                        .background(Color.secondary.opacity(0.08))
-                    } else {
-                        Text("Bu projede görüntülenebilir kontur yok.")
-                            .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+                loadingStatus
+                rawRecoveryControls
+                importedSaveControls
+                if let project {
+                    loadedProjectContent(project)
                 } else {
-                    Text("Bu projede görüntülenebilir kontur yok.")
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.secondary.opacity(0.08))
+                    Spacer()
+                    Text("Önizlemek için bir .tcad dosyası açın.").foregroundStyle(.secondary)
+                    Spacer()
                 }
-                Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                Spacer()
-                Text("Önizlemek için bir .tcad dosyası açın.").foregroundStyle(.secondary)
-                Spacer()
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private var loadingStatus: some View {
+        if loadedModel.load.isLoading {
+            ProgressView("Proje açılıyor…")
+            Button("Açmayı iptal et") {
+                modelReadCancellation?.cancel()
+                loadedModel.load.invalidate()
+                saveNotice = "Model açma iptal edildi."
+            }
+            .accessibilityHint("Önceki açık modeli korur")
+        }
+        if let saveNotice { Text(saveNotice).font(.caption).foregroundStyle(.secondary) }
+    }
+
+    @ViewBuilder
+    private var rawRecoveryControls: some View {
+        if rawSaveNeedsRetry, let rawImport {
+            Text("Kaydedilemeyen ham kopya: \(ModelStore.safeLabel(rawImport.name))")
+                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            Text("Kopya geçici olarak bellekte tutuluyor. Başka bir dosya açmadan önce kopyayı kaydedin veya ham kopyadan vazgeçin; uygulama kapanırsa yeniden seçmeniz gerekir.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
+                .disabled(isSaving || loadedModel.load.isLoading)
+            Button("Ham kopyayı dışa aktar…") {
+                rawExportDocument = ProjectExportDocument(data: rawImport.data)
+                rawExportName = ModelStore.newRawExportName(source: rawImport.name)
+                showingRawExportWarning = true
+            }
+            .disabled(isSaving || loadedModel.load.isLoading)
+            #if DEBUG && targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-integrity"),
+               let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_EXPECTED_RAW"],
+               let expected = Data(base64Encoded: encoded) {
+                Text(rawImport.data == expected ? "Test: ham baytlar aynı" : "Test: ham baytlar değişti")
+                    .accessibilityIdentifier("raw-integrity-status")
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-picker-lifecycle") {
+                Button("Test: seçim iptal") { handlePickerFailure(CocoaError(.userCancelled)) }
+                Button("Test: geçersiz seçim") { handlePickerFailure(ViewerError.message("Test: geçersiz seçim.")) }
+                Button("Test: okunamayan dosya") { openModel(FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), imported: true) }
+                Button("Test: ikinci bozuk dosya") {
+                    let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tcad")
+                    do { try Data("[6,{".utf8).write(to: file); openModel(file, imported: true) }
+                    catch { error = error.localizedDescription }
+                }
+            }
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private var importedSaveControls: some View {
+        if importedData != nil {
+            Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
+                .disabled(isSaving || loadedModel.load.isLoading)
+            Button("Telefona farklı adla kaydet…") {
+                guard let data = importedData else { return }
+                librarySaveSnapshot = (data, loadedModel.load.request)
+                libraryName = project?.name ?? ""
+                showingLibraryNameEditor = true
+            }
+            .disabled(isSaving || loadedModel.load.isLoading)
+        }
+    }
+
+    @ViewBuilder
+    private func loadedProjectContent(_ project: Drawing) -> some View {
+        projectVersionWarnings(project)
+        projectExportControls(project)
+        contourWarnings(project)
+        projectNotchControls(project)
+        if !project.pieces.isEmpty {
+            piecePickerControls(project)
+            pieceNavigation(project)
+            notchNavigation(project)
+            selectedPieceTools(project)
+            projectCanvas(project)
+        } else {
+            Text("Bu projede görüntülenebilir kontur yok.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.secondary.opacity(0.08))
+        }
+        Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
+            .font(.caption).foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private func projectVersionWarnings(_ project: Drawing) -> some View {
+        if project.formatVersion == 10 {
+            Text("Sürüm 10: Deneysel A kesim içeren proje yalnız görüntülenir; üretim için onaylanmamıştır. Düzenleme ve geometri çıktısı desteklenmez; özgün dosya aynen paylaşılabilir.")
+                .font(.callout).foregroundStyle(.orange)
+        }
+        if project.formatVersion == 7 {
+            Text("Sürüm 7: Yalnız görünür konturlar ve işaretler önizlenir. Döndürme geçmişi, eşleşmeler ve üretime uygunluk bu telefonda doğrulanmaz; masaüstünde kontrol edin. Özgün dosya baytları korunur.")
+                .font(.caption).foregroundStyle(.secondary)
+            if project.historyPieceIDsDiffer {
+                Text("Pastal geçmişindeki parça kimlikleri görünür parçalarla eşleşmiyor; geçmiş güncel yerleşimi temsil etmiyor. Masaüstünde yeniden kontrol edin.")
+                    .font(.caption).foregroundStyle(.orange)
             }
         }
-        .padding()
+    }
+
+    @ViewBuilder
+    private func projectExportControls(_ project: Drawing) -> some View {
+        Button("Açık modeli dışa aktar…") {
+            guard let data = sourceData else { return }
+            // Capture the loaded bytes before presenting the system picker.
+            exportDocument = ProjectExportDocument(data: data)
+            exportName = exportFileName(project.name)
+            saveNotice = nil
+            showingExportWarning = true
+        }.disabled(isSaving || loadedModel.load.isLoading || sourceData == nil)
+        Button("Proje adını değiştir ve kopya kaydet") {
+            showingNameEditor = true
+        }.disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 6 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
+        if project.formatVersion >= 6 {
+            Text("Sürüm \(project.formatVersion) projelerinde proje adını değiştirip kopya kaydetme henüz desteklenmiyor. Açık modeli dışa aktarabilirsiniz.")
+                .font(.caption).foregroundStyle(.secondary)
         }
+        if project.formatVersion < 6 && project.hasNonUTF8BOM {
+            Text("UTF-16 veya UTF-32 dosyalarında proje adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        if let sourceData, sourceData.count > LosslessProjectName.maximumEditBytes {
+            Text("Proje adını değiştirmek için dosya 8 MB veya daha küçük olmalı.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func contourWarnings(_ project: Drawing) -> some View {
+        if project.insufficientContourCount > 0 {
+            Text("\(project.insufficientContourCount) parça asgari nokta sayısını karşılamıyor. Kapalı kontur için üç farklı köşe gerekir; tekrarlanan noktalar ayrı sayılmaz. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        if project.collapsedContourCount > 0 {
+            Text("Uyarı: \(project.collapsedContourCount) parçanın tüm noktaları üst üste geliyor. Bu konturların geometrisini masaüstünde kontrol edin.")
+                .font(.caption).foregroundStyle(.orange)
+        }
+    }
+
+    @ViewBuilder
+    private func projectNotchControls(_ project: Drawing) -> some View {
+        if project.pieces.contains(where: { !$0.notches.isEmpty }) {
+            Text("Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir.")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("İşaret koordinatları yaklaşık gösterilir; kesin değerler kaynak dosyada korunur.")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("Sürüm \(project.formatVersion) önizlemesinde dosya ve doğrulama metni en fazla 8 MB olabilir. UTF-8 ve BOM'lu UTF-16/UTF-32 desteklenir; tüm masaüstü proje kuralları doğrulanmaz.")
+                .font(.caption).foregroundStyle(.secondary)
+            Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
+                .disabled(loadedModel.load.isLoading)
+                .sheet(isPresented: $showingNotches) {
+                    NotchPicker(pieces: project.pieces) { piece, point in
+                        selectedPiece = piece
+                        selectedNotch = (piece, point)
+                        notchSelectionRevision = UUID()
+                        showingNotches = false
+                    }
+                }
+            if let selectedNotch, selectedNotch.piece == selectedPiece {
+                let piece = project.pieces[selectedNotch.piece]
+                let point = piece.points[selectedNotch.point]
+                let coordinates = NotchSearch.label(index: selectedNotch.point, x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y))
+                Text(piece.hasMinimumContourPoints
+                     ? "Seçili köşe işareti: \(coordinates). Önizlemede sarı halka ile gösterilir."
+                     : "Seçili köşe işareti: \(coordinates). Konturda yeterli nokta olmadığı için önizleme gösterilemiyor.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if NotchSearch.exceedsDrawingLimit(project.pieces.enumerated().map { index, piece in
+                (visible: piece.hasMinimumContourPoints && (selectedPiece == nil || selectedPiece == index), count: piece.notches.count)
+            }, limit: DrawingView.maximumVisibleNotches) {
+                Text("Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func piecePickerControls(_ project: Drawing) -> some View {
+        Button { showingPieces = true } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Gösterilen parça").font(.caption).foregroundStyle(.secondary)
+                    Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
+                        .font(.headline).lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(loadedModel.load.isLoading)
+        .accessibilityHint("Parçaları aramak veya seçmek için açın")
+        .sheet(isPresented: $showingPieces) {
+            PiecePicker(pieces: project.pieces, selection: Binding(
+                get: { selectedPiece },
+                set: { newSelection in
+                    if newSelection != selectedPiece { selectedNotch = nil }
+                    selectedPiece = newSelection
+                }
+            ))
+        }
+        Button("İki parçayı karşılaştır…") {
+            guard project.formatVersion != 10 else { return }
+            showingPieceComparison = true
+        }
+            .disabled(loadedModel.load.isLoading || project.pieces.count < 2 || project.formatVersion == 10)
+            .sheet(isPresented: $showingPieceComparison) {
+                PieceComparisonView(pieces: project.pieces, projectName: project.name, initialIndex: selectedPiece)
+            }
+    }
+
+    @ViewBuilder
+    private func pieceNavigation(_ project: Drawing) -> some View {
+        HStack {
+            Button("Önceki parça") {
+                guard let current = selectedPiece, current > 0 else { return }
+                selectedNotch = nil
+                selectedPiece = current - 1
+            }
+            .disabled(loadedModel.load.isLoading || selectedPiece == nil || selectedPiece == 0)
+            Spacer()
+            Text(selectedPiece.map { "\($0 + 1) / \(project.pieces.count)" } ?? "Tüm parçalar")
+                .font(.caption).foregroundStyle(.secondary)
+                .accessibilityLabel(selectedPiece.map { "Parça \($0 + 1), toplam \(project.pieces.count)" } ?? "Tüm parçalar gösteriliyor")
+            Spacer()
+            Button("Sonraki parça") {
+                let next = selectedPiece.map { $0 + 1 } ?? 0
+                guard next < project.pieces.count else { return }
+                selectedNotch = nil
+                selectedPiece = next
+            }
+            .disabled(loadedModel.load.isLoading || selectedPiece == project.pieces.count - 1)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    @ViewBuilder
+    private func notchNavigation(_ project: Drawing) -> some View {
+        if let selectedPiece, !project.pieces[selectedPiece].notches.isEmpty {
+            let notches = project.pieces[selectedPiece].notches
+            let current = selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
+            HStack {
+                Button("Önceki işaret") {
+                    if let point = NotchSearch.adjacent(in: notches, current: current, forward: false) {
+                        selectedNotch = (selectedPiece, point)
+                        notchSelectionRevision = UUID()
+                    }
+                }
+                .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: false) == nil)
+                Spacer()
+                Button("Sonraki işaret") {
+                    if let point = NotchSearch.adjacent(in: notches, current: current, forward: true) {
+                        selectedNotch = (selectedPiece, point)
+                        notchSelectionRevision = UUID()
+                    }
+                }
+                .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: true) == nil)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityHint("Seçili parçanın işaretleri arasında dosya sırasıyla gezinin")
+        }
+    }
+
+    @ViewBuilder
+    private func selectedPieceTools(_ project: Drawing) -> some View {
+        if let selectedPiece {
+            Button("İki nokta arasını ölç…") { showingPointDistance = true }
+                .disabled(loadedModel.load.isLoading || project.pieces[selectedPiece].points.count < 2)
+                .sheet(isPresented: $showingPointDistance) {
+                    PointDistanceView(piece: project.pieces[selectedPiece], name: project.pieces[selectedPiece].displayName(index: selectedPiece))
+                }
+            #if DEBUG
+            experimentalPieceTools(project, index: selectedPiece)
+            #endif
+            if project.pieces[selectedPiece].hasMinimumContourPoints {
+                PieceDetails(piece: project.pieces[selectedPiece])
+            }
+        }
+    }
+
+    #if DEBUG
+    @ViewBuilder
+    private func experimentalPieceTools(_ project: Drawing, index selectedPiece: Int) -> some View {
+        Button("Deneysel nokta düzenle…") {
+            guard project.formatVersion < 7, let data = sourceData, let id = project.pieces[selectedPiece].id,
+                  let identity = loadedModel.editIdentity() else { return }
+            loadedModel.pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
+                index: selectedPiece, projectName: project.name, identity: identity)
+        }
+            .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
+            .sheet(item: Binding(get: { loadedModel.pointEditSnapshot }, set: { _ in })) { snapshot in
+                ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
+                    isCurrent: { loadedModel.isCurrent(snapshot.identity, data: snapshot.data) },
+                    invalidateForTesting: { loadedModel.load.invalidate() },
+                    onSessionClosed: { loadedModel.closePointEditSession(snapshot.id) })
+                    .id(snapshot.id)
+            }
+        Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
+            .font(.caption).foregroundStyle(.secondary)
+        if project.formatVersion >= 7 {
+            Text("Sürüm \(project.formatVersion) dosyalarında nokta ve parça adı düzenleme desteklenmiyor; özgün dosya dışa aktarılabilir.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        if project.hasNonUTF8BOM {
+            Text("UTF-16 veya UTF-32 dosyalarında nokta düzenleme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        Button("Parça adını değiştir ve kopya kaydet") {
+            guard project.formatVersion < 7, let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
+            // Keep a failed edit available for retry on the same snapshot.
+            if pieceRenameSnapshot?.data != data || pieceRenameSnapshot?.index != selectedPiece {
+                editedPieceName = name
+            }
+            pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
+            showingPieceNameEditor = true
+        }
+        .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 7 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
+        if project.hasNonUTF8BOM {
+            Text("UTF-16 veya UTF-32 dosyalarında parça adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        if !project.pieceRenameIdentitiesValid {
+            Text("Parça adını değiştirmek için tüm parçaların adı ve varsa geçerli, benzersiz kimliği olmalı.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    #endif
+
+    @ViewBuilder
+    private func projectCanvas(_ project: Drawing) -> some View {
+        if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
+            Text("Bu parça asgari nokta sayısını karşılamıyor; kontur çizimi ve ölçüsü gösterilemiyor.")
+                .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if project.pieces.contains(where: { $0.hasMinimumContourPoints }) {
+            Button("Konturu büyük görünümde incele") { showingFullScreenDrawing = true }
+                .disabled(loadedModel.load.isLoading)
+            DrawingView(
+            pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
+            label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
+            highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
+            selectionRevision: notchSelectionRevision, showGrain: $showGrain
+            )
+            .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
+            .background(Color.secondary.opacity(0.08))
+        } else {
+            Text("Bu projede görüntülenebilir kontur yok.")
+                .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var drawingPresentation: some View {
+        projectScrollView
         #if DEBUG
         .onChange(of: selectedPiece) { _ in pieceRenameSnapshot = nil }
         #endif
         .frame(minWidth: 300, minHeight: 300)
-        .sheet(isPresented: $showingFullScreenDrawing) {
-            if let project {
-                NavigationStack {
-                    GeometryReader { geometry in
-                        ScrollView {
-                            HStack {
-                                Button("Önceki parça") {
-                                    guard let current = selectedPiece, current > 0 else { return }
-                                    selectedNotch = nil
-                                    selectedPiece = current - 1
-                                }
-                                .disabled(loadedModel.load.isLoading || selectedPiece == nil || selectedPiece == 0)
-                                Spacer()
-                                Button { showingLargePiecePicker = true } label: {
-                                    HStack(spacing: 4) {
-                                        Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
-                                            .font(.headline).lineLimit(2)
-                                        Image(systemName: "chevron.up.chevron.down")
-                                    }
-                                }
-                                .disabled(loadedModel.load.isLoading)
-                                .accessibilityLabel("Büyük görünümde parça seç")
-                                .accessibilityValue(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
-                                Spacer()
-                                Button("Sonraki parça") {
-                                    let next = selectedPiece.map { $0 + 1 } ?? 0
-                                    guard next < project.pieces.count else { return }
-                                    selectedNotch = nil
-                                    selectedPiece = next
-                                }
-                                .disabled(loadedModel.load.isLoading || selectedPiece == project.pieces.count - 1)
-                            }
-                            .buttonStyle(.bordered)
-                            .padding(.horizontal)
-                            if let selectedPiece {
-                                Text(project.pieces[selectedPiece].selectionDetails(index: selectedPiece))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal)
-                                    .accessibilityIdentifier("largePreviewPieceDetails")
-                            }
-                            if let selectedPiece, !project.pieces[selectedPiece].notches.isEmpty {
-                                let piece = project.pieces[selectedPiece]
-                                let current = selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
-                                HStack {
-                                    Button("Önceki işaret") {
-                                        if let point = NotchSearch.adjacent(in: piece.notches, current: current, forward: false) {
-                                            selectedNotch = (selectedPiece, point)
-                                            notchSelectionRevision = UUID()
-                                        }
-                                    }
-                                    .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: false) == nil)
-                                    Spacer()
-                                    Button("Sonraki işaret") {
-                                        if let point = NotchSearch.adjacent(in: piece.notches, current: current, forward: true) {
-                                            selectedNotch = (selectedPiece, point)
-                                            notchSelectionRevision = UUID()
-                                        }
-                                    }
-                                    .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: true) == nil)
-                                }
-                                .buttonStyle(.bordered)
-                                .padding(.horizontal)
-                                if let current {
-                                    let point = piece.points[current]
-                                    Text("Seçili işaret: \(NotchSearch.label(index: current, x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y)))")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.horizontal)
-                                        .accessibilityIdentifier("largePreviewNotchLabel")
-                                    Text("Koordinatlar yaklaşık gösterilir; kesin değerler kaynak dosyada korunur.")
-                                        .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
-                                }
-                            }
-                            if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
-                                Text("Bu parça asgari nokta sayısını karşılamıyor; kontur önizlemesi gösterilemiyor.")
-                                    .foregroundStyle(.secondary).padding()
-                            } else {
-                            DrawingView(
-                                pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
-                                label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
-                                highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
-                                selectionRevision: notchSelectionRevision,
-                                drawingHeight: max(320, geometry.size.height - 180), showGrain: $showGrain
-                            )
-                            .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
-                            .padding()
-                            }
-                        }
-                    }
-                    .navigationTitle("Kontur inceleme")
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { showingFullScreenDrawing = false } } }
-                    .sheet(isPresented: $showingLargePiecePicker) {
-                        PiecePicker(pieces: project.pieces, selection: Binding(
-                            get: { selectedPiece },
-                            set: { selection in
-                                if selection != selectedPiece { selectedNotch = nil }
-                                selectedPiece = selection
-                            }
-                        ))
-                    }
-                }
-            }
-        }
+        .sheet(isPresented: $showingFullScreenDrawing) { fullScreenDrawingSheet }
         .onChange(of: showingFullScreenDrawing) { presented in
             if !presented { showingLargePiecePicker = false }
         }
+    }
+
+    @ViewBuilder
+    private var fullScreenDrawingSheet: some View {
+        if let project {
+            NavigationStack {
+                GeometryReader { geometry in
+                    largeDrawingContent(project, height: geometry.size.height)
+                }
+                .navigationTitle("Kontur inceleme")
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { showingFullScreenDrawing = false } } }
+                .sheet(isPresented: $showingLargePiecePicker) {
+                    PiecePicker(pieces: project.pieces, selection: Binding(
+                        get: { selectedPiece },
+                        set: { selection in
+                            if selection != selectedPiece { selectedNotch = nil }
+                            selectedPiece = selection
+                        }
+                    ))
+                }
+            }
+        }
+    }
+
+    private func largeDrawingContent(_ project: Drawing, height: CGFloat) -> some View {
+        ScrollView {
+            largePieceNavigation(project)
+            if let selectedPiece {
+                Text(project.pieces[selectedPiece].selectionDetails(index: selectedPiece))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .accessibilityIdentifier("largePreviewPieceDetails")
+            }
+            largeNotchNavigation(project)
+            largeDrawingCanvas(project, height: height)
+        }
+    }
+
+    @ViewBuilder
+    private func largePieceNavigation(_ project: Drawing) -> some View {
+        HStack {
+            Button("Önceki parça") {
+                guard let current = selectedPiece, current > 0 else { return }
+                selectedNotch = nil
+                selectedPiece = current - 1
+            }
+            .disabled(loadedModel.load.isLoading || selectedPiece == nil || selectedPiece == 0)
+            Spacer()
+            Button { showingLargePiecePicker = true } label: {
+                HStack(spacing: 4) {
+                    Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
+                        .font(.headline).lineLimit(2)
+                    Image(systemName: "chevron.up.chevron.down")
+                }
+            }
+            .disabled(loadedModel.load.isLoading)
+            .accessibilityLabel("Büyük görünümde parça seç")
+            .accessibilityValue(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
+            Spacer()
+            Button("Sonraki parça") {
+                let next = selectedPiece.map { $0 + 1 } ?? 0
+                guard next < project.pieces.count else { return }
+                selectedNotch = nil
+                selectedPiece = next
+            }
+            .disabled(loadedModel.load.isLoading || selectedPiece == project.pieces.count - 1)
+        }
+        .buttonStyle(.bordered)
+        .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private func largeNotchNavigation(_ project: Drawing) -> some View {
+        if let selectedPiece, !project.pieces[selectedPiece].notches.isEmpty {
+            let piece = project.pieces[selectedPiece]
+            let current = selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
+            HStack {
+                Button("Önceki işaret") {
+                    if let point = NotchSearch.adjacent(in: piece.notches, current: current, forward: false) {
+                        selectedNotch = (selectedPiece, point)
+                        notchSelectionRevision = UUID()
+                    }
+                }
+                .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: false) == nil)
+                Spacer()
+                Button("Sonraki işaret") {
+                    if let point = NotchSearch.adjacent(in: piece.notches, current: current, forward: true) {
+                        selectedNotch = (selectedPiece, point)
+                        notchSelectionRevision = UUID()
+                    }
+                }
+                .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: true) == nil)
+            }
+            .buttonStyle(.bordered)
+            .padding(.horizontal)
+            if let current {
+                let point = piece.points[current]
+                Text("Seçili işaret: \(NotchSearch.label(index: current, x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y)))")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .accessibilityIdentifier("largePreviewNotchLabel")
+                Text("Koordinatlar yaklaşık gösterilir; kesin değerler kaynak dosyada korunur.")
+                    .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func largeDrawingCanvas(_ project: Drawing, height: CGFloat) -> some View {
+        if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
+            Text("Bu parça asgari nokta sayısını karşılamıyor; kontur önizlemesi gösterilemiyor.")
+                .foregroundStyle(.secondary).padding()
+        } else {
+        DrawingView(
+            pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
+            label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
+            highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
+            selectionRevision: notchSelectionRevision,
+            drawingHeight: max(320, height - 180), showGrain: $showGrain
+        )
+        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
+        .padding()
+        }
+    }
+
+    private var importPresentation: some View {
+        drawingPresentation
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
                 let url = try result.get()
@@ -607,6 +728,10 @@ private struct ContentView: View {
         } message: {
             Text("Yeni dosya seçmeden önce ham kopyayı yeniden kaydedin veya ham kopyadan açıkça vazgeçin. Dışa aktarırsanız da devam etmek için bellekteki kopyadan ayrıca vazgeçmeniz gerekir. Bekleyen kopya bellekte korunuyor.")
         }
+    }
+
+    private var exportPresentation: some View {
+        importPresentation
         .fileExporter(isPresented: $showingExporter, document: exportDocument, contentType: .data, defaultFilename: exportName) { result in
             exportDocument = nil
             switch result {
@@ -642,6 +767,10 @@ private struct ContentView: View {
         .onChange(of: showingRawExporter) { presented in
             if !presented { rawExportDocument = nil }
         }
+    }
+
+    private var editorPresentation: some View {
+        exportPresentation
         .alert("Kayıtlı model adı", isPresented: $showingLibraryNameEditor) {
             TextField("Model adı", text: $libraryName)
             Button("İptal", role: .cancel) { librarySaveSnapshot = nil }
@@ -677,86 +806,77 @@ private struct ContentView: View {
                 .disabled(editedPieceName.utf16.count > 1024)
         } message: { Text("Yeni bir model kopyası kaydedilir; açık dosya değişmez. Kayıtlı pastal ve içe aktarma geçmişi eski parça adını veya önceki durumu gösterebilir. Parça adı en fazla 1024 UTF-16 birimi olabilir.") }
         #endif
-        .sheet(isPresented: $showingLibrary) {
-            ModelLibrary(search: $librarySearch, sortOrder: $librarySortOrder,
-                         libraryFilter: $libraryFilter, searchContents: $librarySearchContents,
-                         pendingRawRecovery: rawSaveNeedsRetry) { entry, match in
-                showingLibrary = false
-                openModel(ModelStore.payloadURL(entry.url), imported: false, listedEntry: entry, matchedPiece: match)
-            }
-        }
-        #if DEBUG && targetEnvironment(simulator)
-        .onAppear {
-            guard (ProcessInfo.processInfo.arguments.contains("--ui-test-fixture") ||
-                   ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture")),
-                  let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
-                  let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("ui-test-\(UUID().uuidString).tcad")
-            defer { try? FileManager.default.removeItem(at: url) }
-            do {
-                try data.write(to: url, options: .atomic)
-                let drawing = try Drawing.load(url)
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-oversized-metadata") {
-                    let copy = try ModelStore.directory().appendingPathComponent("recovery.tcadcopy", isDirectory: true)
-                    try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: true)
-                    try data.write(to: copy.appendingPathComponent("project.tcad"))
-                    try Data(repeating: 65, count: 65_537).write(to: copy.appendingPathComponent("metadata.json"))
-                }
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-corrupt-library-model") {
-                    let corrupt = try ModelStore.directory().appendingPathComponent("Bozuk.tcad")
-                    try Data([0xff, 0x00, 0x91]).write(to: corrupt)
-                }
-                selectedNotch = nil
-                loadedModel.install(drawing, data: data)
-                editedName = drawing.name
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
-                    importedData = data
-                    importedName = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FILENAME"] ?? "Deneme Modeli.tcad"
-                }
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-import") {
-                    let largeURL = FileManager.default.temporaryDirectory.appendingPathComponent("Büyük-\(UUID().uuidString).tcad")
-                    let utf16 = ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-utf16be")
-                    let expansion = ProcessInfo.processInfo.arguments.contains("--ui-test-v6-utf16-expansion")
-                    let leading = ProcessInfo.processInfo.arguments.contains("--ui-test-v6-long-header") ? String(repeating: " ", count: 5000) : ""
-                    let width = utf16 ? 2 : 1
-                    let text: String
-                    if expansion {
-                        let name = String(repeating: "€", count: 1000)
-                        let pieces = (0..<2800).map { index in
-                            let id = String(format: "00000000-0000-0000-0000-%012d", index + 1)
-                            let mark = index == 0 ? #", "Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]"# : ""
-                            return #"{"Id":"\#(id)","Name":"\#(name)","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]\#(mark)}"#
-                        }.joined(separator: ",")
-                        text = leading + #"[6,{"Name":"Büyük","Pieces":[\#(pieces)],"GradingRules":[]}]"#
-                    } else {
-                        text = leading + "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width)
-                            + #"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
-                    }
-                    var large = utf16 ? Data([0xfe, 0xff]) : Data()
-                    guard let encoded = text.data(using: utf16 ? .utf16BigEndian : .utf8) else { throw ViewerError.message("Test verisi kodlanamadı.") }
-                    large.append(encoded)
-                    try large.write(to: largeURL)
-                    openModel(largeURL, imported: true)
-                }
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-invalid-v6-import") {
-                    let invalidURL = FileManager.default.temporaryDirectory.appendingPathComponent("Eksik-\(UUID().uuidString).tcad")
-                    try Data("[6,{\"Name\":\"kesik\"".utf8).write(to: invalidURL)
-                    openModel(invalidURL, imported: true)
-                }
-                if ProcessInfo.processInfo.arguments.contains("--ui-test-unknown-v6-notch") {
-                    let unknownURL = FileManager.default.temporaryDirectory.appendingPathComponent("İşaret-\(UUID().uuidString).tcad")
-                    let unknown = #"[6,{"Name":"İşaretli","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0},"Depth":2}]}],"GradingRules":[]}]"#
-                    try Data(unknown.utf8).write(to: unknownURL)
-                    openModel(unknownURL, imported: true)
-                }
-            } catch { self.error = error.localizedDescription }
-        }
-        #endif
-        .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("Tamam", role: .cancel) { error = nil }
-        } message: { Text(error ?? "") }
     }
+
+    #if DEBUG && targetEnvironment(simulator)
+    private func installUITestFixture() {
+        guard (ProcessInfo.processInfo.arguments.contains("--ui-test-fixture") ||
+               ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture")),
+              let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
+              let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ui-test-\(UUID().uuidString).tcad")
+        defer { try? FileManager.default.removeItem(at: url) }
+        do {
+            try data.write(to: url, options: .atomic)
+            let drawing = try Drawing.load(url)
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-oversized-metadata") {
+                let copy = try ModelStore.directory().appendingPathComponent("recovery.tcadcopy", isDirectory: true)
+                try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: true)
+                try data.write(to: copy.appendingPathComponent("project.tcad"))
+                try Data(repeating: 65, count: 65_537).write(to: copy.appendingPathComponent("metadata.json"))
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-corrupt-library-model") {
+                let corrupt = try ModelStore.directory().appendingPathComponent("Bozuk.tcad")
+                try Data([0xff, 0x00, 0x91]).write(to: corrupt)
+            }
+            selectedNotch = nil
+            loadedModel.install(drawing, data: data)
+            editedName = drawing.name
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
+                importedData = data
+                importedName = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FILENAME"] ?? "Deneme Modeli.tcad"
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-import") {
+                let largeURL = FileManager.default.temporaryDirectory.appendingPathComponent("Büyük-\(UUID().uuidString).tcad")
+                let utf16 = ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-utf16be")
+                let expansion = ProcessInfo.processInfo.arguments.contains("--ui-test-v6-utf16-expansion")
+                let leading = ProcessInfo.processInfo.arguments.contains("--ui-test-v6-long-header") ? String(repeating: " ", count: 5000) : ""
+                let width = utf16 ? 2 : 1
+                let text: String
+                if expansion {
+                    let name = String(repeating: "€", count: 1000)
+                    let pieces = (0..<2800).map { index in
+                        let id = String(format: "00000000-0000-0000-0000-%012d", index + 1)
+                        let mark = index == 0 ? #", "Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]"# : ""
+                        return #"{"Id":"\#(id)","Name":"\#(name)","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]\#(mark)}"#
+                    }.joined(separator: ",")
+                    text = leading + #"[6,{"Name":"Büyük","Pieces":[\#(pieces)],"GradingRules":[]}]"#
+                } else {
+                    text = leading + "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width)
+                        + #"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+                }
+                var large = utf16 ? Data([0xfe, 0xff]) : Data()
+                guard let encoded = text.data(using: utf16 ? .utf16BigEndian : .utf8) else { throw ViewerError.message("Test verisi kodlanamadı.") }
+                large.append(encoded)
+                try large.write(to: largeURL)
+                openModel(largeURL, imported: true)
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-invalid-v6-import") {
+                let invalidURL = FileManager.default.temporaryDirectory.appendingPathComponent("Eksik-\(UUID().uuidString).tcad")
+                try Data("[6,{\"Name\":\"kesik\"".utf8).write(to: invalidURL)
+                openModel(invalidURL, imported: true)
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-unknown-v6-notch") {
+                let unknownURL = FileManager.default.temporaryDirectory.appendingPathComponent("İşaret-\(UUID().uuidString).tcad")
+                let unknown = #"[6,{"Name":"İşaretli","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0},"Depth":2}]}],"GradingRules":[]}]"#
+                try Data(unknown.utf8).write(to: unknownURL)
+                openModel(unknownURL, imported: true)
+            }
+        } catch { self.error = error.localizedDescription }
+    }
+
+    #endif
 
     private func exportFileName(_ name: String) -> String {
         let base = name.lowercased().hasSuffix(".tcad") ? String(name.dropLast(5)) : name
