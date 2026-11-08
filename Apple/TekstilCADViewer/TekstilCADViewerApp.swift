@@ -149,7 +149,7 @@ private struct ContentView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("MONO DI TREE").font(.caption.weight(.semibold)).tracking(1.2)
-                        Text("CAD Atölyesi").font(.title2).fontDesign(.serif)
+                        Text("CAD Atölyesi").font(.system(.title2, design: .serif))
                     }
                     Spacer()
                     if let project { Text(ModelStore.safeLabel(project.name)).font(.caption).lineLimit(2) }
@@ -194,7 +194,6 @@ private struct ContentView: View {
                 Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
                     .disabled(isSaving || loadedModel.load.isLoading)
                 Button("Ham kopyayı dışa aktar…") {
-                    guard let rawImport else { return }
                     rawExportDocument = ProjectExportDocument(data: rawImport.data)
                     rawExportName = ModelStore.newRawExportName(source: rawImport.name)
                     showingRawExportWarning = true
@@ -1620,6 +1619,15 @@ private struct ModelLibrary: View {
     @State private var filterResult: FilterResult?
     private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents, contentOffset: contentPage.offset, retry: contentRetry) }
 
+    private func modelAccessibilityValue(_ model: ModelStore.Entry, evidence: ModelContentMatch?) -> String {
+        var parts: [String] = []
+        if let evidence { parts.append("Eşleşen parça: \(evidence.detail)") }
+        if let status = model.selectionStatus { parts.append(status) }
+        parts.append("Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))")
+        if let date = model.date { parts.append("Kaydedildi: \(date.formatted(date: .abbreviated, time: .standard))") }
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         NavigationStack {
             let current = filterResult?.key == filterKey ? filterResult : nil
@@ -1733,7 +1741,7 @@ private struct ModelLibrary: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(model.safeName)
-                    .accessibilityValue((current?.evidence[model.id].map { "Eşleşen parça: \($0.detail), " } ?? "") + (model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
+                    .accessibilityValue(modelAccessibilityValue(model, evidence: current?.evidence[model.id]))
                     .buttonStyle(.plain)
                     .disabled(isRecovering)
                     Menu {
@@ -1996,7 +2004,14 @@ struct Drawing {
             } else {
                 dimensions = []
             }
-            let warning = (experimentalALine ? ["Deneysel A kesim; üretim için onaylanmamış"] : []) + (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (metadataEmpty ? ["Üretim bilgileri boş"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
+            var warning: [String] = []
+            if experimentalALine { warning.append("Deneysel A kesim; üretim için onaylanmamış") }
+            if !hasMinimumContourPoints { warning.append("Kontur için nokta sayısı yetersiz: \(points.count)") }
+            if quantityUnreadable { warning.append("Adet okunamadı veya geçersiz") }
+            if metadataUnreadable { warning.append("Üretim bilgileri okunamadı") }
+            if metadataEmpty { warning.append("Üretim bilgileri boş") }
+            if roleUnreadable { warning.append("Parça türü okunamadı veya geçersiz") }
+            if textMetadataUnreadable { warning.append("Beden veya malzeme okunamadı veya geçersiz") }
             return (["Parça \(index + 1)"] + (id.map { ["Kimlik: \($0.uuidString)"] } ?? []) + [closed ? "Kapalı kontur" : "Açık kontur", "\(points.count) nokta"] + fields + dimensions + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
         }
 
@@ -2824,7 +2839,7 @@ private struct ExperimentalDesignBriefView: View {
                             .padding(8)
                     }
                 }.accessibilityHidden(true)
-                Text(option.rawValue).font(.headline).fontDesign(.serif).foregroundStyle(plum)
+                Text(option.rawValue).font(.system(.headline, design: .serif)).foregroundStyle(plum)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(styleCaption(option)).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3605,140 +3620,7 @@ private struct ExperimentalDesignBriefView: View {
         .disabled(draftTransition || referenceDecisionPending)
         .padding(.horizontal).padding(.vertical, 10)
     }
-    var body: some View {
-        NavigationStack {
-            ScrollViewReader { requestScroll in
-            Form {
-                Section {
-                    HStack {
-                        Text(briefStepTitle).font(.headline).accessibilityAddTraits(.isHeader)
-                            .accessibilityLabel("\(briefStepTitle), adım \(step + 1), toplam dört adım")
-                            .accessibilityFocused($focusedStepHeading, equals: step)
-                        Spacer()
-                        Text("\(step + 1) / 4").font(.caption.weight(.semibold))
-                            .accessibilityHidden(true)
-                    }.id("request-step-start")
-                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
-                    Text(briefStepGuidance).font(.subheadline).foregroundStyle(.secondary)
-                }
-                if step == 0 {
-                Section {
-                    Text("ATÖLYE PROJESİ · YENİ ÇALIŞMA").font(.caption.weight(.semibold)).foregroundStyle(plum).padding(.horizontal, 10).padding(.vertical, 5).background(plum.opacity(0.10), in: Capsule())
-                    Text("Modelini seç").font(.largeTitle).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
-                    Text("Özel dikim için temel elbise siluetini belirleyin veya kendi tarifinizi yazın.").font(.subheadline).foregroundStyle(.secondary)
-                    if importedPortable { Text("İçe aktarılan açıklama aşağıdadır. Dosyada ayrı bir model kimliği bulunmuyor; model seçilmedi. İsterseniz bir kart seçin.").font(.caption) }
-                    if style != .describe {
-                        Label("Seçilen model: \(style.rawValue)", systemImage: "checkmark.circle.fill")
-                            .font(.subheadline.weight(.semibold))
-                    } else {
-                        Label("Ayrı model seçilmedi; tarifle devam edebilirsiniz.", systemImage: "text.bubble")
-                            .font(.subheadline)
-                    }
-                    if ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) {
-                        Text("Seçilen model ile tarifteki model bilgisini kontrol edin.").font(.caption).foregroundStyle(plum)
-                    }
-                    Button("Tarife git") {
-                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
-                        focusedBriefSection = .description
-                    }
-                        .frame(minHeight: 44)
-                        .accessibilityHint("Elbise tarifi alanına kaydırır.")
-                    Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.isHeader).id("request-models")
-                        .accessibilityFocused($focusedBriefSection, equals: .models)
-                    Text(typeSize.isAccessibilitySize ? "Tüm modelleri görmek için aşağı kaydırın." : "Tüm modelleri görmek için yana kaydırın.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    if typeSize.isAccessibilitySize {
-                        VStack(spacing: 8) {
-                            ForEach(ExperimentalDesignBrief.selectableStyles) { option in
-                                styleCard(option, expanded: true)
-                            }
-                        }
-                    } else {
-                        ScrollView(.horizontal) {
-                            HStack(alignment: .top, spacing: 8) {
-                                ForEach(ExperimentalDesignBrief.selectableStyles) { option in
-                                    styleCard(option, expanded: false)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                    Button("Tarife git") {
-                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
-                        focusedBriefSection = .description
-                    }
-                        .frame(minHeight: 44).accessibilityHint("Elbise tarifi alanına kaydırır.")
-                    Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. Ayrıntıları aşağıda düzenleyebilirsiniz.").font(.caption)
-                    Text("Nasıl bir elbise istiyorsun?").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
-                        .id("request-description").accessibilityFocused($focusedBriefSection, equals: .description)
-                    Button("Örnek modellere dön") {
-                        focusedInput = nil; requestScroll.scrollTo("request-models", anchor: .top)
-                        focusedBriefSection = .models
-                    }
-                        .frame(minHeight: 44).accessibilityHint("Model kartlarına kaydırır.")
-                    Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: \(ExperimentalDesignBrief.modelSuggestionExample)").font(.subheadline).foregroundStyle(.secondary)
-                    TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
-                    Button("Modeli ve ölçüleri birlikte incele") { proposeCombinedDescription() }.frame(minHeight: 44)
-                    Text("Tek bir açık model ve birimli ölçüler tanınırsa birlikte onayınıza sunulur; tarifiniz korunur. Örnek: \(ExperimentalDesignBrief.combinedDescriptionExample)").font(.caption)
-                    Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
-                    Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
-                    Text("Yalnız tamamı tanınan açık bir tarifteki ölçüler önerilir. Onaylamadan alanlar değişmez; tarif aynen kalır.").font(.caption)
-                    if !measurementMessageStatus.isEmpty { Text(measurementMessageStatus).font(.caption) }
-                    Text("Tek bir açık model adı aranır. Öneriyi onaylamadan tüm ifadenizi kontrol edin; öneri olmadan da tarifinizle devam edebilirsiniz.").font(.caption)
-                    if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
-                    ScrollView(.horizontal) {
-                        HStack { ForEach(["Midi boy", "Balon kol", "Gizli pens", "V yaka", "Astar payı dahil"], id: \.self) { tag in
-                            Button("+ " + tag) {
-                                let addition = (description.isEmpty ? "" : "\n") + tag
-                                if description.utf16.count + addition.utf16.count <= ExperimentalDesignBrief.maxTextUnits { referenceRevision.changed(); description += addition }
-                                else { message = "Tarif uzunluk sınırına ulaştı; önceki metin korundu." }
-                            }.buttonStyle(.bordered).controlSize(.large)
-                        } }
-                    }
-                }
-                Section {
-                    let overview = ExperimentalDesignBrief.AtelierOverview(draft)
-                    let summary = ExperimentalDesignBrief.RequestSummary(draft)
-                    Text("Çalışman özeti").font(.headline).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
-                    Label(summary.model ?? "Ayrı model seçilmedi", systemImage: summary.model == nil ? "circle" : "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                    if ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) {
-                        Text("Seçilen model ile tarifteki model bilgisini kontrol edin.").font(.caption).foregroundStyle(plum)
-                    }
-                    Text(summary.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Henüz tarif yazılmadı." : summary.description)
-                        .font(.subheadline).lineLimit(3).accessibilityLabel("Tarif: \(summary.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Henüz tarif yazılmadı" : summary.description)")
-                    measurementOverview(overview)
-                    if overview.hasOtherMeasurements { Text("Ek ölçü veya not girildi.").font(.caption) }
-                    if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Kutulardaki ölçüler, ölçü mesajı veya ek notlarla karşılaştırılmadı. Çelişki olup olmadığını tüm metni inceleyerek kontrol edin.")
-                            .font(.caption).foregroundStyle(plum)
-                    }
-                    if overview.hasPendingMeasurements { Text("Onaylanmamış ölçüler özete dahil değil.").font(.caption).foregroundStyle(plum) }
-                }
-                }
-                if step == 0 {
-                Section {
-                    let overview = ExperimentalDesignBrief.AtelierOverview(draft)
-                    Text("Ölçülerini ekle").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
-                    measurementOverview(overview)
-                    if overview.hasOtherMeasurements { Text("Ek ölçü veya not girildi.").font(.caption) }
-                    if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Kutulardaki ölçüler, ölçü mesajı veya ek notlarla karşılaştırılmadı. Çelişki olup olmadığını tüm metni inceleyerek kontrol edin.")
-                            .font(.caption).foregroundStyle(plum)
-                    }
-                    if overview.hasPendingMeasurements { Text("Onaylanmamış ölçü girişleri var; isteğe henüz dahil değil.").font(.caption) }
-                    Button("Ölçüleri gir veya düzenle") { focusedInput = nil; step = 1 }.frame(minHeight: 44)
-                    Text("Örnek görsel").font(.headline).accessibilityAddTraits(.isHeader)
-                    if let name = overview.referenceName { Text("Eklendi: \(ModelStore.safeLabel(name))") }
-                    else { Text("Görsel eklenmedi.").foregroundStyle(.secondary) }
-                    Button("Örnek görseli seç veya değiştir") { focusedInput = nil; step = 2 }.frame(minHeight: 44)
-                    Label("Kalıp henüz oluşturulmadı", systemImage: "doc.text")
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(plum)
-                    Text("Bu ekran yalnız istek hazırlar; kalıp veya baskı oluşturmaz.").font(.caption).foregroundStyle(.secondary)
-                }
-                }
-                if step == 1 {
+    private var measurementInputSection: some View {
                 Section("Bildiğiniz ölçüler neler?") {
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
                     VStack(alignment: .leading, spacing: 4) {
@@ -3808,6 +3690,142 @@ private struct ExperimentalDesignBriefView: View {
                     }
 
                 }
+    }
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { requestScroll in
+            Form {
+                Section {
+                    HStack {
+                        Text(briefStepTitle).font(.headline).accessibilityAddTraits(.isHeader)
+                            .accessibilityLabel("\(briefStepTitle), adım \(step + 1), toplam dört adım")
+                            .accessibilityFocused($focusedStepHeading, equals: step)
+                        Spacer()
+                        Text("\(step + 1) / 4").font(.caption.weight(.semibold))
+                            .accessibilityHidden(true)
+                    }.id("request-step-start")
+                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
+                    Text(briefStepGuidance).font(.subheadline).foregroundStyle(.secondary)
+                }
+                if step == 0 {
+                Section {
+                    Text("ATÖLYE PROJESİ · YENİ ÇALIŞMA").font(.caption.weight(.semibold)).foregroundStyle(plum).padding(.horizontal, 10).padding(.vertical, 5).background(plum.opacity(0.10), in: Capsule())
+                    Text("Modelini seç").font(.system(.largeTitle, design: .serif)).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
+                    Text("Özel dikim için temel elbise siluetini belirleyin veya kendi tarifinizi yazın.").font(.subheadline).foregroundStyle(.secondary)
+                    if importedPortable { Text("İçe aktarılan açıklama aşağıdadır. Dosyada ayrı bir model kimliği bulunmuyor; model seçilmedi. İsterseniz bir kart seçin.").font(.caption) }
+                    if style != .describe {
+                        Label("Seçilen model: \(style.rawValue)", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                    } else {
+                        Label("Ayrı model seçilmedi; tarifle devam edebilirsiniz.", systemImage: "text.bubble")
+                            .font(.subheadline)
+                    }
+                    if ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) {
+                        Text("Seçilen model ile tarifteki model bilgisini kontrol edin.").font(.caption).foregroundStyle(plum)
+                    }
+                    Button("Tarife git") {
+                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
+                        focusedBriefSection = .description
+                    }
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Elbise tarifi alanına kaydırır.")
+                    Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.isHeader).id("request-models")
+                        .accessibilityFocused($focusedBriefSection, equals: .models)
+                    Text(typeSize.isAccessibilitySize ? "Tüm modelleri görmek için aşağı kaydırın." : "Tüm modelleri görmek için yana kaydırın.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if typeSize.isAccessibilitySize {
+                        VStack(spacing: 8) {
+                            ForEach(ExperimentalDesignBrief.selectableStyles) { option in
+                                styleCard(option, expanded: true)
+                            }
+                        }
+                    } else {
+                        ScrollView(.horizontal) {
+                            HStack(alignment: .top, spacing: 8) {
+                                ForEach(ExperimentalDesignBrief.selectableStyles) { option in
+                                    styleCard(option, expanded: false)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    Button("Tarife git") {
+                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
+                        focusedBriefSection = .description
+                    }
+                        .frame(minHeight: 44).accessibilityHint("Elbise tarifi alanına kaydırır.")
+                    Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. Ayrıntıları aşağıda düzenleyebilirsiniz.").font(.caption)
+                    Text("Nasıl bir elbise istiyorsun?").font(.system(.title3, design: .serif)).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
+                        .id("request-description").accessibilityFocused($focusedBriefSection, equals: .description)
+                    Button("Örnek modellere dön") {
+                        focusedInput = nil; requestScroll.scrollTo("request-models", anchor: .top)
+                        focusedBriefSection = .models
+                    }
+                        .frame(minHeight: 44).accessibilityHint("Model kartlarına kaydırır.")
+                    Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: \(ExperimentalDesignBrief.modelSuggestionExample)").font(.subheadline).foregroundStyle(.secondary)
+                    TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
+                    Button("Modeli ve ölçüleri birlikte incele") { proposeCombinedDescription() }.frame(minHeight: 44)
+                    Text("Tek bir açık model ve birimli ölçüler tanınırsa birlikte onayınıza sunulur; tarifiniz korunur. Örnek: \(ExperimentalDesignBrief.combinedDescriptionExample)").font(.caption)
+                    Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
+                    Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
+                    Text("Yalnız tamamı tanınan açık bir tarifteki ölçüler önerilir. Onaylamadan alanlar değişmez; tarif aynen kalır.").font(.caption)
+                    if !measurementMessageStatus.isEmpty { Text(measurementMessageStatus).font(.caption) }
+                    Text("Tek bir açık model adı aranır. Öneriyi onaylamadan tüm ifadenizi kontrol edin; öneri olmadan da tarifinizle devam edebilirsiniz.").font(.caption)
+                    if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
+                    ScrollView(.horizontal) {
+                        HStack { ForEach(["Midi boy", "Balon kol", "Gizli pens", "V yaka", "Astar payı dahil"], id: \.self) { tag in
+                            Button("+ " + tag) {
+                                let addition = (description.isEmpty ? "" : "\n") + tag
+                                if description.utf16.count + addition.utf16.count <= ExperimentalDesignBrief.maxTextUnits { referenceRevision.changed(); description += addition }
+                                else { message = "Tarif uzunluk sınırına ulaştı; önceki metin korundu." }
+                            }.buttonStyle(.bordered).controlSize(.large)
+                        } }
+                    }
+                }
+                Section {
+                    let overview = ExperimentalDesignBrief.AtelierOverview(draft)
+                    let summary = ExperimentalDesignBrief.RequestSummary(draft)
+                    Text("Çalışman özeti").font(.system(.headline, design: .serif)).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
+                    Label(summary.model ?? "Ayrı model seçilmedi", systemImage: summary.model == nil ? "circle" : "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                    if ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) {
+                        Text("Seçilen model ile tarifteki model bilgisini kontrol edin.").font(.caption).foregroundStyle(plum)
+                    }
+                    Text(summary.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Henüz tarif yazılmadı." : summary.description)
+                        .font(.subheadline).lineLimit(3).accessibilityLabel("Tarif: \(summary.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Henüz tarif yazılmadı" : summary.description)")
+                    measurementOverview(overview)
+                    if overview.hasOtherMeasurements { Text("Ek ölçü veya not girildi.").font(.caption) }
+                    if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Kutulardaki ölçüler, ölçü mesajı veya ek notlarla karşılaştırılmadı. Çelişki olup olmadığını tüm metni inceleyerek kontrol edin.")
+                            .font(.caption).foregroundStyle(plum)
+                    }
+                    if overview.hasPendingMeasurements { Text("Onaylanmamış ölçüler özete dahil değil.").font(.caption).foregroundStyle(plum) }
+                }
+                }
+                if step == 0 {
+                Section {
+                    let overview = ExperimentalDesignBrief.AtelierOverview(draft)
+                    Text("Ölçülerini ekle").font(.system(.title3, design: .serif)).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
+                    measurementOverview(overview)
+                    if overview.hasOtherMeasurements { Text("Ek ölçü veya not girildi.").font(.caption) }
+                    if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Kutulardaki ölçüler, ölçü mesajı veya ek notlarla karşılaştırılmadı. Çelişki olup olmadığını tüm metni inceleyerek kontrol edin.")
+                            .font(.caption).foregroundStyle(plum)
+                    }
+                    if overview.hasPendingMeasurements { Text("Onaylanmamış ölçü girişleri var; isteğe henüz dahil değil.").font(.caption) }
+                    Button("Ölçüleri gir veya düzenle") { focusedInput = nil; step = 1 }.frame(minHeight: 44)
+                    Text("Örnek görsel").font(.headline).accessibilityAddTraits(.isHeader)
+                    if let name = overview.referenceName { Text("Eklendi: \(ModelStore.safeLabel(name))") }
+                    else { Text("Görsel eklenmedi.").foregroundStyle(.secondary) }
+                    Button("Örnek görseli seç veya değiştir") { focusedInput = nil; step = 2 }.frame(minHeight: 44)
+                    Label("Kalıp henüz oluşturulmadı", systemImage: "doc.text")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(plum)
+                    Text("Bu ekran yalnız istek hazırlar; kalıp veya baskı oluşturmaz.").font(.caption).foregroundStyle(.secondary)
+                }
+                }
+                if step == 1 {
+                measurementInputSection
                 }
                 Section {
                     Text(localStatus).font(.caption).foregroundStyle(.secondary)

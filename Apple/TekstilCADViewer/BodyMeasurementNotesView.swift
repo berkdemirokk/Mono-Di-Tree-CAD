@@ -227,20 +227,7 @@ struct BodyMeasurementNotesView: View {
             Button("Sonraki ölçüler") { focusedIndex = nil; pendingFieldJump = nil; fieldJumpRevision = UUID(); groupIndex += 1 }.frame(minHeight: 44)
         }
     }
-    var body: some View {
-        NavigationStack {
-            ScrollViewReader { proxy in
-            Form {
-                Section {
-                    Text("Bildiğiniz ölçüleri girin; bilinmeyenleri boş bırakın. Uzunluklarda cm veya mm seçin; omuz eğimi derecedir. Bu form kalıp oluşturmaz. Girişler yalnız onayla notlara eklenir. Henüz eklenmemiş değerler yerel taslağa kaydedilmeye çalışılır; ani kapanışta son değişiklikler kaybolabilir.")
-                    Text("Göğüs çevresi, kalça çevresi ve elbise boyu ana istek ekranında ayrıca girilir; bu form onları hesaplamaz.").font(.caption)
-                    Text("Ölçüm açıklamaları araştırma kaynağından alınmıştır; bağımsız kalıp uzmanı tarafından doğrulanmadı. Emin olmadığınız değerleri boş bırakın.").font(.caption)
-                    Text("Bu formdaki belden kalçaya ölçü kalça kemiğinin üst noktasına yöneliktir. A kesim rehberindeki belden kalça hattına düşüklük ve ayrı ön/arka yaylar farklı ölçülerdir; aynı referans noktası olduğu varsayılmaz.").font(.caption)
-                    Text("Bu bilgiler iPhone’dan Windows’a istek olarak aktarılır; kalıp üretilmez.").font(.caption)
-                    Text(localSaveStatus()).font(.caption).foregroundStyle(.secondary)
-                    Picker("Uzunluk birimi", selection: Binding(get: { unit }, set: { requestUnit($0) })) { Text("cm").tag("cm"); Text("mm").tag("mm") }.pickerStyle(.segmented)
-                    Text("Dolu alanların birimi yalnız açıkça onaylanan kayıpsız dönüşümle değişir. Omuz eğimi derece olarak kalır.").font(.caption)
-                }
+    private var measurementGroupSection: some View {
                 Section {
                     Text("Adım \(groupIndex + 1) / \(BodyMeasurementNotes.groups.count): \(BodyMeasurementNotes.groups[groupIndex].title)")
                         .font(.headline).accessibilityAddTraits(.isHeader).id("measurement-group-heading")
@@ -263,6 +250,22 @@ struct BodyMeasurementNotesView: View {
                         }.id(BodyMeasurementNotes.fieldScrollID(index))
                     }
                 }
+    }
+    var body: some View {
+        NavigationStack {
+            ScrollViewReader { proxy in
+            Form {
+                Section {
+                    Text("Bildiğiniz ölçüleri girin; bilinmeyenleri boş bırakın. Uzunluklarda cm veya mm seçin; omuz eğimi derecedir. Bu form kalıp oluşturmaz. Girişler yalnız onayla notlara eklenir. Henüz eklenmemiş değerler yerel taslağa kaydedilmeye çalışılır; ani kapanışta son değişiklikler kaybolabilir.")
+                    Text("Göğüs çevresi, kalça çevresi ve elbise boyu ana istek ekranında ayrıca girilir; bu form onları hesaplamaz.").font(.caption)
+                    Text("Ölçüm açıklamaları araştırma kaynağından alınmıştır; bağımsız kalıp uzmanı tarafından doğrulanmadı. Emin olmadığınız değerleri boş bırakın.").font(.caption)
+                    Text("Bu formdaki belden kalçaya ölçü kalça kemiğinin üst noktasına yöneliktir. A kesim rehberindeki belden kalça hattına düşüklük ve ayrı ön/arka yaylar farklı ölçülerdir; aynı referans noktası olduğu varsayılmaz.").font(.caption)
+                    Text("Bu bilgiler iPhone’dan Windows’a istek olarak aktarılır; kalıp üretilmez.").font(.caption)
+                    Text(localSaveStatus()).font(.caption).foregroundStyle(.secondary)
+                    Picker("Uzunluk birimi", selection: Binding(get: { unit }, set: { requestUnit($0) })) { Text("cm").tag("cm"); Text("mm").tag("mm") }.pickerStyle(.segmented)
+                    Text("Dolu alanların birimi yalnız açıkça onaylanan kayıpsız dönüşümle değişir. Omuz eğimi derece olarak kalır.").font(.caption)
+                }
+                measurementGroupSection
                 Section {
                     DisclosureGroup("Boş veya tamamlanmamış alanlar: \(BodyMeasurementNotes.missingIndices(values).count)") {
                         if BodyMeasurementNotes.missingIndices(values).isEmpty { Text("Tüm alanlarda giriş var; değerlerin doğruluğunu ayrıca kontrol edin.") }
