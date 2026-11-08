@@ -4005,8 +4005,7 @@ private struct ExperimentalDesignBriefView: View {
                 focusedStepHeading = newStep
             }
     }
-    var body: some View {
-        NavigationStack {
+    private var requestPresentation: some View {
             ScrollViewReader { requestScroll in
             requestFormView(requestScroll: requestScroll)
             }
@@ -4270,6 +4269,10 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Tarif ve ölçüleri gözden geçir") { desktopWarningSnapshot = nil; step = measurementReviewStartStep }
                 Button("Vazgeç", role: .cancel) { desktopWarningSnapshot = nil }
             } message: { Text("Tarifteki ölçüler ile soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler masaüstünde farklı değerlendirilebilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
+    }
+    var body: some View {
+        NavigationStack {
+            requestPresentation
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in
                 if !shown {
