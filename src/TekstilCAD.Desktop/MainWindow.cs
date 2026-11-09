@@ -230,12 +230,14 @@ public class MainWindow : Window
         project.Children.Add(dxfCancel);
         dxfCancel.Click += (_,_) => RequestDxfCancellation();
         project.Children.Add(dxfReview);
+        AutomationProperties.SetName(dxfReview,"DXF önizlemesini aç");
         dxfReview.Click += (_,_) => ReviewPreparedDxf();
         System.Windows.Automation.AutomationProperties.SetName(exportCancel,"HPGL dışa aktarımını iptal et");
         project.Children.Add(exportCancel);
         exportCancel.Click += (_, _) => RequestExportCancellation();
         project.Children.Add(recoveryNotice);
         project.Children.Add(recoveryDetails);
+        AutomationProperties.SetName(recoveryDetails,"Kurtarma uyarısı ayrıntıları");
         project.Children.Add(recoveryScanNotice);
         AutomationProperties.SetLiveSetting(recoveryScanNotice,AutomationLiveSetting.Polite);
         AutomationProperties.SetName(recoveryScanDetails,"Kurtarma taraması hatası ayrıntıları");

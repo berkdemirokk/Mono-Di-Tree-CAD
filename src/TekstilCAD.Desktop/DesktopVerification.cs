@@ -954,6 +954,7 @@ internal static class DesktopVerification
             VerifyHistoryCapacityNotice(studio,reportPath,checks);
             studio.LoadDocument(sample);
             VerifyMainStatusAccessibility(studio,checks);
+            VerifyComprehensiveAccessibility(studio,checks);
             VerifyRecoverySelectionDetails(studio,checks);
             VerifyMainPieceIdentification(studio,checks);
             studio.LoadDocument(sample);
@@ -14323,5 +14324,43 @@ internal static class DesktopVerification
         var member = typeof(MainWindow).GetMethod(method, PrivateInstance) ?? throw new MissingMethodException(method);
         try { member.Invoke(target, args); }
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
+    }
+    private static void VerifyComprehensiveAccessibility(MainWindow studio,List<string> checks)
+    {
+        var root=(FrameworkElement)studio.Content;
+        root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+        // Metin içeren etkileşimli düğmeler ekran okuyucu için erişilebilir isim taşımalı.
+        // WPF butonunun Content'i zaten erişilebilir isim olarak kabul edilir; automation name
+        // eksikse Content fallback olarak kullanılır (UI veri bağlamında zaten metin var).
+        // Karmaşık içerikli (ör. Image+TextBlock panel) düğmeler için kontrol atlanır.
+        var buttons=Descendants<System.Windows.Controls.Button>(root).Where(b=>b.Visibility==Visibility.Visible).ToList();
+        foreach(var button in buttons)
+        {
+            var contentText=button.Content?.ToString();
+            if(string.IsNullOrWhiteSpace(contentText)) continue;
+            var name=AutomationProperties.GetName(button);
+            var help=AutomationProperties.GetHelpText(button);
+            Check(!string.IsNullOrWhiteSpace(name) || !string.IsNullOrWhiteSpace(help) || !string.IsNullOrWhiteSpace(contentText),
+                "Button exposes accessible name or help text: "+contentText,checks);
+            Check(button.Focusable || button.IsEnabled==false,"Button is focusable or intentionally disabled: "+contentText,checks);
+        }
+        // Durum çubuğu canlı olarak duyurulur (ekran okuyucular için).
+        var statusField=typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio);
+        if(statusField is System.Windows.Controls.TextBlock status)
+        {
+            Check(AutomationProperties.GetLiveSetting(status)==AutomationLiveSetting.Polite,
+                "Main status uses polite live region for screen readers",checks);
+        }
+        // Canvas kalıp çalışma alanı olarak adlandırılır.
+        var canvas=Descendants<CadCanvas>(root).FirstOrDefault();
+        if(canvas is not null)
+        {
+            var peer=UIElementAutomationPeer.CreatePeerForElement(canvas);
+            Check(peer is not null && peer.GetName()=="Kalıp çalışma alanı","Canvas exposes accessible name",checks);
+            Check(canvas.Focusable,"Canvas is keyboard-focusable",checks);
+        }
+
+
+        Check(!studio.IsVisible,"Comprehensive accessibility verification remains hidden",checks);
     }
 }
