@@ -55,6 +55,9 @@ public sealed class PatternPiece
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "Kalıp";
+    /// <summary>Owning layer; <see cref="Guid.Empty"/> means the implicit default layer. Not written for default documents, so older files stay byte-compatible.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public Guid LayerId { get; set; }
     public List<Point2> Points { get; set; } = [];
     public bool Closed { get; set; } = true;
 
@@ -64,7 +67,7 @@ public sealed class PatternPiece
     public Grainline? Grainline { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NotchMark>? Notches { get; set; }
-    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
+    public PatternPiece Clone() => new() { Id = Id, Name = Name, LayerId = LayerId, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
 }
 
 // Rotation names describe mathematical Y-up coordinates. On the Y-down
@@ -483,10 +486,33 @@ public sealed class DxfImportProvenance
     }
 }
 
+/// <summary>A named drawing layer. Pieces belong to exactly one layer; layers control visibility, locking and grouping.</summary>
+public sealed class Layer
+{
+    /// <summary>Id of the implicit layer every document has. Pieces with an empty LayerId belong to it.</summary>
+    public static readonly Guid DefaultId = Guid.Empty;
+
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "Katman 1";
+    public bool Visible { get; set; } = true;
+    public bool Locked { get; set; } = false;
+    public Layer Clone() => new() { Id = Id, Name = Name, Visible = Visible, Locked = Locked };
+
+    /// <summary>The layer list a document without an explicit list is treated as having.</summary>
+    public static List<Layer> Defaults() => [new Layer { Id = DefaultId, Name = "Katman 1" }];
+}
+
 public sealed class ProjectDocument
 {
     public string Name { get; set; } = "Yeni proje";
     public List<PatternPiece> Pieces { get; set; } = [];
+
+    /// <summary>
+    /// Explicit layer list. Null means the document has only the implicit default layer;
+    /// such documents serialize exactly as before layers existed, so older files stay readable.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<Layer>? Layers { get; set; }
 
     public List<GradingRuleSet> GradingRules { get; set; } = [];
 
@@ -496,5 +522,5 @@ public sealed class ProjectDocument
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DxfImportProvenance? ImportProvenance { get; set; }
 
-    public ProjectDocument Clone() => new() { Name = Name, Pieces = Pieces.Select(p => p.Clone()).ToList(), GradingRules = GradingRules.Select(r => r.Clone()).ToList(), NestingSnapshot=NestingSnapshot?.Clone(), ImportProvenance=ImportProvenance?.Clone() };
+    public ProjectDocument Clone() => new() { Name = Name, Pieces = Pieces.Select(p => p.Clone()).ToList(), Layers = Layers?.Select(l => l.Clone()).ToList(), GradingRules = GradingRules.Select(r => r.Clone()).ToList(), NestingSnapshot=NestingSnapshot?.Clone(), ImportProvenance=ImportProvenance?.Clone() };
 }

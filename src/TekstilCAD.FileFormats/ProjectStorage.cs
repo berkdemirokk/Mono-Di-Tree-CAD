@@ -54,7 +54,7 @@ public static class ProjectStorage
             RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
@@ -66,7 +66,13 @@ public static class ProjectStorage
                     throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
                 if (version == 3 || (version >= 4 && root[1].TryGetProperty("NestingSnapshot", out _))) ValidateSerializedNestingSnapshot(root[1]);
                 var hasTrace=root[1].TryGetProperty("NestingSnapshot",out var nesting) && nesting.ValueKind==JsonValueKind.Object && nesting.TryGetProperty("RotationTrace",out _);
-                if((version==7)!=hasTrace)throw new InvalidDataException("Döndürme izi yalnız tam sürüm 7 projesinde bulunmalıdır.");
+                // A version marks the newest feature the document needs. Trace is
+                // required only for the exact v7 shape; v8 may carry it too.
+                if(hasTrace && version<7)throw new InvalidDataException("Döndürme izi yalnız sürüm 7 veya 8 projesinde bulunmalıdır.");
+                if(version==7 && !hasTrace)throw new InvalidDataException("Sürüm 7 projesinde döndürme izi eksik; dosya açılmadı.");
+                var hasLayers=root[1].TryGetProperty("Layers",out _);
+                if(hasLayers && version<8)throw new InvalidDataException("Katman listesi için sürüm 8 gereklidir; dosya açılmadı.");
+                if(version==8 && !hasLayers)throw new InvalidDataException("Sürüm 8 projesinde katman listesi eksik; dosya açılmadı.");
                 if(hasTrace)
                 {
                     var raw=nesting.GetProperty("RotationTrace");
@@ -372,7 +378,9 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var text = project.NestingSnapshot?.RotationTrace is not null
+        var text = project.Layers is not null
+            ? JsonSerializer.Serialize<object[]>([8, project], Options)
+            : project.NestingSnapshot?.RotationTrace is not null
             ? JsonSerializer.Serialize<object[]>([7, project], Options)
             : project.Pieces.Any(p=>p.Notches is not null)
             ? JsonSerializer.Serialize<object[]>([6, project], Options)
@@ -443,6 +451,21 @@ public static class ProjectStorage
         project.ImportProvenance?.Validate();
         if (project.Name is null || project.Name.Length > 1024 || !IsWellFormedUtf16(project.Name)) throw new InvalidDataException("Geçersiz proje adı veya eksik Unicode karakteri.");
         if (project.Pieces is null || project.Pieces.Count > MaximumPieces) throw new InvalidDataException("Geçersiz parça listesi.");
+        // Layer ids are validated before pieces so every piece can be checked
+        // against a list that is known to be well formed.
+        var layerIds = new HashSet<Guid>();
+        if (project.Layers is { } layers)
+        {
+            if (layers.Count is < 1 or > MaximumPieces) throw new InvalidDataException("Geçersiz katman listesi.");
+            var defaultIdAllowed = layers.Count == 1;
+            foreach (var layer in layers)
+            {
+                if (layer is null || (layer.Id == Guid.Empty && !defaultIdAllowed) || !layerIds.Add(layer.Id) ||
+                    layer.Name is null || layer.Name.Length is < 1 or > 128 || layer.Name != layer.Name.Trim() ||
+                    layer.Name.Any(char.IsControl) || !IsWellFormedUtf16(layer.Name))
+                    throw new InvalidDataException("Geçersiz katman adı veya kimliği.");
+            }
+        }
         var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0;
         foreach (var piece in project.Pieces)
         {
@@ -478,6 +501,7 @@ public static class ProjectStorage
                 }
             }
             if (piece.Id == Guid.Empty || !ids.Add(piece.Id)) throw new InvalidDataException("Parça kimlikleri benzersiz ve dolu olmalıdır.");
+            if (piece.LayerId != Guid.Empty && !layerIds.Contains(piece.LayerId)) throw new InvalidDataException("Parça var olmayan bir katmana bağlı.");
             total += piece.Points.Count;
             if (total > MaximumTotalPoints) throw new InvalidDataException("Proje toplam nokta sınırını aşıyor.");
             try { foreach (var point in piece.Points) Geometry.Validate(point); }

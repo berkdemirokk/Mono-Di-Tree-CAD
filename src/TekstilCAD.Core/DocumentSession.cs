@@ -164,17 +164,28 @@ public sealed class DocumentSession
         for (var i = 0; i < left.Pieces.Count; i++)
         {
             var a = left.Pieces[i]; var b = right.Pieces[i];
-            if (a.Id != b.Id || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
+            if (a.Id != b.Id || a.LayerId != b.LayerId || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
             for (var j = 0; j < a.Points.Count; j++)
                 if (!PointBitsEqual(a.Points[j],b.Points[j])) return false;
         }
         if (left.GradingRules.Count != right.GradingRules.Count) return false;
+        if (!LayersEquals(left.Layers,right.Layers)) return false;
         for (var i = 0; i < left.GradingRules.Count; i++)
         {
             var a = left.GradingRules[i]; var b = right.GradingRules[i];
             if (a.SourcePieceId != b.SourcePieceId || a.SourceClosed != b.SourceClosed ||
                 !PointListsEqual(a.SourcePoints,b.SourcePoints) || !PointListsEqual(a.Deltas,b.Deltas)) return false;
         }
+        return true;
+    }
+    private static bool LayersEquals(List<Layer>? left, List<Layer>? right)
+    {
+        var a = left ?? Layer.Defaults();
+        var b = right ?? Layer.Defaults();
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+            if (a[i].Id != b[i].Id || !string.Equals(a[i].Name, b[i].Name, StringComparison.Ordinal) ||
+                a[i].Visible != b[i].Visible || a[i].Locked != b[i].Locked) return false;
         return true;
     }
 }
