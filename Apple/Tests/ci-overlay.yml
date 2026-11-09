@@ -8,6 +8,7 @@
       - path: Tests/DesignDraftStoreTests.swift
       - path: Tests/MarkerWorkOrderTests.swift
       - path: Tests/MarkerHistoryPreviewTests.swift
+      - path: Tests/FactoryModelCatalogTests.swift
       - path: Tests/ReferenceMeasurementsTests.swift
       - path: Tests/Fixtures/desktop-marker-work-order-v11.tcad
         buildPhase: resources
