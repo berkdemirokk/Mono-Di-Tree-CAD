@@ -986,6 +986,105 @@ internal static class DesktopVerification
         studio.AddPiece([new(600,0),new(700,0),new(700,100),new(600,100)],true);
         Check(studio.Document.Pieces.Count==beforeRefusal,"New geometry is refused when every usable layer is hidden",checks);
     }
+    private static void VerifyMultiSelection(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var snap=(CheckBox)typeof(MainWindow).GetField("snap",PrivateInstance)!.GetValue(studio)!;
+        var pieces=(ListBox)typeof(MainWindow).GetField("pieces",PrivateInstance)!.GetValue(studio)!;
+        var nameBox=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
+        var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var scaleField=typeof(CadCanvas).GetField("scale",PrivateInstance)!;
+        var offsetField=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
+        var groupField=typeof(CadCanvas).GetField("dragGroupSnapshots",PrivateInstance)!;
+        var groupPreviewField=typeof(CadCanvas).GetField("dragGroupPreviews",PrivateInstance)!;
+        var up=typeof(CadCanvas).GetMethod("Up",PrivateInstance)!;
+        var oldSnap=snap.IsChecked;var oldScale=scaleField.GetValue(canvas);var oldOffset=offsetField.GetValue(canvas);
+        try
+        {
+            var first=new PatternPiece { Name="Ön",Points=[new(0,0),new(100,0),new(100,100),new(0,100)] };
+            var second=new PatternPiece { Name="Arka",Points=[new(200,0),new(300,0),new(300,100),new(200,100)] };
+            var third=new PatternPiece { Name="Kol",Points=[new(400,0),new(500,0),new(500,100),new(400,100)] };
+            studio.LoadDocument(new ProjectDocument { Name="Çoklu seçim",Pieces=[first,second,third] });
+            studio.SetTool("Seç");snap.IsChecked=false;scaleField.SetValue(canvas,1d);
+            offsetField.SetValue(canvas,new Vector(10,10));
+            Point Screen(double x,double y)=>new(x+10,y+10);
+            studio.Select(first.Id);
+            var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
+            canvas.SelectAt(Screen(250,50),true);
+            Check(studio.SelectedIds.SequenceEqual(new[]{first.Id,second.Id}) && studio.SelectedId==second.Id && studio.SelectionCount==2
+                && !canvas.HasActiveDragPreview && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
+                "Ctrl+click adds a piece to the multi-selection without starting a drag or changing history",checks);
+            canvas.SelectAt(Screen(250,50),true);
+            Check(studio.SelectedIds.SequenceEqual(new[]{first.Id}) && studio.SelectedId==first.Id && !canvas.HasActiveDragPreview,
+                "Ctrl+click again removes the piece from the multi-selection",checks);
+            canvas.SelectAt(Screen(250,50),true);
+            canvas.SelectAt(Screen(25,25),false);
+            var groupSnapshots=(List<PatternPiece>)groupField.GetValue(canvas)!;
+            Check(canvas.HasActiveDragPreview && groupSnapshots.Count==1 && groupSnapshots[0].Id==second.Id,
+                "Pressing a member of a multi-selection starts a group drag with the other members snapshotted",checks);
+            canvas.UpdateDragPreview(Screen(55,25));
+            var groupPreviews=(Dictionary<Guid,List<Point2>>)groupPreviewField.GetValue(canvas)!;
+            Check(groupPreviews.TryGetValue(second.Id,out var groupPreview) && groupPreview[0]==new Point2(230,0),
+                "Group drag preview translates every selected piece by the same amount",checks);
+            up.Invoke(canvas,[new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left)]);
+            Check(studio.Document.Pieces[0].Points[0]==new Point2(30,0) && studio.Document.Pieces[1].Points[0]==new Point2(230,0)
+                && session.UndoCount==undo+1 && studio.SelectionCount==2 && !canvas.HasActiveDragPreview,
+                "Group drag moves all selected pieces in one undo step and keeps the selection",checks);
+            Invoke(studio,"Undo");
+            Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                "One undo restores every piece moved by the group drag",checks);
+            canvas.SelectAt(Screen(25,25),false);
+            up.Invoke(canvas,[new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left)]);
+            Check(studio.SelectionCount==1 && studio.SelectedId==first.Id && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                "A plain click on a group member without movement collapses to that piece",checks);
+            studio.Select(first.Id);studio.ToggleSelection(second.Id);
+            canvas.SelectAt(Screen(425,25),false);
+            up.Invoke(canvas,[new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left)]);
+            Check(studio.SelectionCount==1 && studio.SelectedId==third.Id,
+                "Clicking a piece outside the group collapses to that piece immediately",checks);
+            // A locked group member refuses the whole group move before any drag starts.
+            studio.Select(first.Id);studio.ToggleSelection(second.Id);
+            var lockedLayer=LayerTools.Add(studio.Document,"Kilitli katman");
+            studio.Document.Pieces[1].LayerId=lockedLayer.Id;LayerTools.SetLocked(studio.Document,lockedLayer.Id,true);
+            Invoke(studio,"Refresh");
+            var lockedBefore=studio.Document.Clone();var lockedUndo=session.UndoCount;
+            canvas.SelectAt(Screen(25,25),false);
+            Check(!canvas.HasActiveDragPreview && status.Text.Contains("kilitli",StringComparison.Ordinal)
+                && DocumentSession.ContentEquals(lockedBefore,studio.Document) && session.UndoCount==lockedUndo,
+                "Group drag is refused when another selected piece sits on a locked layer",checks);
+            // A pending property draft on another member also refuses the group move.
+            studio.LoadDocument(new ProjectDocument { Name="Grup taslağı",Pieces=[first,second] });
+            studio.SetTool("Seç");scaleField.SetValue(canvas,1d);offsetField.SetValue(canvas,new Vector(10,10));
+            studio.Select(second.Id);nameBox.Text="Arka taslak";Invoke(studio,"Refresh");
+            Check(studio.HasPropertyDraftFor(second.Id),"Property draft exists for the second piece",checks);
+            studio.Select(first.Id);studio.ToggleSelection(second.Id);
+            var draftBefore=studio.Document.Clone();var draftUndo=session.UndoCount;
+            canvas.SelectAt(Screen(25,25),false);
+            Check(!canvas.HasActiveDragPreview && status.Text.Contains("alan taslağı",StringComparison.Ordinal)
+                && DocumentSession.ContentEquals(draftBefore,studio.Document) && session.UndoCount==draftUndo,
+                "Group drag is refused when another selected piece has a pending property draft",checks);
+            // The piece list mirrors a Ctrl-style multi-selection into the canvas selection.
+            studio.LoadDocument(new ProjectDocument { Name="Liste seçimi",Pieces=[first,second,third] });
+            studio.SetTool("Seç");
+            pieces.SelectedItems.Clear();
+            pieces.SelectedItems.Add(studio.Document.Pieces[0]);
+            pieces.SelectedItems.Add(studio.Document.Pieces[2]);
+            Check(studio.SelectionCount==2 && studio.SelectedIds.Contains(studio.Document.Pieces[0].Id) && studio.SelectedIds.Contains(studio.Document.Pieces[2].Id),
+                "Piece list multi-selection is mirrored into the canvas multi-selection",checks);
+            pieces.SelectedItems.Clear();
+            Check(studio.SelectionCount==0 && studio.SelectedId is null,"Clearing the piece list selection clears the canvas selection",checks);
+            // Fit selection frames the union of the selected pieces.
+            studio.Select(studio.Document.Pieces[0].Id);studio.ToggleSelection(studio.Document.Pieces[1].Id);
+            canvas.Measure(new Size(600,400));canvas.Arrange(new Rect(0,0,600,400));canvas.UpdateLayout();
+            canvas.FitSelectedPiece();
+            var fitScale=(double)scaleField.GetValue(canvas)!;var fitOffset=(Vector)offsetField.GetValue(canvas)!;
+            Point Fit(double x,double y)=>new(x*fitScale+fitOffset.X,y*fitScale+fitOffset.Y);
+            Check(Fit(0,0).X>=0 && Fit(300,100).X<=canvas.ActualWidth && Fit(0,0).Y>=0 && Fit(300,100).Y<=canvas.ActualHeight,
+                "Fit selection frames the union of every selected visible piece",checks);
+        }
+        finally { snap.IsChecked=oldSnap;scaleField.SetValue(canvas,oldScale);offsetField.SetValue(canvas,oldOffset); }
+    }
     public static int Run(string reportPath)
     {
         MainWindow? studio = null;
@@ -1015,6 +1114,7 @@ internal static class DesktopVerification
             VerifyRecoverySelectionDetails(studio,checks);
             VerifyMainPieceIdentification(studio,checks);
             VerifyLayers(studio,checks);
+            VerifyMultiSelection(studio,checks);
             studio.LoadDocument(sample);
             VerifyLazyMachineQueue(studio,work,checks);
             VerifyAsyncProjectOpen(studio,work,checks);

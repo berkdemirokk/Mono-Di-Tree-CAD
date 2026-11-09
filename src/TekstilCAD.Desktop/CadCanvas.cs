@@ -34,6 +34,11 @@ public sealed class CadCanvas : FrameworkElement
     private Grainline? dragPreviewGrainline;
     private Point2 dragTranslation;
     private PatternPiece? dragSourceSnapshot;
+    // Additional pieces moved with the primary one during a group drag.
+    private List<PatternPiece> dragGroupSnapshots = [];
+    private readonly Dictionary<Guid,List<Point2>> dragGroupPreviews = [];
+    private readonly Dictionary<Guid,Grainline?> dragGroupPreviewGrainlines = [];
+    private Guid? collapseSelectionOnClick;
     private GradingRuleSet? dragRuleReference,dragRuleSnapshot;
     private bool dragRuleEligible;
     private CancellationTokenSource? largeCompletionCancellation;
@@ -240,7 +245,7 @@ public sealed class CadCanvas : FrameworkElement
     // Once a mutation has committed, unexpected ordinary UI failures must not
     // escape as if the edit did not happen. Keep catastrophic CLR failures out.
     private static bool IsNonFatal(Exception ex) => ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
-    private void ClearDrag() { dragId=null;dragVertex=-1;dragOriginal=null;dragPreview=null;dragScreenOrigin=null;dragOriginalGrainline=null;dragPreviewGrainline=null;dragSourceSnapshot=null;dragRuleReference=null;dragRuleSnapshot=null;dragRuleEligible=false;dragTranslation=default; }
+    private void ClearDrag() { dragId=null;dragVertex=-1;dragOriginal=null;dragPreview=null;dragScreenOrigin=null;dragOriginalGrainline=null;dragPreviewGrainline=null;dragSourceSnapshot=null;dragRuleReference=null;dragRuleSnapshot=null;dragRuleEligible=false;dragTranslation=default;dragGroupSnapshots=[];dragGroupPreviews.Clear();dragGroupPreviewGrainlines.Clear();collapseSelectionOnClick=null; }
     internal void CancelLargeCompletion() => largeCompletionCancellation?.Cancel();
     internal void CancelLargeVertexValidation() => largeVertexCancellation?.Cancel();
     public void CancelDrawing() { CancelLargeCompletion();CancelLargeVertexValidation();var changed=drawing.Count>0;drawing.Clear();ClearDrag();panStart=null;ReleaseMouseCapture();InvalidateVisual();if(changed)owner.PendingDrawingChanged(); }
@@ -405,30 +410,31 @@ public sealed class CadCanvas : FrameworkElement
         { owner.SetStatus("Doğrulama sürüyor; görünümü değiştirmek için bitmesini bekleyin.");return; }
         if(dragId is not null || panStart is not null)
         { owner.SetStatus("Önce sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
-        var selected=owner.Selected;
-        if(selected?.Points is not { Count: >0 } points)
-        { owner.SetStatus("Göstermek için önce bir parça seçin.");return; }
-        if(!LayerTools.IsPieceVisible(owner.Document,selected))
-        { owner.SetStatus("Seçili parça gizli bir katmanda; göstermek için önce katmanı görünür yapın.");return; }
+        var pieces=owner.SelectedPieces.Where(piece=>piece.Points.Count>0 && LayerTools.IsPieceVisible(owner.Document,piece)).ToList();
+        if(pieces.Count==0)
+        { owner.SetStatus(owner.SelectedIds.Count>0 ? "Seçili parçalar gizli katmanlarda; göstermek için önce katmanları görünür yapın." : "Göstermek için önce bir parça seçin.");return; }
         var width=ActualWidth;var height=ActualHeight;
         if(!double.IsFinite(width) || !double.IsFinite(height) || width<1 || height<1)
         { owner.SetStatus("Çalışma alanı henüz hazır değil; görünümü yeniden deneyin.");return; }
         double minX=double.PositiveInfinity,minY=double.PositiveInfinity,maxX=double.NegativeInfinity,maxY=double.NegativeInfinity;
-        foreach(var point in points)
+        foreach(var piece in pieces)
         {
-            if(!point.IsFinite)
-            { owner.SetStatus("Seçili parçanın koordinatları geçersiz; görünüm değiştirilmedi.");return; }
-            minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
-            maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
-        }
-        if(selected.Grainline is { } grain)
-        {
-            foreach(var point in new[] { grain.Start,grain.End })
+            foreach(var point in piece.Points)
             {
                 if(!point.IsFinite)
-                { owner.SetStatus("İplik yönü koordinatları geçersiz; görünüm değiştirilmedi.");return; }
+                { owner.SetStatus("Seçili parçanın koordinatları geçersiz; görünüm değiştirilmedi.");return; }
                 minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
                 maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+            }
+            if(piece.Grainline is { } grain)
+            {
+                foreach(var point in new[] { grain.Start,grain.End })
+                {
+                    if(!point.IsFinite)
+                    { owner.SetStatus("İplik yönü koordinatları geçersiz; görünüm değiştirilmedi.");return; }
+                    minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
+                    maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+                }
             }
         }
         var extentX=maxX-minX;var extentY=maxY-minY;
@@ -492,23 +498,66 @@ public sealed class CadCanvas : FrameworkElement
         Geometry.Validate(p);
         if(owner.ActiveTool=="Seç")
         {
-            var (piece,vertex,ambiguous)=ResolvePointerSelection(p);
-            if(ambiguous)
-            {
-                owner.ShowCanvasError("Birden fazla nokta aynı uzaklıkta olabilir veya noktanın üzeri başka bir parçayla örtülüdür. Yanlış noktayı taşımamak için yakınlaştırın veya farklı bir konumdan seçin.");
-                return;
-            }
-            owner.Select(piece?.Id);
-            if(piece is not null && owner.HasPropertyDraftFor(piece.Id))
-            { owner.SetStatus("Parça taşınmadı · Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");return; }
-            if(vertex>=0 && piece?.Notches is not null)
-            {
-                if(!CanDragMarkedVertex(piece,vertex))return;
-            }
-            if(piece is not null) { dragSourceSnapshot=piece.Clone();dragRuleReference=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);dragRuleSnapshot=dragRuleReference?.Clone();dragRuleEligible=!owner.OwnedWindows.OfType<TextileToolsWindow>().Any();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
+            SelectAt(screenPosition,(Keyboard.Modifiers & ModifierKeys.Control)!=0);
             return;
         }
         AddDrawingPointCore(p);
+    }
+    /// <summary>
+    /// Handles a select-tool press at a screen point. <paramref name="toggle"/>
+    /// mirrors Ctrl+click and only changes the multi-selection.
+    /// </summary>
+    internal void SelectAt(Point screenPosition,bool toggle)
+    {
+        var p=World(screenPosition,false);
+        Geometry.Validate(p);
+        var (piece,vertex,ambiguous)=ResolvePointerSelection(p);
+        if(ambiguous)
+        {
+            owner.ShowCanvasError("Birden fazla nokta aynı uzaklıkta olabilir veya noktanın üzeri başka bir parçayla örtülüdür. Yanlış noktayı taşımamak için yakınlaştırın veya farklı bir konumdan seçin.");
+            return;
+        }
+        // Ctrl toggles one piece in the multi-selection without starting a drag.
+        if(toggle)
+        {
+            if(piece is null) { owner.SetStatus("Ctrl ile seçim için bir parçanın üzerine tıklayın."); return; }
+            if(!owner.ToggleSelection(piece.Id))
+            { owner.SetStatus("Parça seçilemedi · Gizli veya kilitli katmandaki parçalar seçilemez."); return; }
+            return;
+        }
+        // A plain click on an already selected group member keeps the group so
+        // it can be dragged; without movement the click collapses to that piece.
+        var inGroup=piece is not null && owner.SelectedIds.Count>1 && owner.SelectedIds.Contains(piece.Id);
+        if(inGroup) collapseSelectionOnClick=piece!.Id;
+        else owner.Select(piece?.Id);
+        if(piece is not null && owner.HasPropertyDraftFor(piece.Id))
+        { owner.SetStatus("Parça taşınmadı · Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");return; }
+        if(vertex>=0 && piece?.Notches is not null)
+        {
+            if(!CanDragMarkedVertex(piece,vertex))return;
+        }
+        if(piece is not null)
+        {
+            // Moving a member of a multi-selection moves the whole group in
+            // one undo step. A vertex handle always edits just its piece.
+            var group=vertex<0 && owner.SelectedIds.Count>1 ? owner.SelectedPieces.Where(member=>member.Id!=piece.Id).ToList() : [];
+            if(group.Count>0)
+            {
+                var lockedMember=group.FirstOrDefault(member=>!owner.IsPieceEditable(member));
+                if(lockedMember is not null)
+                { owner.SetStatus($"Grup taşıması başlatılmadı · “{CanvasPieceLabel(lockedMember.Name)}” parçası kilitli bir katmanda."); return; }
+                var draftMember=group.FirstOrDefault(member=>owner.HasPropertyDraftFor(member.Id));
+                if(draftMember is not null)
+                { owner.SetStatus($"Grup taşıması başlatılmadı · “{CanvasPieceLabel(draftMember.Name)}” parçasının bekleyen alan taslağı var."); return; }
+                dragGroupSnapshots=[..group.Select(member=>member.Clone())];
+                foreach(var snapshot in dragGroupSnapshots)
+                {
+                    dragGroupPreviews[snapshot.Id]=[..snapshot.Points];
+                    dragGroupPreviewGrainlines[snapshot.Id]=snapshot.Grainline?.Clone();
+                }
+            }
+            dragSourceSnapshot=piece.Clone();dragRuleReference=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);dragRuleSnapshot=dragRuleReference?.Clone();dragRuleEligible=!owner.OwnedWindows.OfType<TextileToolsWindow>().Any();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse();
+        }
     }
     /// <summary>Adds an explicit millimetre coordinate without grid snapping. Returns null on success.</summary>
     internal string? AddDrawingPointAt(Point2 point)
@@ -665,7 +714,7 @@ public sealed class CadCanvas : FrameworkElement
         if(dragScreenOrigin is { } startPosition &&
             Math.Abs(pos.X-startPosition.X)<SystemParameters.MinimumHorizontalDragDistance &&
             Math.Abs(pos.Y-startPosition.Y)<SystemParameters.MinimumVerticalDragDistance)
-        { dragPreview=[..dragOriginal];dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default; }
+        { dragPreview=[..dragOriginal];dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;ResetGroupPreviews(); }
         else if(dragVertex>=0)
         {
             var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==dragId);
@@ -685,6 +734,21 @@ public sealed class CadCanvas : FrameworkElement
             dragPreview=dragSourceSnapshot is null ? Geometry.Translate(dragOriginal,dragTranslation.X,dragTranslation.Y)
                 : MarkedPieceTranslation.Translate(dragSourceSnapshot,dragTranslation.X,dragTranslation.Y).Points;
             dragPreviewGrainline=GrainlineTransform.Translate(dragOriginalGrainline,dragOriginal[0],dragPreview[0],dragTranslation.X,dragTranslation.Y);
+            ResetGroupPreviews();
+            foreach(var snapshot in dragGroupSnapshots)
+            {
+                var points=MarkedPieceTranslation.Translate(snapshot,dragTranslation.X,dragTranslation.Y).Points;
+                dragGroupPreviews[snapshot.Id]=points;
+                dragGroupPreviewGrainlines[snapshot.Id]=GrainlineTransform.Translate(snapshot.Grainline,snapshot.Points[0],points[0],dragTranslation.X,dragTranslation.Y);
+            }
+        }
+    }
+    private void ResetGroupPreviews()
+    {
+        foreach(var snapshot in dragGroupSnapshots)
+        {
+            dragGroupPreviews[snapshot.Id]=[..snapshot.Points];
+            dragGroupPreviewGrainlines[snapshot.Id]=snapshot.Grainline?.Clone();
         }
     }
     private static bool SamePointBits(IReadOnlyList<Point2> first,IReadOnlyList<Point2> second) =>
@@ -755,15 +819,44 @@ public sealed class CadCanvas : FrameworkElement
             var translatedRule=dragVertex<0 ? rule?.TranslatedFor(piece,snapshot,dragTranslation.X,dragTranslation.Y) :
                 dragRuleEligible && !owner.OwnedWindows.OfType<TextileToolsWindow>().Any() && ReferenceEquals(rule,dragRuleReference) && RuleStillMatches(rule,dragRuleSnapshot)
                     ? rule?.WithVertexMoveFor(piece,snapshot,dragVertex) : null;
-            owner.CommitObserved(dragVertex>=0 ? "Kontur noktası taşındı" : "Parça taşındı",()=> {
+            // Group members are validated against detached snapshots and then
+            // applied inside the same commit, so the move is one undo step.
+            List<(PatternPiece Live,List<Point2> Points,List<NotchMark>? Notches,Grainline? Grain,GradingRuleSet? Rule,GradingRuleSet? Translated)> groupMoves=[];
+            if(dragVertex<0 && dragGroupSnapshots.Count>0)
+            {
+                foreach(var member in dragGroupSnapshots)
+                {
+                    var live=owner.Document.Pieces.FirstOrDefault(candidate=>candidate.Id==member.Id);
+                    if(live is null || !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[live] },new ProjectDocument { Pieces=[member] }))
+                        throw new InvalidOperationException("Grup taşıması sırasında bir parça değişti; işlem uygulanmadı.");
+                    if(owner.HasPropertyDraftFor(member.Id))
+                        throw new InvalidOperationException("Grup taşıması uygulanmadı · Bir parçanın ad veya konum taslağı sürükleme sırasında oluşturuldu.");
+                    var verified=MarkedPieceTranslation.Translate(member,dragTranslation.X,dragTranslation.Y);
+                    if(!dragGroupPreviews.TryGetValue(member.Id,out var preview) || !verified.Points.SequenceEqual(preview))
+                        throw new InvalidOperationException("Grup önizlemesi doğrulanan ötelemeyle eşleşmiyor.");
+                    foreach(var point in verified.Points)Geometry.Validate(point);
+                    var grain=GrainlineTransform.Translate(member.Grainline,member.Points[0],verified.Points[0],dragTranslation.X,dragTranslation.Y);
+                    var memberRule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==member.Id);
+                    groupMoves.Add((live,verified.Points,verified.Notches,grain,memberRule,memberRule?.TranslatedFor(member,verified.Points,dragTranslation.X,dragTranslation.Y)));
+                }
+            }
+            owner.CommitObserved(groupMoves.Count>0 ? $"Grup taşındı ({groupMoves.Count+1} parça)" : dragVertex>=0 ? "Kontur noktası taşındı" : "Parça taşındı",()=> {
                 piece.Points=snapshot;piece.Grainline=newGrain;if(dragVertex<0)piece.Notches=movedNotches;else if(verifiedVertexMarks is not null)piece.Notches=verifiedVertexMarks;
                 if(translatedRule is not null)owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;
+                foreach(var move in groupMoves)
+                {
+                    move.Live.Points=move.Points;move.Live.Notches=move.Notches;move.Live.Grainline=move.Grain;
+                    if(move.Translated is not null)owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(move.Rule!)]=move.Translated;
+                }
             },()=>observedCommits++);
-            if(rule is not null && translatedRule is null)
+            if(rule is not null && translatedRule is null || groupMoves.Any(move=>move.Rule is not null && move.Translated is null))
                 owner.ShowCanvasError("Kontur değiştirildi; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
             else owner.ClearCanvasError();
         }
+        var collapseId=collapseSelectionOnClick is { } pending && dragVertex<0 && dragTranslation.X==0 && dragTranslation.Y==0 ? pending : (Guid?)null;
         ClearDrag();ReleaseMouseCapture();InvalidateVisual();
+        // Clear the drag first: selection changes are refused while a drag is active.
+        if(collapseId is { } selectedId) owner.Select(selectedId);
     }
 
     /// <summary>Validates a detached large vertex proposal; no live geometry changes until the worker succeeds.</summary>
@@ -930,10 +1023,12 @@ public sealed class CadCanvas : FrameworkElement
             if(p.Points.Count==0)continue;
             // Hidden layers keep their geometry in the document but are not drawn.
             if(!LayerTools.IsPieceVisible(owner.Document,p))continue;
-            var selected=p.Id==owner.SelectedId;
+            var selected=owner.SelectedIds.Contains(p.Id);
             var pen=selected ? (selectedPen ??= new Pen(selectedBrush ??= B("#FFCB70"),2.3))
                 : (normalPen ??= new Pen(normalStroke ??= B("#4DE1C1"),1.5));
-            var visible=p.Id==dragId && dragPreview is not null ? dragPreview : p.Points;
+            var isPrimaryDrag=p.Id==dragId && dragPreview is not null;
+            var hasGroupPreview=dragGroupPreviews.TryGetValue(p.Id,out var groupPreview);
+            var visible=isPrimaryDrag ? dragPreview! : hasGroupPreview ? groupPreview! : p.Points;
             var fill=p.Closed ? selected ? (selectedFill ??= B("#304947")) : (normalFill ??= B("#163D40")) : null;
             DrawContour(dc,visible,p.Closed,fill,pen);
             if(p.Notches is not null)
@@ -941,14 +1036,17 @@ public sealed class CadCanvas : FrameworkElement
                 var notchBrush=B("#FF8FAF");var notchPen=new Pen(notchBrush,2);
                 foreach(var notch in p.Notches)
                 {
-                    var notchPosition=p.Id==dragId && dragPreview is not null && notch.VertexIndex>=0 && notch.VertexIndex<visible.Count && (dragVertex<0 || notch.VertexIndex==dragVertex || (p.Closed && dragVertex==p.Points.Count-1 && notch.VertexIndex==0 && p.Points[0]==p.Points[^1])) ? visible[notch.VertexIndex] : notch.Position;
+                    var followsVertices=notch.VertexIndex>=0 && notch.VertexIndex<visible.Count &&
+                        (hasGroupPreview || isPrimaryDrag && (dragVertex<0 || notch.VertexIndex==dragVertex || (p.Closed && dragVertex==p.Points.Count-1 && notch.VertexIndex==0 && p.Points[0]==p.Points[^1])));
+                    var notchPosition=followsVertices ? visible[notch.VertexIndex] : notch.Position;
                     var point=Screen(notchPosition);
                     if(!MarkerCanAffectViewport(point,RenderSize))continue;
                     dc.DrawEllipse(null,notchPen,point,7,7);
                     if(selected)Text(dc,$"İşaret {notch.VertexIndex}",new Point(point.X+8,point.Y-15),notchBrush,11);
                 }
             }
-            var grain=p.Id==dragId && dragPreview is not null ? dragPreviewGrainline : p.Grainline;
+            var grain=isPrimaryDrag ? dragPreviewGrainline
+                : dragGroupPreviewGrainlines.TryGetValue(p.Id,out var groupGrain) ? groupGrain : p.Grainline;
             if(grain is not null)
             {
                 var grainBrush=grain.NeedsReview ? B("#FFC468") : B("#65CFFF");

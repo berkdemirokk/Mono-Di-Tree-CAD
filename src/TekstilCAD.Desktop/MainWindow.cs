@@ -35,6 +35,12 @@ public class MainWindow : Window
     public ProjectDocument Document => session.Document;
     public Guid? SelectedId { get => session.SelectedId; private set => session.SelectedId = value; }
     public PatternPiece? Selected => Document.Pieces.FirstOrDefault(p => p.Id == SelectedId);
+    // Multi-selection is view state: the primary selection stays in the session,
+    // the remaining ids live here so undo and save are unaffected.
+    private readonly List<Guid> selection = [];
+    public IReadOnlyList<Guid> SelectedIds => selection;
+    public int SelectionCount => selection.Count;
+    public IReadOnlyList<PatternPiece> SelectedPieces => selection.Select(id => Document.Pieces.FirstOrDefault(piece => piece.Id == id)).OfType<PatternPiece>().ToList();
     public string ActiveTool { get; private set; } = "Seç";
     public bool Snap => snap.IsChecked == true;
     private readonly CadCanvas canvas;
@@ -475,9 +481,11 @@ public class MainWindow : Window
         pieceId.SetValue(TextBlock.ForegroundProperty,Muted);
         pieceRows.AppendChild(pieceId);
         pieces.ItemTemplate=new DataTemplate { VisualTree=pieceRows };
-        pieces.SelectionChanged += (_, _) => { if (!syncing) { var id=(pieces.SelectedItem as PatternPiece)?.Id; if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation())) { syncing=true;pieces.SelectedItem=Selected;syncing=false;return; } SelectedId=id; Refresh(); } };
+        pieces.SelectionMode=SelectionMode.Extended;
+        AutomationProperties.SetHelpText(pieces,"Aynı adlı parçaları satırdaki tam kimlikten ayırt edin. Ctrl veya Shift ile birden fazla parça seçebilirsiniz; seçili parçanın adı ve kimliği aşağıda kopyalanabilir.");
+        pieces.SelectionChanged += (_, _) => { if (!syncing) { var ids=pieces.SelectedItems.Cast<PatternPiece>().Select(item=>item.Id).ToList(); if((BlockForActiveDrag() || BlockForLargeVertexValidation())) { syncing=true;SyncPieceListSelection();syncing=false;return; } ApplyListSelection(ids); } };
         inspector.Children.Add(pieces);
-        AddButton(inspector,"Birden fazla parçayı taşı…",OpenGroupMove,"Parça listesinden birden fazla parça seçip aynı X/Y kadar taşıyın; işlem tek adımda geri alınır.");
+        AddButton(inspector,"Birden fazla parçayı taşı…",OpenGroupMove,"Parça listesinden birden fazla parça seçip aynı X/Y kadar taşıyın; işlem tek adımda geri alınır. Tuvalde Ctrl+tıklama ile de çoklu seçim yapabilirsiniz.");
         pieceSearch.TextChanged+=(_,_)=>RefreshPieceSearch();
         AutomationProperties.SetName(selectedPieceIdentity,"Seçili parçanın tam adı ve kimliği");
         AutomationProperties.SetHelpText(selectedPieceIdentity,"Adı ve kimliği seçip kopyalayabilirsiniz. Görünmeyen karakterler Unicode koduyla gösterilir.");
@@ -743,7 +751,45 @@ public class MainWindow : Window
         recoveryDetails.Visibility=recoveryNotice.Visibility;
     }
     public void FitView() => canvas.Fit();
-    public void Select(Guid? id) { if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation()))return;SelectedId=id; Refresh(); }
+    public void Select(Guid? id)
+    {
+        if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation()))return;
+        SetSelectionCore(id is { } value ? [value] : [], id);
+        Refresh();
+    }
+    /// <summary>Adds or removes one piece from the multi-selection. Returns false when the piece is not selectable.</summary>
+    internal bool ToggleSelection(Guid id)
+    {
+        if(BlockForActiveDrag() || BlockForLargeVertexValidation())return false;
+        var piece=Document.Pieces.FirstOrDefault(candidate=>candidate.Id==id);
+        if(piece is null || !IsPieceEditable(piece))return false;
+        if(!selection.Remove(id))selection.Add(id);
+        SelectedId=selection.Count==0 ? null : selection[^1];
+        Refresh();
+        return true;
+    }
+    private void SetSelectionCore(IEnumerable<Guid> ids, Guid? primary)
+    {
+        selection.Clear();selection.AddRange(ids);
+        if(primary is { } value && !selection.Contains(value))selection.Add(value);
+        SelectedId=primary;
+    }
+    private void ApplyListSelection(IReadOnlyList<Guid> ids)
+    {
+        var selectable=ids.Where(id=>Document.Pieces.Any(piece=>piece.Id==id)).ToList();
+        Guid? primary=selectable.Count==0 ? null
+            : SelectedId is { } current && selectable.Contains(current) ? current : selectable[^1];
+        SetSelectionCore(selectable, primary);
+        Refresh();
+    }
+    private void SyncPieceListSelection()
+    {
+        var desired=pieces.Items.Cast<PatternPiece>().Where(piece=>selection.Contains(piece.Id)).ToList();
+        var current=pieces.SelectedItems.Cast<PatternPiece>().ToList();
+        if(current.Count==desired.Count && current.All(item=>desired.Contains(item)))return;
+        pieces.SelectedItems.Clear();
+        foreach(var piece in desired)pieces.SelectedItems.Add(piece);
+    }
     /// <summary>Layer shown in the layer panel; view state only, never part of the document.</summary>
     internal Layer? SelectedLayer => LayerTools.Find(Document, selectedLayerId);
     internal Guid SelectedLayerId => selectedLayerId;
@@ -985,7 +1031,7 @@ public class MainWindow : Window
         if (target is not { Visible: true, Locked: false })
         { SetStatus("Kalıp eklenmedi · Seçili ve varsayılan katman gizli veya kilitli. Önce bir katmanı görünür ve kilitsiz yapın."); return; }
         var layerId = target.Id;
-        CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", LayerId=layerId, Points=[.. points], Closed=closed }; Document.Pieces.Add(p); SelectedId=p.Id; },onCommitted);
+        CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", LayerId=layerId, Points=[.. points], Closed=closed }; Document.Pieces.Add(p); SetSelectionCore([p.Id],p.Id); },onCommitted);
     }
     internal Action? AfterDxfLoadBeforeRefreshForVerification { get; set; }
     internal Action? AfterProjectLoadBeforeRefreshForVerification { get; set; }
@@ -1008,7 +1054,7 @@ public class MainWindow : Window
         if(markUnsaved)session.MarkUnsaved();
         dirty=markUnsaved;
         propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;
-        SelectedId=null;recoveredSource=null;recoveredDocumentSaved=false;recoveryRestoreIncomplete=false;
+        selection.Clear();SelectedId=null;recoveredSource=null;recoveredDocumentSaved=false;recoveryRestoreIncomplete=false;
         onLoaded?.Invoke();
         ClearRecovery();canvas.CancelDrawing();canvas.IsEnabled=true;
         if(markUnsaved)AfterDxfLoadBeforeRefreshForVerification?.Invoke();
@@ -1041,9 +1087,12 @@ public class MainWindow : Window
             if(sourceChanged) { pieces.ItemsSource=source;pieces.Items.Filter=MatchesPieceSearch; }
             else CollectionViewSource.GetDefaultView(source).Refresh();
         }
-        var listSelection=Selected;
-        var visibleSelection=listSelection is not null && MatchesPieceSearch(listSelection) ? listSelection : null;
-        if(!ReferenceEquals(pieces.SelectedItem,visibleSelection)) pieces.SelectedItem=visibleSelection;
+        // Multi-selection is view state: prune removed pieces, keep the primary in
+        // the set and mirror the set into the piece list without extra events.
+        selection.RemoveAll(id=>source.All(piece=>piece.Id!=id));
+        if(SelectedId is { } primaryId && !selection.Contains(primaryId))selection.Add(primaryId);
+        if(SelectedId is null && selection.Count>0)SelectedId=selection[^1];
+        SyncPieceListSelection();
         UpdatePieceSearchStatus();
         var safeProjectName=SafePieceName(Document.Name);
         projectTitle.Text = safeProjectName;
@@ -1796,7 +1845,7 @@ public class MainWindow : Window
         var committed=false;
         try
         {
-            CommitObserved("Parça çoğaltıldı",()=> { Document.Pieces.Add(duplicate);if(copiedRule is not null)Document.GradingRules.Add(copiedRule);SelectedId=duplicate.Id; },()=>committed=true);
+            CommitObserved("Parça çoğaltıldı",()=> { Document.Pieces.Add(duplicate);if(copiedRule is not null)Document.GradingRules.Add(copiedRule);SetSelectionCore([duplicate.Id],duplicate.Id); },()=>committed=true);
             if(committed)SetStatus($"Parça çoğaltıldı · Kaynak {sourceId:D} · Yeni {duplicate.Id:D}. Aynı konumdalar; köşe işaretleri {(duplicate.Notches is null ? "yok" : "kopyalandı")}; üretim bilgisi {(duplicate.Metadata is null ? "kopyalanmadı" : "kopyalandı; adedi kontrol edin")}; iplik yönü {(duplicate.Grainline is null ? "kopyalanmadı" : "kopyalandı")}; serileme kuralı {(copiedRule is null ? "kopyalanmadı" : "kopyalandı")}. Pastal ve kaynak geçmişi aktarılmadı.");
         }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
@@ -1833,7 +1882,7 @@ public class MainWindow : Window
             p=Document.Pieces.Single(piece=>piece.Id==p.Id);
         }
         var committed=false;
-        try { CommitObserved("Parça silindi",()=> { Document.Pieces.Remove(p); Document.GradingRules.RemoveAll(r=>r.SourcePieceId==p.Id); SelectedId=null; },()=>committed=true); }
+        try { CommitObserved("Parça silindi",()=> { Document.Pieces.Remove(p); Document.GradingRules.RemoveAll(r=>r.SourcePieceId==p.Id); SetSelectionCore([],null); },()=>committed=true); }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             mainMutationReviewRequired=true;
@@ -4074,7 +4123,7 @@ public class MainWindow : Window
         if(pending is not null)ActiveTool=pending.Tool;
         projectEpoch=Guid.NewGuid();session.MarkUnsaved();dirty=true;
         filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;
-        SelectedId=null;recoveredSource=chosen;recoveredDocumentSaved=false;recoveryRestoreIncomplete=true;
+        selection.Clear();SelectedId=null;recoveredSource=chosen;recoveredDocumentSaved=false;recoveryRestoreIncomplete=true;
         propertyDrafts.Clear();
         foreach(var (id,draft) in drafts)propertyDrafts.Add(id,draft);
         // Invalidate earlier session writes with a serialized clear barrier;
