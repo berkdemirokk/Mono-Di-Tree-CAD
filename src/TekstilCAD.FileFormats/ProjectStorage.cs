@@ -456,15 +456,17 @@ public static class ProjectStorage
         var layerIds = new HashSet<Guid>();
         if (project.Layers is { } layers)
         {
-            if (layers.Count is < 1 or > MaximumPieces) throw new InvalidDataException("Geçersiz katman listesi.");
-            var defaultIdAllowed = layers.Count == 1;
+            if (layers.Count is < 1 or > ProjectStorageLimits.MaximumLayers) throw new InvalidDataException("Geçersiz katman listesi.");
             foreach (var layer in layers)
             {
-                if (layer is null || (layer.Id == Guid.Empty && !defaultIdAllowed) || !layerIds.Add(layer.Id) ||
-                    layer.Name is null || layer.Name.Length is < 1 or > 128 || layer.Name != layer.Name.Trim() ||
+                if (layer is null || !layerIds.Add(layer.Id) ||
+                    layer.Name is null || layer.Name.Length is < 1 or > LayerTools.MaximumNameLength || layer.Name != layer.Name.Trim() ||
                     layer.Name.Any(char.IsControl) || !IsWellFormedUtf16(layer.Name))
                     throw new InvalidDataException("Geçersiz katman adı veya kimliği.");
             }
+            // Every piece points at a layer or at the default one, so an explicit
+            // list must carry the default layer as well.
+            if (!layerIds.Contains(Layer.DefaultId)) throw new InvalidDataException("Katman listesinde varsayılan katman eksik.");
         }
         var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0;
         foreach (var piece in project.Pieces)
