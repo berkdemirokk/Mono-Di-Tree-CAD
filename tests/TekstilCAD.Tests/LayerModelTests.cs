@@ -150,6 +150,29 @@ public sealed class LayerModelTests : IDisposable
     }
 
     [Fact]
+    public void ChangingTheImplicitDefaultLayerStoresItAndDeletingKeepsItsSettings()
+    {
+        var document = Sample();
+        Assert.Null(document.Layers);
+        LayerTools.SetVisible(document, Layer.DefaultId, false);
+        Assert.NotNull(document.Layers);
+        Assert.False(LayerTools.DefaultLayer(document).Visible);
+
+        var path = FilePath("hidden-default.tcad");
+        ProjectStorage.Save(document, path);
+        var loaded = ProjectStorage.Load(path);
+        Assert.False(LayerTools.DefaultLayer(loaded).Visible);
+        Assert.All(loaded.Pieces, piece => Assert.False(LayerTools.IsPieceVisible(loaded, piece)));
+
+        // Removing the only extra layer must not reset a customised default layer.
+        var layer = LayerTools.Add(loaded, "Astar");
+        Assert.True(LayerTools.Delete(loaded, layer.Id));
+        Assert.NotNull(loaded.Layers);
+        Assert.Single(loaded.Layers!);
+        Assert.False(loaded.Layers![0].Visible);
+    }
+
+    [Fact]
     public void LayerOrderAndFlagsTakePartInDocumentEquality()
     {
         var left = Sample();

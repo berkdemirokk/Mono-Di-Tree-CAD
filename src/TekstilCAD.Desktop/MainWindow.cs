@@ -39,6 +39,14 @@ public class MainWindow : Window
     public bool Snap => snap.IsChecked == true;
     private readonly CadCanvas canvas;
     private readonly ListBox pieces = new();
+    // Layer panel state is view-only: the selected layer is not part of the document.
+    private readonly ComboBox layerList = new() { Margin=new Thickness(3,2,3,3), MinWidth=0, HorizontalContentAlignment=HorizontalAlignment.Stretch };
+    private readonly CheckBox layerVisible = new() { Content="Görünür", IsChecked=true, Margin=new Thickness(4,2,10,2) };
+    private readonly CheckBox layerLocked = new() { Content="Kilitli", IsChecked=false, Margin=new Thickness(4,2,4,2) };
+    private readonly TextBlock layerStatus = new() { TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, FontSize=10, Margin=new Thickness(4,2,4,6) };
+    private Guid selectedLayerId = Layer.DefaultId;
+    private bool syncingLayers;
+    private readonly List<(Guid Id, string Name, bool Visible, bool Locked)> displayedLayers = [];
     private readonly TextBox pieceSearch = new() { MaxLength=1024, Margin=new Thickness(3,2,3,3), Padding=new Thickness(7,5,7,5), MinWidth=0 };
     private readonly TextBlock pieceSearchStatus = new() { TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,2,4,6) };
     private string pieceSearchQuery = "";
@@ -407,6 +415,38 @@ public class MainWindow : Window
         snap.Unchecked += (_, _) => units.Text = "MILIMETRE   /   Serbest koordinat";
         inspector.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 0, 3, 12) });
         pieceCount.Foreground = Muted; pieceCount.FontSize = 10; pieceCount.Margin = new Thickness(4, 8, 0, 8); inspector.Children.Add(pieceCount);
+        inspector.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 16, 3, 10) });
+        inspector.Children.Add(Label("KATMANLAR", Muted, 10));
+        layerList.DisplayMemberPath = nameof(Layer.Name);
+        AutomationProperties.SetName(layerList, "Katman seçimi");
+        AutomationProperties.SetHelpText(layerList, "Parçaların ait olduğu katmanı seçin. Görünürlük ve kilit seçili katmana uygulanır.");
+        layerList.SelectionChanged += (_, _) =>
+        {
+            if (syncingLayers) return;
+            if (layerList.SelectedItem is Layer layer) { selectedLayerId = layer.Id; RefreshLayerPanel(); }
+        };
+        inspector.Children.Add(layerList);
+        var layerFlags = new WrapPanel();
+        AutomationProperties.SetName(layerVisible, "Seçili katman görünür");
+        AutomationProperties.SetHelpText(layerVisible, "Kapalıysa katmanın parçaları tuvalde çizilmez ve fareyle seçilemez.");
+        layerVisible.Checked += (_, _) => SetSelectedLayerVisible(true);
+        layerVisible.Unchecked += (_, _) => SetSelectedLayerVisible(false);
+        layerFlags.Children.Add(layerVisible);
+        AutomationProperties.SetName(layerLocked, "Seçili katman kilitli");
+        AutomationProperties.SetHelpText(layerLocked, "Kilitli katmanın parçaları görünür ama tuvalde seçilemez ve düzenlenemez.");
+        layerLocked.Checked += (_, _) => SetSelectedLayerLocked(true);
+        layerLocked.Unchecked += (_, _) => SetSelectedLayerLocked(false);
+        layerFlags.Children.Add(layerLocked);
+        inspector.Children.Add(layerFlags);
+        var layerCommands = new WrapPanel();
+        AddButton(layerCommands, "Yeni katman", AddLayer, "Yeni bir katman ekler ve seçer. Katman listesi proje dosyasında saklanır.");
+        AddButton(layerCommands, "Yeniden adlandır…", RenameSelectedLayer, "Seçili katmanın adını değiştirir.");
+        AddButton(layerCommands, "Sil", DeleteSelectedLayer, "Seçili katmanı siler; parçaları varsayılan katmana taşınır.");
+        inspector.Children.Add(layerCommands);
+        selectionCommands.Add(AddButton(inspector, "Seçili parçayı katmana ata", AssignSelectionToLayer, "Seçili parçayı seçili katmana taşır. Katman gizli veya kilitli olsa da atama yapılabilir."));
+        AutomationProperties.SetName(layerStatus, "Katman durumu");
+        AutomationProperties.SetLiveSetting(layerStatus, AutomationLiveSetting.Polite);
+        inspector.Children.Add(layerStatus);
         inspector.Children.Add(Label("Parça adı veya kimliği ara",Muted,10));
         var pieceSearchRow=new DockPanel();
         var clearPieceSearch=new Button { Content="Temizle", Padding=new Thickness(8,4,8,4), Margin=new Thickness(3,2,3,3) };
@@ -704,6 +744,144 @@ public class MainWindow : Window
     }
     public void FitView() => canvas.Fit();
     public void Select(Guid? id) { if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation()))return;SelectedId=id; Refresh(); }
+    /// <summary>Layer shown in the layer panel; view state only, never part of the document.</summary>
+    internal Layer? SelectedLayer => LayerTools.Find(Document, selectedLayerId);
+    internal Guid SelectedLayerId => selectedLayerId;
+    /// <summary>Selects a layer in the panel. Used by the headless verification harness.</summary>
+    internal bool SelectLayer(Guid id)
+    {
+        if (LayerTools.Find(Document, id) is null) return false;
+        if (selectedLayerId == id) return true;
+        selectedLayerId = id; RefreshLayerPanel(); return true;
+    }
+    /// <summary>Pieces on a locked layer are visible but cannot be edited.</summary>
+    internal bool IsPieceEditable(PatternPiece? piece) => piece is null || !LayerTools.IsPieceLocked(Document, piece);
+    private bool BlockIfSelectionLocked(string action)
+    {
+        if (Selected is not { } piece || IsPieceEditable(piece)) return false;
+        var layerName = LayerTools.Find(Document, piece.LayerId)?.Name ?? "varsayılan";
+        SetStatus($"{action} yapılmadı · Seçili parça kilitli “{layerName}” katmanında. Katman kilidini kaldırın.");
+        return true;
+    }
+    private void RefreshLayerPanel()
+    {
+        var wasSyncing = syncingLayers; syncingLayers = true;
+        try
+        {
+            var layers = LayerTools.Layers(Document);
+            var changed = displayedLayers.Count != layers.Count;
+            if (!changed)
+                for (var i = 0; i < layers.Count; i++)
+                    if (displayedLayers[i] != (layers[i].Id, layers[i].Name, layers[i].Visible, layers[i].Locked)) { changed = true; break; }
+            if (changed)
+            {
+                displayedLayers.Clear();
+                foreach (var layer in layers) displayedLayers.Add((layer.Id, layer.Name, layer.Visible, layer.Locked));
+                // Document is replaced on every commit, so the combo needs a fresh snapshot.
+                layerList.ItemsSource = layers.ToList();
+            }
+            var current = layers.FirstOrDefault(layer => layer.Id == selectedLayerId) ?? layers[0];
+            selectedLayerId = current.Id;
+            if (!ReferenceEquals(layerList.SelectedItem, current)) layerList.SelectedItem = current;
+            layerVisible.IsChecked = current.Visible;
+            layerLocked.IsChecked = current.Locked;
+            var count = Document.Pieces.Count(piece => piece.LayerId == current.Id);
+            var state = current.Visible ? "görünür" : "gizli";
+            if (current.Locked) state += " · kilitli";
+            var message = $"{count} parça · {state}" + (current.Id == Layer.DefaultId ? " · varsayılan katman" : "");
+            if (layerStatus.Text != message) layerStatus.Text = message;
+            AutomationProperties.SetName(layerStatus, "Katman durumu: " + message);
+        }
+        finally { syncingLayers = wasSyncing; }
+    }
+    private void SetSelectedLayerVisible(bool visible)
+    {
+        if (syncingLayers) return;
+        if (SelectedLayer is not { } layer || layer.Visible == visible) return;
+        try { CommitObserved(visible ? "Katman görünür yapıldı" : "Katman gizlendi", () => LayerTools.SetVisible(Document, layer.Id, visible)); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
+        { SetStatus("Katman görünürlüğü değiştirilmedi: " + ex.Message); RefreshLayerPanel(); }
+    }
+    private void SetSelectedLayerLocked(bool locked)
+    {
+        if (syncingLayers) return;
+        if (SelectedLayer is not { } layer || layer.Locked == locked) return;
+        try { CommitObserved(locked ? "Katman kilitlendi" : "Katman kilidi açıldı", () => LayerTools.SetLocked(Document, layer.Id, locked)); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
+        { SetStatus("Katman kilidi değiştirilmedi: " + ex.Message); RefreshLayerPanel(); }
+    }
+    private void AddLayer()
+    {
+        if (BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation()) return;
+        var name = LayerTools.SuggestName(Document);
+        try { CommitObserved("Katman eklendi", () => selectedLayerId = LayerTools.Add(Document, name).Id); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
+        { SetStatus("Katman eklenmedi: " + ex.Message); }
+    }
+    /// <summary>Applies a layer rename without a dialog so the headless harness can verify it.</summary>
+    internal bool TryRenameLayer(Guid layerId, string name, out string? error)
+    {
+        error = null;
+        try { CommitObserved("Katman adı değiştirildi", () => LayerTools.Rename(Document, layerId, name)); return true; }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
+        { error = ex.Message; return false; }
+    }
+    private void RenameSelectedLayer()
+    {
+        if (SelectedLayer is not { } layer) { SetStatus("Yeniden adlandırmak için bir katman seçin."); return; }
+        var dialog = new Window { Owner = this, Title = "Katmanı yeniden adlandır", Width = 430, Height = 230, MinWidth = 360, MinHeight = 200, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+        StudioTheme.Apply(dialog);
+        var root = new DockPanel { Margin = new Thickness(18) }; dialog.Content = root;
+        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
+        DockPanel.SetDock(actions, Dock.Bottom); root.Children.Add(actions);
+        var panel = new StackPanel(); root.Children.Add(panel);
+        var input = new TextBox { Text = layer.Name, MaxLength = LayerTools.MaximumNameLength, Margin = new Thickness(3, 4, 3, 3) };
+        StyleInput(input); AutomationProperties.SetName(input, "Katman adı");
+        panel.Children.Add(Label("Katman adı")); panel.Children.Add(input);
+        panel.Children.Add(new TextBlock { Text = "Ad 1–128 karakter olmalı; başta veya sonda boşluk ve kontrol karakteri kullanamazsınız. Aynı ad iki katmana verilemez.", TextWrapping = TextWrapping.Wrap, Foreground = Muted, FontSize = 11 });
+        var error = new TextBlock { Foreground = StudioTheme.Danger, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(3, 6, 3, 3) };
+        AutomationProperties.SetName(error, "Katman adı doğrulama hatası");
+        AutomationProperties.SetLiveSetting(error, AutomationLiveSetting.Assertive);
+        panel.Children.Add(error);
+        var cancel = AddButton(actions, "Vazgeç", () => dialog.DialogResult = false); cancel.IsCancel = true;
+        AddButton(actions, "Adı uygula", () =>
+        {
+            if (!TryRenameLayer(layer.Id, input.Text, out var message))
+            {
+                error.Text = message;
+                AutomationProperties.SetName(error, "Katman adı doğrulama hatası: " + message);
+                if (System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(error) is { } peer)
+                    peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
+                return;
+            }
+            dialog.DialogResult = true;
+        });
+        dialog.Loaded += (_, _) => { input.Focus(); input.SelectAll(); };
+        dialog.ShowDialog();
+    }
+    private void DeleteSelectedLayer()
+    {
+        if (SelectedLayer is not { } layer) { SetStatus("Silmek için bir katman seçin."); return; }
+        if (layer.Id == Layer.DefaultId) { SetStatus("Varsayılan katman silinemez; parçaları başka bir katmana taşıyabilirsiniz."); return; }
+        if (BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation()) return;
+        var moved = Document.Pieces.Count(piece => piece.LayerId == layer.Id);
+        try
+        {
+            CommitObserved($"“{layer.Name}” katmanı silindi", () => { LayerTools.Delete(Document, layer.Id); selectedLayerId = Layer.DefaultId; });
+            if (moved > 0) SetStatus($"“{layer.Name}” katmanı silindi · {moved} parça varsayılan katmana taşındı.");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
+        { SetStatus("Katman silinmedi: " + ex.Message); }
+    }
+    private void AssignSelectionToLayer()
+    {
+        if (Selected is not { } piece) { SetStatus("Katmana atamak için önce bir parça seçin."); return; }
+        if (SelectedLayer is not { } layer) { SetStatus("Katman seçilmedi."); return; }
+        if (piece.LayerId == layer.Id) { SetStatus($"Parça zaten “{layer.Name}” katmanında."); return; }
+        try { CommitObserved($"Parça “{layer.Name}” katmanına atandı", () => LayerTools.Assign(Document, piece, layer.Id)); }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
+        { SetStatus("Parça katmana atanmadı: " + ex.Message); }
+    }
     private void OpenCoordinateDrawing()
     {
         if(BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation())return;
@@ -784,7 +962,7 @@ public class MainWindow : Window
     internal bool CanRetainCurrentUndoSnapshot => session.CanRetainCurrentUndoSnapshot;
     internal bool CanRetainUndoSnapshot(ProjectDocument candidate) => session.CanRetainUndoSnapshot(candidate);
     // Called only after a changed document is committed, before UI refresh can fail.
-    internal void CommitObserved(string description, Action action, Action? onCommitted)
+    internal void CommitObserved(string description, Action action, Action? onCommitted = null)
     {
         ArgumentNullException.ThrowIfNull(action);
         if(recoveryRestoreIncomplete)
@@ -797,7 +975,18 @@ public class MainWindow : Window
     }
     public void AddPiece(List<Point2> points,bool closed) => AddPiece(points,closed,null);
     internal void AddPiece(List<Point2> points,bool closed,Action? onCommitted)
-    { if (points.Count < (closed ? 3 : 2)) return; CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", Points=[.. points], Closed=closed }; Document.Pieces.Add(p); SelectedId=p.Id; },onCommitted); }
+    {
+        if (points.Count < (closed ? 3 : 2)) return;
+        // New geometry goes to the layer selected in the panel. A hidden or locked
+        // layer cannot receive it; fall back to the default layer when that one is
+        // usable, otherwise refuse so the contour does not disappear silently.
+        var target = SelectedLayer;
+        if (target is not { Visible: true, Locked: false }) target = LayerTools.DefaultLayer(Document);
+        if (target is not { Visible: true, Locked: false })
+        { SetStatus("Kalıp eklenmedi · Seçili ve varsayılan katman gizli veya kilitli. Önce bir katmanı görünür ve kilitsiz yapın."); return; }
+        var layerId = target.Id;
+        CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", LayerId=layerId, Points=[.. points], Closed=closed }; Document.Pieces.Add(p); SelectedId=p.Id; },onCommitted);
+    }
     internal Action? AfterDxfLoadBeforeRefreshForVerification { get; set; }
     internal Action? AfterProjectLoadBeforeRefreshForVerification { get; set; }
     public void LoadDocument(ProjectDocument document) => LoadDocumentCore(document,false,null);
@@ -834,6 +1023,7 @@ public class MainWindow : Window
         try
         {
         DuringRefreshForVerification?.Invoke();
+        RefreshLayerPanel();
         var source=Document.Pieces;
         // Transactions replace the owned list, but List<T> does not notify WPF if
         // changed in place. Keep the view during selection-only refreshes while
@@ -1235,6 +1425,7 @@ public class MainWindow : Window
         : value.ToString("0.##", CultureInfo.CurrentCulture);
     private void ApplyProperties()
     {
+        if (BlockIfSelectionLocked("Ad ve konum uygulama")) return;
         if(SelectedId is { } id)ApplyPropertyDrafts([id]);
     }
     private List<(Guid Id, string Name, double X, double Y)> ValidatePropertyDrafts(ProjectDocument document, IEnumerable<Guid> ids)
@@ -1521,6 +1712,7 @@ public class MainWindow : Window
     {
         if(!EnsureMainMutationReady())return;
         if(Selected is not { Points.Count: >0 } piece)return;
+        if(BlockIfSelectionLocked("Dönüşüm"))return;
         if(HasPropertyDraftFor(piece.Id))
         { SetStatus("Dönüşüm uygulanmadı · Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");return; }
         if(piece.Notches is not null && operation is null) { SetStatus("Bu dönüşüm köşe işaretleriyle desteklenmiyor.");return; }
@@ -1617,6 +1809,7 @@ public class MainWindow : Window
     {
         if(!EnsureMainMutationReady())return;
         if(Selected is not {} p) return;
+        if(BlockIfSelectionLocked("Parça silme"))return;
         if(propertyDrafts.ContainsKey(p.Id))
         { SetStatus("Parça silinmedi · Önce bu parçanın alan taslağını uygulayın veya taslakları inceleyip kaldırın.");return; }
         var count=Document.GradingRules.Count(r=>r.SourcePieceId==p.Id);

@@ -59,9 +59,10 @@ public static class LayerTools
     public static void Rename(ProjectDocument document, Guid layerId, string name)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var layer = Find(document, layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
+        var layers = Materialize(document);
+        var layer = layers.FirstOrDefault(candidate => candidate.Id == layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
         var validated = ValidateName(name);
-        if (Layers(document).Any(other => other.Id != layerId && string.Equals(other.Name, validated, StringComparison.Ordinal)))
+        if (layers.Any(other => other.Id != layerId && string.Equals(other.Name, validated, StringComparison.Ordinal)))
             throw new ArgumentException("Bu adda bir katman zaten var.", nameof(name));
         layer.Name = validated;
     }
@@ -69,16 +70,20 @@ public static class LayerTools
     public static void SetVisible(ProjectDocument document, Guid layerId, bool visible)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var layer = Find(document, layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
+        var layer = Materialize(document).FirstOrDefault(candidate => candidate.Id == layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
         layer.Visible = visible;
     }
 
     public static void SetLocked(ProjectDocument document, Guid layerId, bool locked)
     {
         ArgumentNullException.ThrowIfNull(document);
-        var layer = Find(document, layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
+        var layer = Materialize(document).FirstOrDefault(candidate => candidate.Id == layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
         layer.Locked = locked;
     }
+
+    // A flag or name change on the implicit default layer must be stored, so the
+    // list becomes explicit before the change. Adding a layer does the same.
+    private static List<Layer> Materialize(ProjectDocument document) => document.Layers ??= Layer.Defaults();
 
     /// <summary>Moves a piece to a layer. The target must exist.</summary>
     public static void Assign(ProjectDocument document, PatternPiece piece, Guid layerId)
@@ -105,8 +110,16 @@ public static class LayerTools
         layers.Remove(layer);
         foreach (var piece in document.Pieces)
             if (piece.LayerId == layerId) piece.LayerId = Layer.DefaultId;
-        if (layers.Count == 1) document.Layers = null;
+        // Keep the list when the remaining default layer carries a custom name or
+        // flags; dropping it would silently reset those settings.
+        if (layers.Count == 1 && IsPristineDefault(layers[0])) document.Layers = null;
         return true;
+    }
+
+    private static bool IsPristineDefault(Layer layer)
+    {
+        var pristine = Layer.Defaults()[0];
+        return layer.Id == Layer.DefaultId && layer.Name == pristine.Name && layer.Visible && !layer.Locked;
     }
 
     /// <summary>Next unused "Katman N" name, so repeated adds stay distinguishable.</summary>

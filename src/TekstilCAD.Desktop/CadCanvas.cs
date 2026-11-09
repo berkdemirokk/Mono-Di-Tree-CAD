@@ -341,19 +341,24 @@ public sealed class CadCanvas : FrameworkElement
         double minX=double.PositiveInfinity,minY=double.PositiveInfinity,maxX=double.NegativeInfinity,maxY=double.NegativeInfinity;
         var found=false;
         foreach(var piece in owner.Document.Pieces)
-        foreach(var point in piece.Points)
         {
-            if(!point.IsFinite)
-            { owner.SetStatus("Proje koordinatları geçersiz; görünüm değiştirilmedi.");return; }
-            found=true;
-            minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
-            maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+            // Hidden layers are not framed: "show all" should show what is visible.
+            if(!LayerTools.IsPieceVisible(owner.Document,piece))continue;
+            foreach(var point in piece.Points)
+            {
+                if(!point.IsFinite)
+                { owner.SetStatus("Proje koordinatları geçersiz; görünüm değiştirilmedi.");return; }
+                found=true;
+                minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
+                maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+            }
         }
         // Grainlines can lie outside a contour, particularly when an edit
         // marked them for review. They must remain visible in an all-fit view.
         foreach(var piece in owner.Document.Pieces)
         {
             if(piece.Points.Count==0 || piece.Grainline is not { } grain)continue;
+            if(!LayerTools.IsPieceVisible(owner.Document,piece))continue;
             foreach(var point in new[] { grain.Start,grain.End })
             {
                 if(!point.IsFinite)
@@ -403,6 +408,8 @@ public sealed class CadCanvas : FrameworkElement
         var selected=owner.Selected;
         if(selected?.Points is not { Count: >0 } points)
         { owner.SetStatus("Göstermek için önce bir parça seçin.");return; }
+        if(!LayerTools.IsPieceVisible(owner.Document,selected))
+        { owner.SetStatus("Seçili parça gizli bir katmanda; göstermek için önce katmanı görünür yapın.");return; }
         var width=ActualWidth;var height=ActualHeight;
         if(!double.IsFinite(width) || !double.IsFinite(height) || width<1 || height<1)
         { owner.SetStatus("Çalışma alanı henüz hazır değil; görünümü yeniden deneyin.");return; }
@@ -580,13 +587,16 @@ public sealed class CadCanvas : FrameworkElement
     {
         var pieces=owner.Document.Pieces;
         var selected=owner.Selected;
+        // Hidden and locked pieces are not pickable. A selection made from the
+        // piece list therefore cannot be dragged on the canvas.
+        if(selected is not null && !IsInteractive(selected))selected=null;
         if(selected is not null)
         {
             var selectedIndex=pieces.FindIndex(item=>item.Id==selected.Id);
             if(selectedIndex>=0)
             {
                 for(var i=pieces.Count-1;i>selectedIndex;i--)
-                    if(HitVisibleOverlay(pieces[i],pointer))return (pieces[i],-1,false);
+                    if(IsInteractive(pieces[i]) && HitVisibleOverlay(pieces[i],pointer))return (pieces[i],-1,false);
             }
             var (vertex,ambiguous)=FindNearestVertex(selected,pointer,scale);
             if(ambiguous)return (null,-1,true);
@@ -598,12 +608,15 @@ public sealed class CadCanvas : FrameworkElement
                 // that an obscured vertex was the user's intended target.
                 if(selectedIndex>=0)
                     for(var i=pieces.Count-1;i>selectedIndex;i--)
-                        if(HitVisibleOverlay(pieces[i],selected.Points[vertex]))return (null,-1,true);
+                        if(IsInteractive(pieces[i]) && HitVisibleOverlay(pieces[i],selected.Points[vertex]))return (null,-1,true);
                 return (selected,vertex,false);
             }
         }
-        return (pieces.LastOrDefault(item=>Hit(item,pointer)),-1,false);
+        return (pieces.LastOrDefault(item=>IsInteractive(item) && Hit(item,pointer)),-1,false);
     }
+    /// <summary>Visible and unlocked pieces respond to the pointer.</summary>
+    private bool IsInteractive(PatternPiece piece) =>
+        LayerTools.IsPieceVisible(owner.Document,piece) && !LayerTools.IsPieceLocked(owner.Document,piece);
     // Mouse picking is screen-based: choose the closest visible vertex, not
     // the first vertex in storage order. A duplicate final closing vertex is
     // the same logical vertex; any other equal-distance tie remains ambiguous.
@@ -914,7 +927,10 @@ public sealed class CadCanvas : FrameworkElement
         Pen? selectedPen=null,normalPen=null;
         foreach(var p in owner.Document.Pieces)
         {
-            if(p.Points.Count==0)continue;var selected=p.Id==owner.SelectedId;
+            if(p.Points.Count==0)continue;
+            // Hidden layers keep their geometry in the document but are not drawn.
+            if(!LayerTools.IsPieceVisible(owner.Document,p))continue;
+            var selected=p.Id==owner.SelectedId;
             var pen=selected ? (selectedPen ??= new Pen(selectedBrush ??= B("#FFCB70"),2.3))
                 : (normalPen ??= new Pen(normalStroke ??= B("#4DE1C1"),1.5));
             var visible=p.Id==dragId && dragPreview is not null ? dragPreview : p.Points;

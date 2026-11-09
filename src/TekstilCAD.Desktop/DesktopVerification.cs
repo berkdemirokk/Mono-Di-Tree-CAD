@@ -929,6 +929,63 @@ internal static class DesktopVerification
         Check(VirtualizingPanel.GetIsVirtualizing(list) && VirtualizingPanel.GetVirtualizationMode(list)==VirtualizationMode.Recycling && ScrollViewer.GetCanContentScroll(list),
             "Piece list requests recycling virtualization with logical scrolling",checks);
     }
+    private static void VerifyLayers(MainWindow studio,List<string> checks)
+    {
+        studio.LoadDocument(new ProjectDocument
+        {
+            Name="Katman doğrulaması",
+            Pieces=[
+                new PatternPiece{Name="Gövde",Points=[new(0,0),new(100,0),new(100,100),new(0,100)]},
+                new PatternPiece{Name="Kol",Points=[new(200,0),new(300,0),new(300,100),new(200,100)]}
+            ]
+        });
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        Check(studio.Document.Layers is null && studio.SelectedLayerId==Layer.DefaultId && studio.SelectedLayer is {Visible:true,Locked:false},
+            "Default layer is implicit, visible and unlocked",checks);
+        Invoke(studio,"AddLayer");
+        var layers=studio.Document.Layers;
+        Check(layers is {Count:2} && layers[0].Id==Layer.DefaultId,"Adding a layer stores an explicit list that keeps the default layer",checks);
+        var added=studio.SelectedLayerId;
+        Check(added!=Layer.DefaultId && studio.SelectedLayer?.Name=="Katman 2","New layer is selected with a suggested name",checks);
+        Check(studio.TryRenameLayer(added,"Astar",out _) && studio.SelectedLayer?.Name=="Astar","Layer rename keeps the selection",checks);
+        Check(!studio.TryRenameLayer(added,"Katman 1",out var duplicateError) && !string.IsNullOrEmpty(duplicateError),
+            "Duplicate layer name is rejected with a message",checks);
+        Check(!studio.TryRenameLayer(added,"Astar ",out _),"Layer name with surrounding space is rejected",checks);
+        studio.Select(studio.Document.Pieces[1].Id);
+        Invoke(studio,"AssignSelectionToLayer");
+        Check(studio.Document.Pieces[1].LayerId==added,"Selected piece is assigned to the selected layer",checks);
+        // Hidden layers keep geometry in the document but leave pointer picking.
+        Invoke(studio,"SetSelectedLayerVisible",false);
+        Check(studio.SelectedLayer is {Visible:false},"Layer visibility flag is stored in the document",checks);
+        Check(canvas.ResolvePointerSelection(new Point2(250,50)).Piece is null,"Piece on a hidden layer is not pickable on the canvas",checks);
+        Check(canvas.ResolvePointerSelection(new Point2(50,50)).Piece?.Name=="Gövde","Piece on a visible layer stays pickable",checks);
+        // Locked layers stay visible but are not editable.
+        Invoke(studio,"SetSelectedLayerVisible",true);
+        Invoke(studio,"SetSelectedLayerLocked",true);
+        Check(studio.SelectedLayer is {Visible:true,Locked:true},"Layer lock flag is stored in the document",checks);
+        Check(canvas.ResolvePointerSelection(new Point2(250,50)).Piece is null,"Piece on a locked layer is not pickable on the canvas",checks);
+        studio.Select(studio.Document.Pieces[1].Id);
+        Check(studio.Selected is not null && !studio.IsPieceEditable(studio.Selected),"Selection on a locked layer is not editable",checks);
+        // Deleting the only extra layer returns its pieces to the default layer.
+        Check(studio.SelectLayer(added),"Layer panel selection can be restored",checks);
+        Invoke(studio,"DeleteSelectedLayer");
+        Check(studio.Document.Layers is null && studio.Document.Pieces.All(piece=>piece.LayerId==Layer.DefaultId),
+            "Deleting the only extra layer returns its pieces to the default layer",checks);
+        Invoke(studio,"Undo");
+        Check(studio.Document.Layers is {Count:2} && studio.Document.Pieces[1].LayerId==added,
+            "Undo restores the deleted layer and the piece assignment",checks);
+        // New geometry falls back to the default layer, then refuses when both are unusable.
+        Check(studio.SelectLayer(added),"Locked layer can be selected in the panel",checks);
+        var beforeAdd=studio.Document.Pieces.Count;
+        studio.AddPiece([new(400,0),new(500,0),new(500,100),new(400,100)],true);
+        Check(studio.Document.Pieces.Count==beforeAdd+1 && studio.Document.Pieces[^1].LayerId==Layer.DefaultId,
+            "New geometry falls back to the default layer when the selected layer is locked",checks);
+        Check(studio.SelectLayer(Layer.DefaultId),"Default layer can be selected in the panel",checks);
+        Invoke(studio,"SetSelectedLayerVisible",false);
+        var beforeRefusal=studio.Document.Pieces.Count;
+        studio.AddPiece([new(600,0),new(700,0),new(700,100),new(600,100)],true);
+        Check(studio.Document.Pieces.Count==beforeRefusal,"New geometry is refused when every usable layer is hidden",checks);
+    }
     public static int Run(string reportPath)
     {
         MainWindow? studio = null;
@@ -957,6 +1014,7 @@ internal static class DesktopVerification
             VerifyComprehensiveAccessibility(studio,checks);
             VerifyRecoverySelectionDetails(studio,checks);
             VerifyMainPieceIdentification(studio,checks);
+            VerifyLayers(studio,checks);
             studio.LoadDocument(sample);
             VerifyLazyMachineQueue(studio,work,checks);
             VerifyAsyncProjectOpen(studio,work,checks);
@@ -5624,16 +5682,14 @@ internal static class DesktopVerification
             }
             finally { release.Set();PumpUntil(()=>pending.IsCompleted);closeTools.Close(); }
         }
-        var lobed=new PatternPiece { Name="Yoğun eğri örneği",Points=Enumerable.Range(0,512).Select(i=> {
-            var angle=Math.Tau*i/512;var radius=1000+200*Math.Cos(3*angle);
-            return new Point2(radius*Math.Cos(angle),radius*Math.Sin(angle)); }).ToList() };
-        studio.LoadDocument(new ProjectDocument { Pieces=[lobed] });studio.Select(lobed.Id);
+        var narrow=new PatternPiece { Name="Dar girinti örneği",Points=[new(0,0),new(100,0),new(100,100),new(52,100),new(52,20),new(48,20),new(48,100),new(0,100)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[narrow] });studio.Select(narrow.Id);
         var uncertainTools=new TextileToolsWindow(studio);var beforeUncertain=studio.Document.Clone();
-        var uncertainTask=(Task)run.Invoke(uncertainTools,["1"])!;PumpUntil(()=>uncertainTask.IsCompleted);uncertainTask.GetAwaiter().GetResult();
+        var uncertainTask=(Task)run.Invoke(uncertainTools,["5"])!;PumpUntil(()=>uncertainTask.IsCompleted);uncertainTask.GetAwaiter().GetResult();
         var uncertainStatus=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(uncertainTools)!;
         Check(DocumentSession.ContentEquals(beforeUncertain,studio.Document) && uncertainStatus.Text.Contains("korunduğu doğrulanamadı")
             && !uncertainStatus.Text.Contains("ayrıntısını değiştiriyor") && uncertainStatus.Text.Contains("üretim şartları izin veriyorsa"),
-            "Uncertain smooth allowance reports unverified preservation without claiming damage or changing the source",checks);
+            "Uncertain narrow allowance reports unverified preservation without claiming damage or changing the source",checks);
         uncertainTools.Close();
         }
         finally { SynchronizationContext.SetSynchronizationContext(oldContext); }
@@ -13287,7 +13343,7 @@ internal static class DesktopVerification
             return new Point2(radius*Math.Cos(angle),radius*Math.Sin(angle));
         }).ToList() };
         var narrow=new PatternPiece { Name="Dar girinti",Points=[new(0,0),new(100,0),new(100,100),new(52,100),new(52,20),new(48,20),new(48,100),new(0,100)] };
-        studio.LoadDocument(new ProjectDocument { Pieces=[lobed,narrow] });studio.Select(lobed.Id);
+        studio.LoadDocument(new ProjectDocument { Pieces=[lobed,narrow] });studio.Select(narrow.Id);
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
         var tools=new TextileToolsWindow(studio);
@@ -13296,13 +13352,13 @@ internal static class DesktopVerification
             var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
             var source=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
             var run=typeof(TextileToolsWindow).GetMethod("CreateOffsetAsync",PrivateInstance)!;
-            var task=(Task)run.Invoke(tools,["1"])!;PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            var task=(Task)run.Invoke(tools,["5"])!;PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             Check(result.Text.Contains("yerel kontur ayrıntısının korunduğu doğrulanamadı",StringComparison.Ordinal)
                 && result.Text.Contains("kesin hatalı olduğu anlamına gelmez",StringComparison.Ordinal)
                 && result.Text.Contains("kaynak çizimle karşılaştırın",StringComparison.Ordinal)
                 && result.Text.Contains("üretim sorumlusuna danışın",StringComparison.Ordinal)
-                && result.Text.Contains(lobed.Id.ToString("D"),StringComparison.Ordinal)
-                && result.Text.Contains("1 mm",StringComparison.Ordinal)
+                && result.Text.Contains(narrow.Id.ToString("D"),StringComparison.Ordinal)
+                && result.Text.Contains("5 mm",StringComparison.Ordinal)
                 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
                 "An unverified local offset detail reports its source and measured next steps without claiming the contour is invalid",checks);
             var previewButton=(Button)typeof(TextileToolsWindow).GetField("unverifiedOffsetPreview",PrivateInstance)!.GetValue(tools)!;
@@ -13310,7 +13366,7 @@ internal static class DesktopVerification
                 AutomationProperties.GetHelpText(previewButton).Contains("dışa aktarılmaz",StringComparison.Ordinal),
                 "Unverified offset offers an accessible display-only preview",checks);
             new System.Windows.Interop.WindowInteropHelper(tools).EnsureHandle();
-            var preview=new OffsetUnverifiedPreviewWindow(tools,lobed.Points,lobed.Points);
+            var preview=new OffsetUnverifiedPreviewWindow(tools,narrow.Points,narrow.Points);
             try
             {
                 var panel=(DockPanel)preview.Content;
@@ -13409,7 +13465,7 @@ internal static class DesktopVerification
                 finally { flatMeasure.Close(); }
             }
             finally { preview.Close(); }
-            source.SelectedItem=source.Items.Cast<PatternPiece>().Single(p=>p.Id==narrow.Id);
+            source.SelectedItem=source.Items.Cast<PatternPiece>().Single(p=>p.Id==lobed.Id);
             previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(previewButton.Visibility==Visibility.Collapsed && result.Text.Contains("eski önizleme gösterilmedi",StringComparison.Ordinal) &&
                 DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
@@ -13418,10 +13474,19 @@ internal static class DesktopVerification
             Check(result.Text.Contains("Dikiş payı uygulanmadı",StringComparison.Ordinal)
                 && result.Text.Contains("Dikiş payı en az 0,000001 mm olmalıdır",StringComparison.Ordinal)
                 && !result.Text.Contains("kesin hatalı olduğu anlamına gelmez",StringComparison.Ordinal)
-                && result.Text.Contains(narrow.Id.ToString("D"),StringComparison.Ordinal)
+                && result.Text.Contains(lobed.Id.ToString("D"),StringComparison.Ordinal)
                 && result.Text.Contains(MeasurementInput.Format(0.0000001)+" mm",StringComparison.Ordinal)
                 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
                 "An unrelated offset rejection does not receive the local-detail-specific guidance",checks);
+            // The lobed contour used to be rejected by the reverse comparison even
+            // though no source detail is lost; it must now offset successfully.
+            source.SelectedItem=source.Items.Cast<PatternPiece>().Single(p=>p.Id==lobed.Id);
+            task=(Task)run.Invoke(tools,["1"])!;PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(result.Text.Contains("projeye eklendi",StringComparison.Ordinal)
+                && !result.Text.Contains("kesin hatalı olduğu anlamına gelmez",StringComparison.Ordinal)
+                && studio.Document.Pieces.Count==before.Pieces.Count+1
+                && session.UndoCount==undo+1 && session.RedoCount==0,
+                "A sound lobed contour offsets successfully without the local-detail warning",checks);
         }
         finally { tools.Close();SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
