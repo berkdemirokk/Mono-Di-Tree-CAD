@@ -7,6 +7,7 @@ struct StudioToolsView: View {
     @State private var showingMarker = false
     @State private var showingMeasurements = false
     @State private var showingHistory = false
+    @State private var showingCatalog = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -14,6 +15,9 @@ struct StudioToolsView: View {
                 Text("Türkçe").tag(false)
                 Text("English").tag(true)
             }.pickerStyle(.segmented).accessibilityIdentifier("studio-language")
+            Button(english ? "Model catalogue" : "Model kütüphanesi") { showingCatalog = true }
+                .frame(minHeight: 44).accessibilityIdentifier("factory-catalog")
+                .sheet(isPresented: $showingCatalog) { FactoryCatalogView(english: english) }
             #if os(iOS)
             Button { showingMarker = true } label: {
                 Label(english ? "Marker workshop · A4 PDF" : "Pastal atölyesi · A4 PDF", systemImage: "scissors")

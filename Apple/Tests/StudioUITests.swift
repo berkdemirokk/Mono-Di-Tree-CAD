@@ -1,6 +1,19 @@
 import XCTest
 
 final class StudioUITests: XCTestCase {
+    func testCatalogueOpensWithoutChangingTheCurrentDrawing() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-interfaceEnglish", "YES"]
+        app.launch()
+        let catalogue = app.buttons["factory-catalog"]
+        XCTAssertTrue(catalogue.waitForExistence(timeout: 15))
+        catalogue.tap()
+        XCTAssertTrue(app.navigationBars["Model catalogue"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["factory-catalog-import"].exists)
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["marker-workspace"].waitForExistence(timeout: 5))
+    }
+
     func testWorkshopLanguageAndMissingSource() {
         let app = XCUIApplication()
         app.launchArguments += ["-interfaceEnglish", "YES"]

@@ -69,8 +69,9 @@ enum MarkerWorkOrderParser {
             guard values.count == 1 else { issue("\(tr) eksik veya çelişkili.", "\(en) is missing or conflicting."); return nil }
             return values.first
         }
-        let modelPattern = #"(?<![a-z0-9-])\d+\s*-\s*\d+\s*-\s*\d+(?![a-z0-9-])"#
+        let modelPattern = #"(?<![a-z0-9.-])(?:\d+\s*-\s*\d+\s*-\s*\d+|\d+\s*-\s*\d{3,})(?![a-z0-9.-])"#
         order.model = unique(matches(modelPattern, text).map { replace(#"\s"#, group($0, 0, text), "") }, "Model kodu", "Model code")
+        if let model = order.model, !ModelCodeFormat.valid(model) { issue("Model kodu geçersiz.", "Invalid model code.") }
         text = replace(modelPattern, text, " ")
         let widthPattern = #"\b(?:en|eni|eninde)\s*[:=]?\s*("# + number + #")\s*(mm|cm|m|milimetre|santim|santimetre|metre)\b"#
         let reverseWidth = "(" + number + #")\s*(mm|cm|m|milimetre|santim|santimetre|metre)\s*(?:eninde|en|ende)\b"#

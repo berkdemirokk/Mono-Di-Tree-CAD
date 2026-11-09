@@ -45,6 +45,13 @@ final class MarkerHistoryPreviewTests: XCTestCase {
         edit(&snapshot); project["NestingSnapshot"] = snapshot; return project
     }
 
+    func testTwoPartModelCodeSurvivesHistoricalRequestValidation() throws {
+        let original = try project(sourceText: order.replacingOccurrences(of: "1-2-3052", with: "2-26558"))
+        let changed = changeHistory(original) { $0["ModelCode"] = "2-26558" }
+        let preview = try MarkerHistoryPreview.load(data(changed))
+        XCTAssertEqual(preview.modelCode, "2-26558")
+    }
+
     func testReadsHistoricalRequestWithoutOpeningLinkedSourceAndKeepsBytes() throws {
         let original = try data(project()), before = original
         let preview = try MarkerHistoryPreview.load(original)

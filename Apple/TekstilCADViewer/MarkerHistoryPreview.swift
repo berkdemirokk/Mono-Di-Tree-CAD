@@ -43,7 +43,7 @@ struct MarkerHistoryPreview {
         guard let raw = snapshot["WorkOrderHistory"] as? [String: Any] else { throw Failure.invalid }
         try fields(raw, required: ["ModelCode", "SourceText", "SizeQuantities", "PieceQuantities"], optional: ["Source"])
         let model = try text(raw["ModelCode"], limit: 64)
-        guard matches(#"^[0-9]+-[0-9]+-[0-9]+$"#, model), model.utf16.count >= 5 else { throw Failure.invalid }
+        guard ModelCodeFormat.valid(model) else { throw Failure.invalid }
         let sourceText = try text(raw["SourceText"], limit: 12_000)
         let order = try ParsedOrder(sourceText)
         guard equal(model, order.model) else { throw Failure.invalid }
@@ -247,7 +247,11 @@ struct MarkerHistoryPreview {
             var remainder = try Self.replace("(?<![a-z0-9-])(\(part))\\s*(?:-|tire)\\s*(\(part))\\s*(?:-|tire)\\s*(\(part))(?![a-z0-9-])", input) { match in
                 models.append((1...3).map { words[match.g($0)] ?? match.g($0) }.joined(separator: "-")); return " "
             }
+            remainder = try Self.replace("(?<![a-z0-9.-])(\(part))\\s*(?:-|tire)\\s*([0-9]{3,})(?![a-z0-9.-])", remainder) { match in
+                models.append((words[match.g(1)] ?? match.g(1)) + "-" + match.g(2)); return " "
+            }
             model = try Self.one(models)
+            guard ModelCodeFormat.valid(model) else { throw Failure.invalid }
             var widths: [Double] = []
             remainder = try Self.replace("(?:(?:\\b(?:en|eni|eninde|tela)\\s*[:=]?\\s*)(\(n))\\s*(\(unit))|(\(n))\\s*(\(unit))\\s*(?:eninde|en|ende)\\b)", remainder) { match in
                 let value = try Self.numeric(match.g(1).isEmpty ? match.g(3) : match.g(1))
