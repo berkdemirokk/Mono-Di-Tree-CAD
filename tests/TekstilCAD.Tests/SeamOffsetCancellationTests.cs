@@ -47,17 +47,15 @@ public sealed class SeamOffsetCancellationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void UncancelledUnverifiedLobedContourRetainsDetachedPreview(bool reverse)
+    public void UncancelledUnverifiedContourRetainsDetachedPreview(bool reverse)
     {
-        var source = new PatternPiece { Points = Enumerable.Range(0, 512).Select(i =>
-        {
-            double a = Math.Tau * i / 512, r = 1000 + 200 * Math.Cos(3 * a);
-            return new Point2(r * Math.Cos(a), r * Math.Sin(a));
-        }).ToList() };
+        // A narrow recess that the allowance seals is the genuinely unverifiable
+        // case; the dense smooth lobed contour is verified and must succeed.
+        var source = new PatternPiece { Points = [new(0,0),new(100,0),new(100,100),new(52,100),new(52,20),new(48,20),new(48,100),new(0,100)] };
         if (reverse) source.Points.Reverse();
         var before = source.Points.ToArray();
         using var cancellation = new CancellationTokenSource();
-        var failure = Assert.Throws<OffsetLocalDetailUnverifiedException>(() => PatternTools.Offset(source, 1, cancellation.Token));
+        var failure = Assert.Throws<OffsetLocalDetailUnverifiedException>(() => PatternTools.Offset(source, 5, cancellation.Token));
         Assert.False(failure.Preview.IsDefaultOrEmpty);
         var preview = failure.Preview.ToArray();
         Assert.All(preview, p => Assert.True(p.IsFinite));

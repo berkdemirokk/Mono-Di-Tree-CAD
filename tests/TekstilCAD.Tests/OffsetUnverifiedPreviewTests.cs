@@ -8,12 +8,12 @@ public class OffsetUnverifiedPreviewTests
     [Fact]
     public void UnverifiedContourIsImmutablePreviewAndSourceIsUnchanged()
     {
-        var source=new PatternPiece { Name="Loblu kontur", Closed=true, Points=Enumerable.Range(0,512).Select(i=>{
-            double a=Math.Tau*i/512,r=1000+200*Math.Cos(3*a);
-            return new Point2(r*Math.Cos(a),r*Math.Sin(a));
-        }).ToList() };
+        // A 4 mm wide, 80 mm deep recess is sealed by a 5 mm outward offset:
+        // the local check cannot verify that the recess survived.
+        var source=new PatternPiece { Name="Dar girintili kontur", Closed=true, Points=[new(0,0),new(100,0),new(100,100),new(52,100),
+            new(52,20),new(48,20),new(48,100),new(0,100)] };
         var before=source.Points.ToArray();
-        var failure=Assert.Throws<OffsetLocalDetailUnverifiedException>(()=>PatternTools.Offset(source,1));
+        var failure=Assert.Throws<OffsetLocalDetailUnverifiedException>(()=>PatternTools.Offset(source,5));
         Assert.False(failure.Preview.IsDefaultOrEmpty);
         var captured=failure.Preview.ToArray();
         Assert.All(captured,p=>{ Assert.True(double.IsFinite(p.X)); Assert.True(double.IsFinite(p.Y)); });

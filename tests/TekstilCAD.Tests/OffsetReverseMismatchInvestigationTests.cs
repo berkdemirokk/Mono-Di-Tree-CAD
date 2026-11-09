@@ -26,14 +26,17 @@ public sealed class OffsetReverseMismatchInvestigationTests(ITestOutputHelper lo
         var sourceToRecovered = LargestSampleDistance(path, recovered);
         var recoveredToSource = LargestSampleDistance(recovered, path);
         log.WriteLine($"reverse={reverse}; source->recovered={sourceToRecovered:G17} grid units; recovered->source={recoveredToSource:G17} grid units; forward vertices={forward.Count}; recovered vertices={recovered.Count}");
-        // This establishes which independent measurement triggers the current 8-unit
-        // guard. It does not establish that the forward offset preserves features.
-        Assert.True(Math.Max(sourceToRecovered, recoveredToSource) > 8);
-        Assert.Throws<OffsetLocalDetailUnverifiedException>(() => PatternTools.Offset(new PatternPiece
+        // Only the source-to-recovered direction is a safety property. The reverse
+        // direction also measures Clipper's extra miter vertices in the
+        // reconstruction (516 vs 512 here), which are not lost source features.
+        Assert.True(sourceToRecovered <= 8);
+        Assert.True(recoveredToSource > 8);
+        var offset = PatternTools.Offset(new PatternPiece
         {
             Closed = true,
             Points = path.Select(p => new Point2(p.X / scale, p.Y / scale)).ToList()
-        }, 1));
+        }, 1);
+        Assert.True(offset.Points.Count >= 512);
     }
 
     private static double LargestSampleDistance(Path64 source, Path64 target)

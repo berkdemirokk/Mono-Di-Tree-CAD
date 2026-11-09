@@ -101,16 +101,13 @@ public static class PatternTools
         cancellationToken.ThrowIfCancellationRequested();
         if (recovered.Count != 1) throw new ArgumentException("Dikiş payı kontur yapısını değiştiriyor; işlem uygulanmadı.");
         // A global area budget can hide a small lost notch on a large perimeter.
-        // Check local vertices and edge midpoints in both directions, in grid units.
+        // Check every source vertex and edge midpoint against the reconstructed
+        // source, in grid units. Only the source-to-recovered direction is a
+        // safety property: the reverse direction also measures Clipper's extra
+        // miter vertices in the reconstruction, which are not lost features.
         // This is a conservative sampling check, not a proof of Hausdorff distance.
         var sourceMatches=LocallyMatchesWithDiagnostic(path,recovered[0],8.0,cancellationToken,out var failingIndex,out var failingSample);
-        var reverseMatches = LocallyMatchesWithCancellation(recovered[0], path, 8.0, cancellationToken);
-        // Clipper2'nin ters ofseti bazı konturlarda (özellikle içbükey çinkler
-        // içeren) vertex bazlı 8-grid doğrulama ile tam olarak eşleşmeyebilir.
-        // Büyük değişiklikler (çentik kaybolması, kontur şeklinin değişmesi)
-        // XOR alanı kontrolüyle hala yakalanır, bu yüzden vertex bazlı doğrulama
-        // başarısız olduğunda sadece XOR alanı kontrolüne geçilir.
-        if (!sourceMatches || !reverseMatches)
+        if (!sourceMatches)
         {
             // The local check may return false just as cancellation is requested.
             // Do not replace that cancellation with a validation failure or copy
@@ -122,6 +119,7 @@ public static class PatternTools
                 preview.Add(new Point2(p.X / scale, p.Y / scale));
             }
             cancellationToken.ThrowIfCancellationRequested();
+            throw new OffsetLocalDetailUnverifiedException(preview, failingIndex, failingSample);
         }
         cancellationToken.ThrowIfCancellationRequested();
         var difference = Clipper.Xor(new Paths64 { path }, recovered, FillRule.NonZero);
