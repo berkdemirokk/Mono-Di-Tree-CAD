@@ -66,4 +66,39 @@ final class FixtureLoadingTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Arka Beden"].exists)
         XCTAssertTrue(app.staticTexts["2 parça • Ölçekli üretim çıktısı değildir"].exists)
     }
+
+    func testInvalidJSONShowsError() {
+        let app = launch(with: "invalid-json")
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].staticTexts["Desteklenmeyen proje biçimi."].exists)
+    }
+
+    func testMissingNameShowsError() {
+        let app = launch(with: "missing-name")
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].staticTexts["Proje adı veya parça listesi eksik ya da sınır dışında."].exists)
+    }
+
+    func testMissingPiecesShowsError() {
+        let app = launch(with: "missing-pieces")
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].staticTexts["Proje adı veya parça listesi eksik ya da sınır dışında."].exists)
+    }
+
+    func testMissingClosedShowsError() {
+        let app = launch(with: "missing-closed")
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].staticTexts["Parça konturu eksik veya sınır dışında."].exists)
+    }
+
+    func testNaNCoordinateShowsError() {
+        let app = launch(with: "nan-coordinate")
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.alerts["Dosya açılamadı"].staticTexts["Geçersiz veya gösterilemeyen koordinat."].exists)
+    }
+
+    func testManyPiecesFixtureLoads() {
+        let app = launch(with: "many-pieces")
+        XCTAssertTrue(app.staticTexts["Çok Fazla Parça"].waitForExistence(timeout: 15))
+    }
 }
