@@ -59,9 +59,11 @@ public static class LayerTools
     public static void Rename(ProjectDocument document, Guid layerId, string name)
     {
         ArgumentNullException.ThrowIfNull(document);
+        var current = Find(document, layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
+        var validated = ValidateName(name);
+        if (string.Equals(current.Name, validated, StringComparison.Ordinal)) return; // etkisiz işlem: listeyi materialize etme
         var layers = Materialize(document);
         var layer = layers.FirstOrDefault(candidate => candidate.Id == layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
-        var validated = ValidateName(name);
         if (layers.Any(other => other.Id != layerId && string.Equals(other.Name, validated, StringComparison.Ordinal)))
             throw new ArgumentException("Bu adda bir katman zaten var.", nameof(name));
         layer.Name = validated;
@@ -70,6 +72,8 @@ public static class LayerTools
     public static void SetVisible(ProjectDocument document, Guid layerId, bool visible)
     {
         ArgumentNullException.ThrowIfNull(document);
+        var current = Find(document, layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
+        if (current.Visible == visible) return; // etkisiz işlem: listeyi materialize etme, sürüm 8'e sessiz geçiş yapma
         var layer = Materialize(document).FirstOrDefault(candidate => candidate.Id == layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
         layer.Visible = visible;
     }
@@ -77,6 +81,8 @@ public static class LayerTools
     public static void SetLocked(ProjectDocument document, Guid layerId, bool locked)
     {
         ArgumentNullException.ThrowIfNull(document);
+        var current = Find(document, layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
+        if (current.Locked == locked) return; // etkisiz işlem: listeyi materialize etme, sürüm 8'e sessiz geçiş yapma
         var layer = Materialize(document).FirstOrDefault(candidate => candidate.Id == layerId) ?? throw new ArgumentException("Katman bulunamadı.", nameof(layerId));
         layer.Locked = locked;
     }
