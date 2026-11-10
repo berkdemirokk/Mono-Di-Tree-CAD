@@ -3,6 +3,7 @@
     platform: iOS
     sources:
       - path: Tests/ViewerUITests.swift
+      - path: Tests/FixtureLoadingTests.swift
       - path: Tests/Fixtures
         buildPhase: resources
     dependencies:

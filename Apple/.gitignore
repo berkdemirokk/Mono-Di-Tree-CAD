@@ -1,0 +1,32 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+DerivedData/
+*.xcresult/
+
+# Build outputs
+build/
+*.ipa
+*.xcarchive
+
+# Swift Package Manager
+.build/
+*.xcodeproj/project.xcworkspace/
+
+# macOS
+.DS_Store
+
+# Signing artifacts (never commit)
+*.p12
+*.mobileprovision
+*.p8
+*.keychain-db
+
+# Xcode temporary files
+*.xcodeproj/*.pbxuser
+*.xcodeproj/*.mode1v3
+*.xcodeproj/*.mode2v3
+*.xcodeproj/*.perspectivev3
