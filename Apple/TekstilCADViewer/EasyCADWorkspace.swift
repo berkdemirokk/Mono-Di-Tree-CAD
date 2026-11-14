@@ -108,6 +108,10 @@ struct EasyCADWorkspace: View {
     @State private var problem: String?
     @State private var success: String?
     @State private var exportURL: URL?
+    @State private var snapToFiveMillimeters = true
+    @State private var dragStarted = false
+    @State private var draggedPieceID: UUID?
+    @State private var currentDrag = CGSize.zero
 
     init(example: Bool, resume: Bool = false) {
         let initial = resume ? (CADLocalDraftStore.load() ?? DraftProject.blank)
@@ -164,7 +168,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func addRectangle() {
-        guard document.pieces.count < 10_000 else { problem = "Parça sınırına ulaşıldı."; return }
+        guard document.pieces.count < 250 else { problem = "Parça sınırına ulaşıldı."; return }
         var updated = document
         let start = Double(document.pieces.count) * 20
         let piece = DraftPiece(name: "Dikdörtgen \(document.pieces.count + 1)", closed: true, points: [
@@ -177,7 +181,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func addLine() {
-        guard document.pieces.count < 10_000 else { problem = "Parça sınırına ulaşıldı."; return }
+        guard document.pieces.count < 250 else { problem = "Parça sınırına ulaşıldı."; return }
         var updated = document
         let start = Double(document.pieces.count) * 20
         let piece = DraftPiece(name: "Çizgi \(document.pieces.count + 1)", closed: false, points: [
@@ -247,7 +251,7 @@ struct EasyCADWorkspace: View {
             problem = "Kalıp çalışma alanı sınırını aşıyor."; return
         }
         updated.pieces[index].points = points
-        commit(updated, notice: "Parça 10 mm taşındı.")
+        commit(updated, notice: "Parça taşındı.")
         select(document.pieces[index])
     }
 
@@ -267,7 +271,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func duplicateSelected() {
-        guard let index = selectedIndex, document.pieces.count < 10_000 else { return }
+        guard let index = selectedIndex, document.pieces.count < 250 else { return }
         var updated = document
         var copy = updated.pieces[index]
         copy.id = UUID()
@@ -357,6 +361,12 @@ struct EasyCADWorkspace: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("1 · Çizimin", systemImage: "pencil.tip").font(.headline)
                         preview
+                        if !document.pieces.isEmpty {
+                            Toggle("Sürüklerken 5 mm'ye hizala", isOn: $snapToFiveMillimeters)
+                                .font(.caption)
+                            Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         if document.pieces.isEmpty {
                             Text("Çalışma alanın boş. Aşağıdan dikdörtgen veya çizgi ekle.")
                                 .foregroundStyle(.secondary)
@@ -491,40 +501,138 @@ struct EasyCADWorkspace: View {
         }
     }
 
+    // Drawing, hit testing and finger movement share the same transform.
+    private struct PreviewTransform {
+        let scale: Double
+        let minX: Double
+        let minY: Double
+        let offsetX: Double
+        let offsetY: Double
+        let height: Double
+
+        func point(_ p: DraftPoint) -> CGPoint {
+            CGPoint(x: offsetX + (p.x - minX) * scale,
+                    y: height - offsetY - (p.y - minY) * scale)
+        }
+    }
+
+    private func transform(_ size: CGSize) -> PreviewTransform? {
+        let points = document.pieces.flatMap(\.points)
+        guard let first = points.first, size.width > 40, size.height > 40 else { return nil }
+        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
+        for p in points {
+            minX = min(minX, p.x); maxX = max(maxX, p.x)
+            minY = min(minY, p.y); maxY = max(maxY, p.y)
+        }
+        let w = max(maxX - minX, 1), h = max(maxY - minY, 1)
+        let scale = min(max((Double(size.width) - 32) / w, 0.000001),
+                        max((Double(size.height) - 32) / h, 0.000001))
+        guard scale.isFinite, scale > 0 else { return nil }
+        return PreviewTransform(scale: scale, minX: minX, minY: minY,
+            offsetX: (Double(size.width) - (maxX - minX) * scale) / 2,
+            offsetY: (Double(size.height) - (maxY - minY) * scale) / 2,
+            height: Double(size.height))
+    }
+
+    private func segmentDistance(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> Double {
+        let dx = Double(b.x - a.x), dy = Double(b.y - a.y)
+        let d2 = dx * dx + dy * dy
+        let t = d2 < 1e-12 ? 0 : max(0, min(1,
+            (Double(p.x - a.x) * dx + Double(p.y - a.y) * dy) / d2))
+        return hypot(Double(p.x - a.x) - t * dx, Double(p.y - a.y) - t * dy)
+    }
+
+    private func inside(_ point: CGPoint, polygon: [CGPoint]) -> Bool {
+        guard polygon.count >= 3 else { return false }
+        var isInside = false
+        var j = polygon.count - 1
+        for i in polygon.indices {
+            let a = polygon[i], b = polygon[j]
+            if (a.y > point.y) != (b.y > point.y) {
+                let edgeX = Double(b.x - a.x) * Double(point.y - a.y) /
+                    Double(b.y - a.y) + Double(a.x)
+                if Double(point.x) < edgeX { isInside.toggle() }
+            }
+            j = i
+        }
+        return isInside
+    }
+
+    private func hitPiece(_ point: CGPoint, size: CGSize) -> DraftPiece? {
+        guard let transform = transform(size) else { return nil }
+        var closest: (piece: DraftPiece, distance: Double)?
+        for piece in document.pieces.reversed() {
+            let vertices = piece.points.map(transform.point)
+            if piece.closed && inside(point, polygon: vertices) { return piece }
+            guard vertices.count >= 2 else { continue }
+            let count = piece.closed ? vertices.count : vertices.count - 1
+            for index in 0..<count {
+                let d = segmentDistance(point, vertices[index], vertices[(index + 1) % vertices.count])
+                if closest == nil || d < closest!.distance { closest = (piece, d) }
+            }
+        }
+        return (closest?.distance ?? Double.infinity) <= 24 ? closest?.piece : nil
+    }
+
+    private func finishDrag(_ translation: CGSize, size: CGSize) {
+        defer { dragStarted = false; draggedPieceID = nil; currentDrag = .zero }
+        guard draggedPieceID != nil, let transform = transform(size) else { return }
+        var dx = Double(translation.width) / transform.scale
+        var dy = -Double(translation.height) / transform.scale
+        guard dx.isFinite, dy.isFinite else { return }
+        if snapToFiveMillimeters {
+            dx = (dx / 5).rounded() * 5
+            dy = (dy / 5).rounded() * 5
+        }
+        guard dx.isFinite, dy.isFinite, abs(dx) <= 100_000_000, abs(dy) <= 100_000_000 else {
+            problem = "Sürükleme çalışma alanını aşıyor."
+            return
+        }
+        if dx != 0 || dy != 0 { move(dx: dx, dy: dy) }
+    }
+
     private var preview: some View {
-        Canvas { context, size in
-            let points = document.pieces.flatMap(\.points)
-            guard let first = points.first else { return }
-            var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-            for point in points {
-                minX = min(minX, point.x); maxX = max(maxX, point.x)
-                minY = min(minY, point.y); maxY = max(maxY, point.y)
+        GeometryReader { geometry in
+            Canvas { context, size in
+                guard let mapper = transform(size) else { return }
+                for piece in document.pieces {
+                    guard let first = piece.points.first else { continue }
+                    let delta = piece.id == draggedPieceID ? currentDrag : .zero
+                    func position(_ p: DraftPoint) -> CGPoint {
+                        let q = mapper.point(p)
+                        return CGPoint(x: q.x + delta.width, y: q.y + delta.height)
+                    }
+                    var path = Path()
+                    path.move(to: position(first))
+                    for p in piece.points.dropFirst() { path.addLine(to: position(p)) }
+                    if piece.closed { path.closeSubpath() }
+                    context.stroke(path,
+                        with: .color(piece.id == selectedID ? .accentColor : .secondary),
+                        lineWidth: piece.id == selectedID ? 3 : 1.8)
+                }
             }
-            let width = max(maxX - minX, 1)
-            let height = max(maxY - minY, 1)
-            let scale = min(max((Double(size.width) - 32) / width, 0.000001),
-                            max((Double(size.height) - 32) / height, 0.000001))
-            let offsetX = (Double(size.width) - (maxX - minX) * scale) / 2
-            let offsetY = (Double(size.height) - (maxY - minY) * scale) / 2
-            func position(_ point: DraftPoint) -> CGPoint {
-                CGPoint(x: offsetX + (point.x - minX) * scale,
-                        y: Double(size.height) - offsetY - (point.y - minY) * scale)
-            }
-            for piece in document.pieces {
-                guard let first = piece.points.first else { continue }
-                var path = Path()
-                path.move(to: position(first))
-                for point in piece.points.dropFirst() { path.addLine(to: position(point)) }
-                if piece.closed { path.closeSubpath() }
-                context.stroke(path,
-                               with: .color(piece.id == selectedID ? .accentColor : .secondary),
-                               lineWidth: piece.id == selectedID ? 3 : 1.8)
-            }
+            .contentShape(Rectangle())
+            .simultaneousGesture(SpatialTapGesture().onEnded { value in
+                select(hitPiece(value.location, size: geometry.size))
+            })
+            .simultaneousGesture(DragGesture(minimumDistance: 8)
+                .onChanged { value in
+                    if !dragStarted {
+                        dragStarted = true
+                        let piece = hitPiece(value.startLocation, size: geometry.size)
+                        draggedPieceID = piece?.id
+                        if let piece { select(piece) }
+                    }
+                    if draggedPieceID != nil { currentDrag = value.translation }
+                }
+                .onEnded { value in
+                    finishDrag(value.translation, size: geometry.size)
+                })
         }
         .frame(height: 260)
         .frame(maxWidth: .infinity)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
-        .accessibilityLabel("Kalıp çiziminin ölçekli olmayan önizlemesi")
-        .accessibilityHint("Düzenlemek için Parça seç menüsünü ve aşağıdaki araçları kullanın.")
+        .accessibilityLabel("Dokunarak parça seçebileceğiniz kalıp önizlemesi")
+        .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Alternatif: Parça seç menüsü.")
     }
 }
