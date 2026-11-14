@@ -5,13 +5,70 @@ import UniformTypeIdentifiers
 @main
 struct TekstilCADViewerApp: App {
     var body: some Scene {
+        #if os(macOS)
+        Window("Mono Di Tree CAD", id: "workspace") { ContentView() }
+        #else
         WindowGroup { ContentView() }
+        #endif
     }
 }
 
 private struct ContentView: View {
+    private struct EditorRoute: Identifiable {
+        let id = UUID()
+        let example: Bool
+        let document: DraftProject?
+
+        init(example: Bool = false, document: DraftProject? = nil) {
+            self.example = example
+            self.document = document
+        }
+    }
+
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var editorRoute: EditorRoute?
+    @State private var hasLocalDraft = false
+    @State private var recentProjects: [CADProjectLibrary.Entry] = []
+    @State private var didStart = false
+    @State private var recentRefresh = UUID()
+
+    private func refreshProjects() {
+        do { hasLocalDraft = try CADLocalDraftStore.restore() != nil }
+        catch { self.error = "Taslak okunamadı. \(error.localizedDescription)" }
+        recentRefresh = UUID()
+    }
+
+    @MainActor
+    private func readRecentProjects() async {
+        let result = await Task.detached(priority: .userInitiated) {
+            Result { try CADProjectLibrary.recent() }
+        }.value
+        guard !Task.isCancelled else { return }
+        switch result {
+        case .success(let entries): recentProjects = entries
+        case .failure(let failure): error = "Son projeler okunamadı. \(failure.localizedDescription)"
+        }
+    }
+
+    private func resumeEditor() {
+        do {
+            guard let draft = try CADLocalDraftStore.restore() else {
+                throw ViewerError.message("Kaydedilmiş taslak bulunamadı.")
+            }
+            editorRoute = EditorRoute(document: draft)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func openEditor(_ route: EditorRoute) {
+        do {
+            try CADLocalDraftStore.archiveBeforeSwitch()
+            editorRoute = route
+        } catch {
+            self.error = "Önceki taslak korunamadığı için yeni çalışma açılmadı. \(error.localizedDescription)"
+        }
+    }
+
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -21,16 +78,40 @@ private struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack {
-                Button(".tcad aç") { loadRequest = UUID(); isLoading = false; showingImporter = true }
-                    .accessibilityHint("Önizlemek için bir proje dosyası seçin")
-                Spacer()
-                if let project { Text(project.name).font(.headline).lineLimit(1) }
-            }
-            Text("Yalnızca proje önizlemesi. Düzenleme, serileme, pastal ve üretim çıktıları desteklenmez.")
-                .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
             if let project {
+                HStack {
+                    Button {
+                        loadRequest = UUID()
+                        isLoading = false
+                        self.project = nil
+                        selectedPiece = nil
+                    } label: {
+                        Label("Projeler", systemImage: "chevron.backward")
+                            .frame(minHeight: 44)
+                    }
+                    Spacer()
+                    Text(project.name).font(.headline).lineLimit(1)
+                }
+                if hasLocalDraft { resumeButton }
+                if let editableDraft = project.editableDraft {
+                    Button {
+                        var copy = editableDraft
+                        copy.id = UUID()
+                        openEditor(EditorRoute(document: copy))
+                    } label: {
+                        Label("Kopyasını düzenle", systemImage: "square.on.square")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Bu basit çizimin yeni düzenlenebilir bir kopyasını açar. Kaynak dosyayı değiştirmez.")
+                }
+                if let notice = project.formatNotice {
+                    Text(notice)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .accessibilityAddTraits(.isStaticText)
+                }
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
                         HStack {
@@ -55,6 +136,7 @@ private struct ContentView: View {
                     }
                     DrawingView(
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces,
+                        bounds: selectedPiece.flatMap { project.pieces[$0].bounds } ?? project.bounds,
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi"
                     )
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
@@ -69,13 +151,14 @@ private struct ContentView: View {
                 Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                Spacer()
-                Text("Önizlemek için bir .tcad dosyası açın.").foregroundStyle(.secondary)
-                Spacer()
+                home.disabled(isLoading)
             }
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
+        .sheet(item: $editorRoute, onDismiss: refreshProjects) { route in
+            EasyCADWorkspace(example: route.example, imported: route.document)
+        }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
                 let url = try result.get()
@@ -101,10 +184,21 @@ private struct ContentView: View {
                         }
                     }
                 }
+            } catch let failure as NSError where failure.domain == NSCocoaErrorDomain && failure.code == NSUserCancelledError {
+                // The Files picker was dismissed without selecting a project.
             } catch { self.error = error.localizedDescription }
         }
-        #if DEBUG && targetEnvironment(simulator)
         .onAppear {
+            guard !didStart else { return }
+            didStart = true
+            #if DEBUG && targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-draft") {
+                CADLocalDraftStore.discard()
+                CADProjectLibrary.resetTestLibrary()
+            }
+            #endif
+            refreshProjects()
+            #if DEBUG && targetEnvironment(simulator)
             guard ProcessInfo.processInfo.arguments.contains("--ui-test-fixture"),
                   let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
                   let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
@@ -118,12 +212,84 @@ private struct ContentView: View {
                 drawingRevision = UUID()
                 project = drawing
             } catch { self.error = error.localizedDescription }
+            #endif
         }
-        #endif
+        .task(id: recentRefresh) {
+            if didStart { await readRecentProjects() }
+        }
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
     }
+
+    private var resumeButton: some View {
+        Button(action: resumeEditor) {
+            Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityHint("Cihazda otomatik kaydedilmiş taslağı açar.")
+    }
+
+    private var home: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("MONO DI TREE").font(.caption.bold()).tracking(3)
+                    .foregroundStyle(.secondary)
+                Text("Kalıbını kolayca oluştur").font(.title.bold())
+                Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
+                    .foregroundStyle(.secondary)
+
+                Button { openEditor(EditorRoute()) } label: {
+                    Label("Yeni proje oluştur", systemImage: "plus.square")
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                Button { openEditor(EditorRoute(example: true)) } label: {
+                    Label("Örnekle dene", systemImage: "hand.tap")
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                }
+                .buttonStyle(.bordered)
+                Button { showingImporter = true } label: {
+                    Label("Dosya aç (.tcad)", systemImage: "folder")
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityHint("Dosyalardan bir proje seçerek konturlarını önizleyin.")
+
+                Divider()
+                Text("Son projeler").font(.headline).accessibilityAddTraits(.isHeader)
+                if hasLocalDraft { resumeButton }
+                if recentProjects.isEmpty && !hasLocalDraft {
+                    Text("Kaydettiğin projeler burada görünür.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(recentProjects) { entry in
+                    Button {
+                        do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
+                        catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
+                    } label: {
+                        HStack {
+                            Image(systemName: "doc")
+                            VStack(alignment: .leading) {
+                                Text(entry.name)
+                                Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.forward").font(.caption)
+                        }
+                        .frame(minHeight: 48)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
 }
 
 private enum ViewerError: LocalizedError {
@@ -133,10 +299,38 @@ private enum ViewerError: LocalizedError {
 
 private struct Drawing {
     struct Point { let x: Double; let y: Double }
+    struct Bounds {
+        var minX: Double
+        var maxX: Double
+        var minY: Double
+        var maxY: Double
+
+        init(_ point: Point) {
+            minX = point.x
+            maxX = point.x
+            minY = point.y
+            maxY = point.y
+        }
+
+        mutating func include(_ point: Point) {
+            minX = min(minX, point.x)
+            maxX = max(maxX, point.x)
+            minY = min(minY, point.y)
+            maxY = max(maxY, point.y)
+        }
+
+        mutating func include(_ other: Bounds) {
+            minX = min(minX, other.minX)
+            maxX = max(maxX, other.maxX)
+            minY = min(minY, other.minY)
+            maxY = max(maxY, other.maxY)
+        }
+    }
     struct Grain { let start: Point; let end: Point; let needsReview: Bool }
     struct Piece {
         let name: String?
         let points: [Point]
+        let bounds: Bounds?
         let closed: Bool
         let role: String?
         let size: String?
@@ -154,6 +348,9 @@ private struct Drawing {
     }
     let name: String
     let pieces: [Piece]
+    let bounds: Bounds?
+    let formatNotice: String?
+    let editableDraft: DraftProject?
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -169,34 +366,196 @@ private struct Drawing {
               CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
         return number.boolValue
     }
-    static func load(_ url: URL) throws -> Drawing {
-        let values = try url.resourceValues(forKeys: [.fileSizeKey])
-        if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        let data = try Data(contentsOf: url)
-        guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        let root = try JSONSerialization.jsonObject(with: data)
-        let object: [String: Any]
-        if let array = root as? [Any], array.count == 2,
-           let version = array[0] as? Int, (1...5).contains(version), let body = array[1] as? [String: Any] {
-            object = body
-        } else if let body = root as? [String: Any] { object = body }
-        else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
-        guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
-            throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
-        }
-        var total = 0
-        var pieces: [Piece] = []
-        for raw in rawPieces {
-            guard let rawPoints = raw["Points"] as? [[String: Any]], rawPoints.count <= 10_000,
-                  let closed = jsonBoolean(raw["Closed"]) else { throw ViewerError.message("Parça konturu eksik veya sınır dışında.") }
-            total += rawPoints.count
-            guard total <= 200_000 else { throw ViewerError.message("Toplam nokta sınırı aşıldı.") }
-            let points: [Point] = try rawPoints.map { point in
+
+    /// Bir parça sözlüğünden ekran polilinesini üretir. Sürüm 9'da `Curues`,
+    /// diğer sürümlerde `Points` okunur.
+    private static func piecePoints(from raw: [String: Any], schemaVersion: Int, closed: Bool) throws -> [Point] {
+        if schemaVersion == 9, let rawCurves = raw["Curves"] as? [[String: Any]], !rawCurves.isEmpty {
+            var sampled: [Point] = []
+            for (index, curve) in rawCurves.enumerated() {
+                guard let kind = curve["$type"] as? String else {
+                    throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                }
+                let curvePoints: [Point]
+                switch kind {
+                case "line":
+                    guard let s = curve["Start"] as? [String: Any],
+                          let e = curve["End"] as? [String: Any],
+                          let sx = jsonNumber(s["X"]), let sy = jsonNumber(s["Y"]),
+                          let ex = jsonNumber(e["X"]), let ey = jsonNumber(e["Y"]),
+                          sx.isFinite, sy.isFinite, ex.isFinite, ey.isFinite,
+                          abs(sx) <= 100_000_000, abs(sy) <= 100_000_000,
+                          abs(ex) <= 100_000_000, abs(ey) <= 100_000_000 else {
+                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                    }
+                    curvePoints = [Point(x: sx, y: sy), Point(x: ex, y: ey)]
+                case "cubicBezier":
+                    guard let p0 = curve["P0"] as? [String: Any],
+                          let p1 = curve["P1"] as? [String: Any],
+                          let p2 = curve["P2"] as? [String: Any],
+                          let p3 = curve["P3"] as? [String: Any],
+                          let x0 = jsonNumber(p0["X"]), let y0 = jsonNumber(p0["Y"]),
+                          let x1 = jsonNumber(p1["X"]), let y1 = jsonNumber(p1["Y"]),
+                          let x2 = jsonNumber(p2["X"]), let y2 = jsonNumber(p2["Y"]),
+                          let x3 = jsonNumber(p3["X"]), let y3 = jsonNumber(p3["Y"]),
+                          [x0, y0, x1, y1, x2, y2, x3, y3].allSatisfy({ $0.isFinite && abs($0) <= 100_000_000 }) else {
+                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                    }
+                    let bezier = CurveSegment.cubicBezier(p0: Point(x: x0, y: y0), p1: Point(x: x1, y: y1),
+                                                          p2: Point(x: x2, y: y2), p3: Point(x: x3, y: y3))
+                    curvePoints = bezier.sampled()
+                case "arc":
+                    guard let c = curve["Center"] as? [String: Any],
+                          let cx = jsonNumber(c["X"]), let cy = jsonNumber(c["Y"]),
+                          let radius = jsonNumber(curve["Radius"]), radius.isFinite, radius > 0,
+                          let startAngle = jsonNumber(curve["StartAngle"]), startAngle.isFinite,
+                          let sweepAngle = jsonNumber(curve["SweepAngle"]), sweepAngle.isFinite,
+                          abs(cx) <= 100_000_000, abs(cy) <= 100_000_000 else {
+                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                    }
+                    let arc = CurveSegment.arc(center: Point(x: cx, y: cy), radius: radius,
+                                               startAngle: startAngle, sweepAngle: sweepAngle)
+                    curvePoints = arc.sampled()
+                default:
+                    throw ViewerError.message("Bilinmeyen parametrik kontur türü.")
+                }
+                if index > 0, let last = sampled.last, let first = curvePoints.first, last == first {
+                    sampled.append(contentsOf: curvePoints.dropFirst())
+                } else {
+                    sampled.append(contentsOf: curvePoints)
+                }
+            }
+            return sampled
+        } else {
+            guard let rawPoints = raw["Points"] as? [[String: Any]], rawPoints.count <= 10_000 else {
+                throw ViewerError.message("Parça konturu eksik veya sınır dışında.")
+            }
+            return try rawPoints.map { point in
                 guard let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
                       x.isFinite, y.isFinite, abs(x) < 1e100, abs(y) < 1e100 else {
                     throw ViewerError.message("Geçersiz veya gösterilemeyen koordinat.")
                 }
                 return Point(x: x, y: y)
+            }
+        }
+    }
+    static func load(_ url: URL) throws -> Drawing {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey])
+        if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+        let data = try CADFileIO.read(url, limit: 64 * 1024 * 1024)
+        let root: Any
+        do {
+            root = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw ViewerError.message("Desteklenmeyen proje biçimi.")
+        }
+        let object: [String: Any]
+        var schemaVersion = 0
+        if let array = root as? [Any], array.count == 2,
+           let number = array[0] as? NSNumber,
+           CFGetTypeID(number) != CFBooleanGetTypeID(),
+           number.doubleValue.isFinite, number.doubleValue.rounded() == number.doubleValue,
+           (1...9).contains(number.intValue), let body = array[1] as? [String: Any] {
+            schemaVersion = number.intValue
+            object = body
+        } else if let body = root as? [String: Any] { object = body }
+        else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
+        // Inspect only contours, not the full Windows production schema. Guard a few
+        // version-required envelopes to avoid silently accepting obviously broken files.
+        if schemaVersion == 6 {
+            let rawPieces = object["Pieces"] as? [[String: Any]] ?? []
+            guard rawPieces.contains(where: { $0["Notches"] != nil }) else {
+                throw ViewerError.message("Sürüm 6 çentik işareti içermiyor.")
+            }
+        }
+        if schemaVersion == 7 {
+            guard let nesting = object["NestingSnapshot"] as? [String: Any],
+                  nesting["RotationTrace"] is [String: Any] else {
+                throw ViewerError.message("Sürüm 7 döndürme izi eksik.")
+            }
+        }
+        if schemaVersion == 8 {
+            guard object["Layers"] is [[String: Any]] else {
+                throw ViewerError.message("Sürüm 8 katman listesi eksik.")
+            }
+        }
+        if schemaVersion == 9 {
+            let rawPieces = object["Pieces"] as? [[String: Any]] ?? []
+            var foundControls = false
+            for piece in rawPieces {
+                guard let curves = piece["Curves"] else { continue }
+                foundControls = true
+                guard jsonBoolean(piece["Closed"]) == false,
+                      let elements = curves as? [[String: Any]],
+                      !elements.isEmpty, elements.count <= 2_000 else {
+                    throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                }
+                for curve in elements {
+                    guard let kind = curve["$type"] as? String else {
+                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                    }
+                    let expected: Set<String>
+                    switch kind {
+                    case "line": expected = ["$type", "Start", "End"]
+                    case "cubicBezier": expected = ["$type", "P0", "P1", "P2", "P3"]
+                    case "arc": expected = ["$type", "Center", "Radius", "StartAngle", "SweepAngle"]
+                    default: throw ViewerError.message("Bilinmeyen parametrik kontur türü.")
+                    }
+                    guard Set(curve.keys) == expected else {
+                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                    }
+                    for key in expected where key != "$type" {
+                        if ["Radius", "StartAngle", "SweepAngle"].contains(key) {
+                            guard let number = jsonNumber(curve[key]),
+                                  number.isFinite,
+                                  (key != "Radius" || number > 0) else {
+                                throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                            }
+                        } else {
+                            guard let point = curve[key] as? [String: Any],
+                                  Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                                  let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
+                                  x.isFinite, y.isFinite,
+                                  abs(x) <= 100_000_000, abs(y) <= 100_000_000,
+                                  (point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true) else {
+                                throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                            }
+                        }
+                    }
+                }
+            }
+            guard foundControls else {
+                throw ViewerError.message("Sürüm 9 parametrik kontur içermiyor.")
+            }
+        } else if let pieces = object["Pieces"] as? [[String: Any]],
+                  pieces.contains(where: { $0["Curves"] != nil }) {
+            throw ViewerError.message("Parametrik kontur için sürüm 9 gerekir.")
+        }
+        guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
+            throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
+        }
+        var total = 0
+        var pieces: [Piece] = []
+        var bounds: Bounds?
+        for raw in rawPieces {
+            guard let closed = jsonBoolean(raw["Closed"]) else {
+                throw ViewerError.message("Parça konturu eksik veya sınır dışında.")
+            }
+            let points: [Point]
+            if schemaVersion == 9, let rawCurves = raw["Curves"] as? [[String: Any]], !rawCurves.isEmpty {
+                guard !closed else {
+                    throw ViewerError.message("Sürüm 9 parametrik konturu açık olmalıdır.")
+                }
+                points = try piecePoints(from: raw, schemaVersion: schemaVersion, closed: false)
+            } else {
+                points = try piecePoints(from: raw, schemaVersion: schemaVersion, closed: closed)
+            }
+            total += points.count
+            guard total <= 200_000 else { throw ViewerError.message("Toplam nokta sınırı aşıldı.") }
+            var pieceBounds: Bounds?
+            for p in points {
+                if pieceBounds == nil { pieceBounds = Bounds(p) }
+                else { pieceBounds?.include(p) }
             }
             let metadata = raw["Metadata"] as? [String: Any]
             let quantityNumber = metadata?["Quantity"] as? NSNumber
@@ -222,12 +581,23 @@ private struct Drawing {
             } else {
                 grainStatus = "İplik yönü: Okunamadı"
             }
-            pieces.append(Piece(name: raw["Name"] as? String, points: points, closed: closed,
+            if points.count > 1, let pieceBounds {
+                if bounds == nil { bounds = pieceBounds }
+                else { bounds?.include(pieceBounds) }
+            }
+            pieces.append(Piece(name: raw["Name"] as? String, points: points, bounds: pieceBounds, closed: closed,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
         }
-        return Drawing(name: name, pieces: pieces)
+        let formatNotice = schemaVersion == 9
+            ? "Sürüm 9: Bézier/yay kontrol parametreleri dosyada korunur ve iPhone'da düzenlenebilir. Fabrika veya kesim doğrulaması değildir."
+            : schemaVersion >= 6
+            ? "Sürüm \(schemaVersion) yalnız kontur önizlemesi: çentikler, döndürülmüş pastal izleri ve katman görünürlüğü uygulanmaz. Fabrika veya kesim doğrulaması değildir."
+            : nil
+        let editableDraft = CADSketchImport.loadEditableCopy(from: data, jsonRoot: root)
+        return Drawing(name: name, pieces: pieces, bounds: bounds, formatNotice: formatNotice,
+                       editableDraft: editableDraft)
     }
 }
 
@@ -289,18 +659,8 @@ private struct PiecePicker: View {
 private struct PieceDetails: View {
     let piece: Drawing.Piece
 
-    private var dimensions: (width: Double, height: Double)? {
-        guard let first = piece.points.first else { return nil }
-        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-        for point in piece.points.dropFirst() {
-            minX = min(minX, point.x); maxX = max(maxX, point.x)
-            minY = min(minY, point.y); maxY = max(maxY, point.y)
-        }
-        return (maxX - minX, maxY - minY)
-    }
-
     var body: some View {
-        if let dimensions {
+        if let bounds = piece.bounds {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Kontur bilgisi").font(.subheadline.bold())
                 Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
@@ -309,7 +669,7 @@ private struct PieceDetails: View {
                 if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 Text(piece.grainStatus)
-                Text("En: \(dimensions.width.formatted(.number.precision(.fractionLength(0...2)))) • Boy: \(dimensions.height.formatted(.number.precision(.fractionLength(0...2))))")
+                Text("En: \((bounds.maxX - bounds.minX).formatted(.number.precision(.fractionLength(0...2)))) • Boy: \((bounds.maxY - bounds.minY).formatted(.number.precision(.fractionLength(0...2))))")
                 Text("Boyutlar dosyadaki koordinat birimindedir.")
                     .foregroundStyle(.secondary)
             }
@@ -323,6 +683,7 @@ private struct PieceDetails: View {
 }
 private struct DrawingView: View {
     let pieces: [Drawing.Piece]
+    let bounds: Drawing.Bounds?
     let label: String
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
@@ -399,11 +760,8 @@ private struct DrawingView: View {
 
     private var drawing: some View {
         Canvas { context, size in
-            let points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
-            guard let first = points.first else { return }
-            var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-            for p in points { minX = min(minX, p.x); maxX = max(maxX, p.x); minY = min(minY, p.y); maxY = max(maxY, p.y) }
-            let width = maxX - minX, height = maxY - minY
+            guard let bounds else { return }
+            let width = bounds.maxX - bounds.minX, height = bounds.maxY - bounds.minY
             guard width > 0 || height > 0 else { return }
             let horizontalScale = width > 0 ? max(Double(size.width) - 32, 1) / max(width, 1e-100) : .infinity
             let verticalScale = height > 0 ? max(Double(size.height) - 32, 1) / max(height, 1e-100) : .infinity
@@ -411,7 +769,7 @@ private struct DrawingView: View {
             let offsetX = (Double(size.width) - width * scale) / 2
             let offsetY = (Double(size.height) - height * scale) / 2
             func position(_ p: Drawing.Point) -> CGPoint {
-                CGPoint(x: offsetX + (p.x - minX) * scale, y: Double(size.height) - offsetY - (p.y - minY) * scale)
+                CGPoint(x: offsetX + (p.x - bounds.minX) * scale, y: Double(size.height) - offsetY - (p.y - bounds.minY) * scale)
             }
             for piece in pieces {
                 guard let first = piece.points.first else { continue }
