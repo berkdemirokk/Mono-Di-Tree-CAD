@@ -1,4 +1,4 @@
-# iPhone Görüntüleyici Test Rehberi
+# iPhone Kalıp Atölyesi ve Görüntüleyici Test Rehberi
 
 Bu belge, `Apple/` altındaki Mono Di Tree CAD iOS/macOS kontur görüntüleyicinin yerel olarak nasıl derleneceğini ve test edileceğini açıklar.
 
@@ -120,3 +120,17 @@ Workflow girdileri:
 - `apple-testflight.yml` — Sadece elle tetiklenir, IPA derleme + App Store Connect yükleme
 
 Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; GitHub Secrets aracılığıyla saklayın.
+
+
+## Yeni başlayanlar için kabul senaryosu (manuel)
+
+1. Uygulamayı ilk kez aç: iki başlangıç seçeneği net görünmeli; mevcut dosya görüntüleyici çalışmalı.
+2. **Yeni proje oluştur** > **Dikdörtgen ekle**: önizlemede bir parça görünmeli.
+3. Parçanın adını ve en/boyunu (`100`/`150` mm), X/Y konumunu değiştirip uygula; önizleme güncellenmeli.
+4. Parçayı sağa taşı, 90° döndür, kopyala, sil; her işlemde geri al/ileri al doğru sonucu vermeli.
+5. **Dosyayı hazırla** > **Paylaş veya Dosyalara kaydet** ile gerçekten `.tcad` dosyası dışa aktar. Windows masaüstünde açıp kimlik, ölçü ve geometriyi bağımsız doğrula.
+6. **Örnekle dene** seçeneği iki örnek parçayla açılmalı; yeni kullanıcı önceki CAD bilgisi olmadan işlemleri bulabilmeli.
+7. Boş projede dışa aktar reddedilmeli; 0/negatif/büyük, bozuk veya sonsuz sayılar kabul edilmemeli.
+8. VoiceOver, Dynamic Type, küçük ekran, iPhone/iPad, Türkçe/İngilizce sistem dili, Dosyalar ve iCloud sağlayıcıları ile gerçek cihaz kabulü yapılmalı.
+
+`ViewerUITests.swift` başlangıç ve ilk düzenleme yolunu otomatik kontrol eder; testlerin varlığı fiziksel cihaz doğrulaması anlamına gelmez.
