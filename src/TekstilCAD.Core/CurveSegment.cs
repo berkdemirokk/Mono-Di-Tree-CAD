@@ -95,6 +95,9 @@ public abstract record CurveSegment
 /// <summary>Sampling and measurement helpers for parametric curve segments.</summary>
 public static class CurveSampler
 {
+    // Sampling is a preview operation, not an unbounded allocation request.
+    private const int MaximumSamplePoints = 100_000;
+
     /// <summary>Sample every segment into one continuous polyline whose chord
     /// deviation from each parametric curve stays within <paramref name="toleranceMm"/>.</summary>
     public static List<Point2> Sample(IReadOnlyList<CurveSegment> segments, double toleranceMm)
@@ -111,6 +114,9 @@ public static class CurveSampler
             // Consecutive segments share an endpoint: emit it only once.
             if (i > 0 && result.Count > 0 && points[0] == result[^1])
                 points.RemoveAt(0);
+            if (points.Count > MaximumSamplePoints - result.Count)
+                throw new InvalidDataException("Eğri örnekleme nokta bütçesini aşıyor.");
+            foreach (var point in points) Geometry.Validate(point);
             result.AddRange(points);
         }
         return result;
@@ -138,6 +144,10 @@ public static class CurveSampler
 
     private static List<Point2> SampleBezier(CurveSegment.CubicBezier bez, double tolerance)
     {
+        Geometry.Validate(bez.P0);
+        Geometry.Validate(bez.P1);
+        Geometry.Validate(bez.P2);
+        Geometry.Validate(bez.P3);
         var result = new List<Point2> { bez.P0 };
         Flatten(result, bez.P0, bez.P1, bez.P2, bez.P3, tolerance);
         return result;
@@ -145,8 +155,10 @@ public static class CurveSampler
 
     private static List<Point2> SampleArc(CurveSegment.Arc arc, double tolerance)
     {
-        if (!double.IsFinite(arc.Radius) || arc.Radius <= 0)
-            throw new ArgumentOutOfRangeException(nameof(arc), "Yay yarıçapı pozitif ve sınırlı olmalıdır.");
+        Geometry.Validate(arc.Center);
+        if (!double.IsFinite(arc.Radius) || arc.Radius <= 0 ||
+            !double.IsFinite(arc.StartAngle) || !double.IsFinite(arc.SweepAngle))
+            throw new ArgumentOutOfRangeException(nameof(arc), "Yay yarıçapı ve açıları sonlu, yarıçap pozitif olmalıdır.");
         var sweepAbs = Math.Abs(arc.SweepAngle);
         if (sweepAbs <= Geometry.Epsilon) return new List<Point2> { arc.PointAt(0) };
         // Maximum sub-sweep whose chord sagitta stays within tolerance:
@@ -154,14 +166,22 @@ public static class CurveSampler
         var ratio = tolerance / Math.Abs(arc.Radius);
         if (ratio >= 1.0) ratio = 0.999;
         var delta = 2.0 * Math.Acos(1.0 - ratio);
-        var count = Math.Max(1, (int)Math.Ceiling(sweepAbs / delta));
+        if (!double.IsFinite(delta) || delta <= 0)
+            throw new InvalidDataException("Yay toleransı sayısal hassasiyetin altında; güvenilir örnekleme yapılamıyor.");
+        var requiredCount = Math.Ceiling(sweepAbs / delta);
+        if (!double.IsFinite(requiredCount) || requiredCount > MaximumSamplePoints - 1)
+            throw new InvalidDataException("Yay örnekleme nokta bütçesini aşıyor.");
+        var count = Math.Max(1, (int)requiredCount);
         var result = new List<Point2>(count + 1);
         for (var k = 0; k <= count; k++) result.Add(arc.PointAt((double)k / count));
         return result;
     }
 
-    private static void Flatten(List<Point2> result, Point2 a, Point2 b, Point2 c, Point2 d, double tolerance)
+    private static void Flatten(List<Point2> result, Point2 a, Point2 b, Point2 c, Point2 d, double tolerance,
+                                int depth = 0)
     {
+        if (depth >= 64 || result.Count >= MaximumSamplePoints)
+            throw new InvalidDataException("Bézier örnekleme sınırına ulaşıldı.");
         var flatness = Math.Max(CurveSegment.DistancePointToSegment(b, a, d), CurveSegment.DistancePointToSegment(c, a, d));
         var span = Math.Max(Geometry.Distance(a, b), Math.Max(Geometry.Distance(b, c), Geometry.Distance(c, d)));
         if (flatness <= tolerance || span <= Geometry.Epsilon)
@@ -175,7 +195,7 @@ public static class CurveSampler
         var abbc = (ab + bc) * 0.5;
         var bccd = (bc + cd) * 0.5;
         var abbccd = (abbc + bccd) * 0.5;
-        Flatten(result, a, ab, abbc, abbccd, tolerance);
-        Flatten(result, abbccd, bccd, cd, d, tolerance);
+        Flatten(result, a, ab, abbc, abbccd, tolerance, depth + 1);
+        Flatten(result, abbccd, bccd, cd, d, tolerance, depth + 1);
     }
 }
