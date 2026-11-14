@@ -133,6 +133,36 @@ public class CurveSegmentTests
     }
 
     [Fact]
+    public void ArcTinyToleranceIsRejectedInsteadOfSilentlyFlattening()
+    {
+        var arc = new CurveSegment.Arc(P(0, 0), 100, 0, Math.PI / 2);
+        Assert.Throws<InvalidDataException>(() => CurveSampler.Sample([arc], 1e-30));
+    }
+
+    [Fact]
+    public void ArcExcessiveSweepIsRejectedBeforeAllocation()
+    {
+        var arc = new CurveSegment.Arc(P(0, 0), 100, 0, 1_000_000_000);
+        Assert.Throws<InvalidDataException>(() => CurveSampler.Sample([arc], 0.01));
+    }
+
+    [Fact]
+    public void ArcNonFiniteAnglesAreRejected()
+    {
+        var arc = new CurveSegment.Arc(P(0, 0), 100, double.NaN, Math.PI);
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurveSampler.Sample([arc], 0.1));
+    }
+
+    [Fact]
+    public void InvalidLineAndBezierCoordinatesCannotBeSampled()
+    {
+        var line = new CurveSegment.Line(P(double.NaN, 0), P(10, 0));
+        var bezier = new CurveSegment.CubicBezier(P(0, 0), P(0, 1e12), P(10, 0), P(10, 10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurveSampler.Sample([line], 0.1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurveSampler.Sample([bezier], 0.1));
+    }
+
+    [Fact]
     public void ArcRadiusMustBePositive()
     {
         var seg = new CurveSegment.Arc(P(0, 0), 0, 0, Math.PI);
