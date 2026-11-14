@@ -27,6 +27,7 @@ struct EasyCADWorkspace: View {
     // Last verified on-disk state, distinct from the next UI edit. An absent
     // draft uses nil; resumed sessions start from their verified snapshot.
     @State private var persistedSnapshot: DraftProject?
+    @FocusState private var pieceNameFocused: Bool
 
     init(example: Bool, imported: DraftProject? = nil) {
         let initial = imported ?? (example ? DraftProject.example : DraftProject.blank)
@@ -323,6 +324,9 @@ struct EasyCADWorkspace: View {
                                 TextField("Parça adı", text: $pieceName)
                                     .textFieldStyle(.roundedBorder)
                                     .accessibilityLabel("Seçili parçanın adı")
+                                    .submitLabel(.done)
+                                    .focused($pieceNameFocused)
+                                    .onSubmit { pieceNameFocused = false }
                                 HStack {
                                     VStack(alignment: .leading) {
                                         Text("X (mm)").font(.caption)
