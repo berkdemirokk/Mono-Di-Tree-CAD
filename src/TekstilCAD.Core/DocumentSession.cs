@@ -142,6 +142,23 @@ public sealed class DocumentSession
         for(var i=0;i<a.Count;i++)if(!PointBitsEqual(a[i],b[i]))return false;
         return true;
     }
+    private static bool DoubleBitsEqual(double a, double b) =>
+        BitConverter.DoubleToInt64Bits(a) == BitConverter.DoubleToInt64Bits(b);
+    private static bool CurveEquals(CurveSegment a, CurveSegment b) => (a, b) switch
+    {
+        (CurveSegment.Line x, CurveSegment.Line y) =>
+            PointBitsEqual(x.Start, y.Start) && PointBitsEqual(x.End, y.End),
+        (CurveSegment.CubicBezier x, CurveSegment.CubicBezier y) =>
+            PointBitsEqual(x.P0, y.P0) && PointBitsEqual(x.P1, y.P1) &&
+            PointBitsEqual(x.P2, y.P2) && PointBitsEqual(x.P3, y.P3),
+        (CurveSegment.Arc x, CurveSegment.Arc y) =>
+            PointBitsEqual(x.Center, y.Center) && DoubleBitsEqual(x.Radius, y.Radius) &&
+            DoubleBitsEqual(x.StartAngle, y.StartAngle) && DoubleBitsEqual(x.SweepAngle, y.SweepAngle),
+        _ => false
+    };
+    private static bool CurvesEqual(List<CurveSegment>? a, List<CurveSegment>? b) =>
+        ReferenceEquals(a, b) || (a is not null && b is not null &&
+            a.Count == b.Count && a.Zip(b).All(pair => CurveEquals(pair.First, pair.Second)));
     private static bool GrainlineEquals(Grainline? a, Grainline? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && PointBitsEqual(a.Start,b.Start) && PointBitsEqual(a.End,b.End) && a.NeedsReview == b.NeedsReview);
     private static bool NotchesEqual(List<NotchMark>? a,List<NotchMark>? b) => ReferenceEquals(a,b) ||
@@ -164,7 +181,7 @@ public sealed class DocumentSession
         for (var i = 0; i < left.Pieces.Count; i++)
         {
             var a = left.Pieces[i]; var b = right.Pieces[i];
-            if (a.Id != b.Id || a.LayerId != b.LayerId || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
+            if (a.Id != b.Id || a.LayerId != b.LayerId || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !CurvesEqual(a.Curves,b.Curves) || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
             for (var j = 0; j < a.Points.Count; j++)
                 if (!PointBitsEqual(a.Points[j],b.Points[j])) return false;
         }
