@@ -45,6 +45,8 @@ struct EasyCADWorkspace: View {
     @State private var pieceName = ""
     @State private var pieceX = ""
     @State private var pieceY = ""
+    @State private var pieceWidth = ""
+    @State private var pieceHeight = ""
     @State private var problem: String?
     @State private var success: String?
     @State private var exportURL: URL?
@@ -58,6 +60,8 @@ struct EasyCADWorkspace: View {
             _pieceName = State(initialValue: first.name)
             _pieceX = State(initialValue: Self.number(first.minX))
             _pieceY = State(initialValue: Self.number(first.minY))
+            _pieceWidth = State(initialValue: Self.number(first.maxX - first.minX))
+            _pieceHeight = State(initialValue: Self.number(first.maxY - first.minY))
         }
     }
 
@@ -66,7 +70,7 @@ struct EasyCADWorkspace: View {
     }
 
     private static func number(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...3)))
+        value.formatted(.number.grouping(.never).precision(.fractionLength(0...3)))
     }
 
     private func numericInput(_ text: String) -> Double? {
@@ -81,6 +85,8 @@ struct EasyCADWorkspace: View {
         pieceName = piece?.name ?? ""
         pieceX = piece.map { Self.number($0.minX) } ?? ""
         pieceY = piece.map { Self.number($0.minY) } ?? ""
+        pieceWidth = piece.map { Self.number($0.maxX - $0.minX) } ?? ""
+        pieceHeight = piece.map { Self.number($0.maxY - $0.minY) } ?? ""
     }
 
     private func commit(_ updated: DraftProject, notice: String) {
@@ -133,7 +139,32 @@ struct EasyCADWorkspace: View {
             }
             let piece = updated.pieces[index]
             let dx = x - piece.minX, dy = y - piece.minY
-            let translated = piece.points.map { DraftPoint(x: $0.x + dx, y: $0.y + dy) }
+            var translated = piece.points.map { DraftPoint(x: $0.x + dx, y: $0.y + dy) }
+            if piece.closed, piece.points.count == 4 {
+                // The starter only creates axis-aligned four-point rectangles.
+                guard let width = numericInput(pieceWidth), let height = numericInput(pieceHeight),
+                      width > 0, height > 0 else {
+                    problem = "En ve boy 0'dan büyük, geçerli milimetre değerleri olmalı."; return
+                }
+                translated = [
+                    DraftPoint(x: x, y: y), DraftPoint(x: x + width, y: y),
+                    DraftPoint(x: x + width, y: y + height), DraftPoint(x: x, y: y + height)
+                ]
+            } else if !piece.closed, piece.points.count == 2 {
+                // Length is edited along the existing line direction. For the
+                // initial horizontal line it directly controls its width.
+                guard let length = numericInput(pieceWidth), length > 0 else {
+                    problem = "Çizgi uzunluğu sıfırdan büyük olmalı."; return
+                }
+                let vx = piece.points[1].x - piece.points[0].x
+                let vy = piece.points[1].y - piece.points[0].y
+                let original = hypot(vx, vy)
+                guard original > 0 else { problem = "Çizgi uzunluğu geçersiz."; return }
+                translated = [
+                    DraftPoint(x: x, y: y),
+                    DraftPoint(x: x + vx / original * length, y: y + vy / original * length)
+                ]
+            }
             guard translated.allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else {
                 problem = "Kalıp çalışma alanı sınırını aşıyor."; return
             }
@@ -309,7 +340,25 @@ struct EasyCADWorkspace: View {
                                         TextField("Y", text: $pieceY).textFieldStyle(.roundedBorder)
                                     }
                                 }
-                                Button("Konumu ve adı uygula") { saveDetails() }
+                                if let selectedIndex {
+                                    if document.pieces[selectedIndex].closed {
+                                        HStack {
+                                            VStack(alignment: .leading) {
+                                                Text("En (mm)").font(.caption)
+                                                TextField("En", text: $pieceWidth).textFieldStyle(.roundedBorder)
+                                            }
+                                            VStack(alignment: .leading) {
+                                                Text("Boy (mm)").font(.caption)
+                                                TextField("Boy", text: $pieceHeight).textFieldStyle(.roundedBorder)
+                                            }
+                                        }
+                                    } else {
+                                        Text("Çizgi uzunluğu (mm)").font(.caption)
+                                        TextField("Uzunluk", text: $pieceWidth)
+                                            .textFieldStyle(.roundedBorder)
+                                    }
+                                }
+                                Button("Ölçüleri, konumu ve adı uygula") { saveDetails() }
                                     .buttonStyle(.borderedProminent)
                                 HStack {
                                     Button("← 10 mm") { move(dx: -10, dy: 0) }
