@@ -1,4 +1,4 @@
-# iPhone Görüntüleyici Test Rehberi
+# iPhone Kalıp Atölyesi ve Görüntüleyici Test Rehberi
 
 Bu belge, `Apple/` altındaki Mono Di Tree CAD iOS/macOS kontur görüntüleyicinin yerel olarak nasıl derleneceğini ve test edileceğini açıklar.
 
@@ -120,3 +120,30 @@ Workflow girdileri:
 - `apple-testflight.yml` — Sadece elle tetiklenir, IPA derleme + App Store Connect yükleme
 
 Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; GitHub Secrets aracılığıyla saklayın.
+
+
+## Yeni başlayanlar için kabul senaryosu (manuel)
+
+1. Uygulamayı ilk kez aç: iki başlangıç seçeneği net görünmeli; mevcut dosya görüntüleyici çalışmalı.
+2. **Yeni proje oluştur** > **Dikdörtgen ekle**: önizlemede bir parça görünmeli.
+3. Parçanın adını ve en/boyunu (`100`/`150` mm), X/Y konumunu değiştirip uygula; önizleme güncellenmeli.
+4. Parçayı sağa taşı, 90° döndür, kopyala, sil; her işlemde geri al/ileri al doğru sonucu vermeli.
+5. **Dosyayı hazırla** > **Paylaş veya Dosyalara kaydet** ile gerçekten `.tcad` dosyası dışa aktar. Windows masaüstünde açıp kimlik, ölçü ve geometriyi bağımsız doğrula.
+6. **Örnekle dene** seçeneği iki örnek parçayla açılmalı; yeni kullanıcı önceki CAD bilgisi olmadan işlemleri bulabilmeli.
+7. Boş projede dışa aktar reddedilmeli; 0/negatif/büyük, bozuk veya sonsuz sayılar kabul edilmemeli.
+8. VoiceOver, Dynamic Type, küçük ekran, iPhone/iPad, Türkçe/İngilizce sistem dili, Dosyalar ve iCloud sağlayıcıları ile gerçek cihaz kabulü yapılmalı.
+
+`ViewerUITests.swift` başlangıç ve ilk düzenleme yolunu otomatik kontrol eder; testlerin varlığı fiziksel cihaz doğrulaması anlamına gelmez.
+
+## Dokunmatik ve çevrimdışı taslak kabulü
+
+1. Yeni proje aç, dikdörtgen ekle. Dikdörtgenin içine dokun, seçimin değiştiğini doğrula.
+2. Parmağınla seçili parçayı sürükle; çizim hareket esnasında önizlenmeli, bırakınca yeni konum kalıcı olmalı. 5 mm'ye hizala seçeneğinin açık/kapalı sonuçlarını karşılaştır.
+3. Sürüklemeden sonra Geri Al ve İleri Al orijinal ve yeni noktaları aynen geri getirmeli.
+4. Editörü kapat; **Son çizime devam et** ile aynı parçalar geri gelmeli. Uygulamayı kapatıp tekrar açıldığında da yerel taslak geri yüklenmeli.
+5. Kayıtlı taslak varken Yeni Proje/Örnekle Dene eski taslağın değiştirileceğini sormalı. İptal edildiğinde dosya korunmalı.
+6. Aşırı büyüklükte koordinat, sıfır uzunluk, bozuk taslak ve disk alanı hatalarında üretim dosyaları etkilenmemeli; kullanıcıya açık hata gösterilmeli.
+7. Büyük parça yoğunluğunda UI takılması, erişilebilirlik ve uygulama yeniden başlatılması test edilmeli; taslak 250 parça, 20.000 nokta ve 2 MB sınırına sahiptir.
+8. Bu özellik ücretli dış servis veya gizli API anahtarı gerektirmemeli.
+
+UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla sıfırlar; bu argüman yayın uygulamasında çalışmaz.

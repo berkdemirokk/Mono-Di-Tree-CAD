@@ -10,8 +10,30 @@ struct TekstilCADViewerApp: App {
 }
 
 private struct ContentView: View {
+    private enum EditorRoute: String, Identifiable {
+        case new, example, resume
+        var id: String { rawValue }
+    }
+
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var editorRoute: EditorRoute?
+    @State private var hasLocalDraft = CADLocalDraftStore.hasSavedDraft
+    @State private var showingReplaceDraftConfirmation = false
+    @State private var pendingFreshExample = false
+
+    private func openFreshEditor(example: Bool) {
+        if hasLocalDraft {
+            pendingFreshExample = example
+            showingReplaceDraftConfirmation = true
+        } else {
+            editorRoute = example ? .example : .new
+        }
+    }
+
+    private func resumeEditor() {
+        editorRoute = .resume
+    }
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -27,10 +49,31 @@ private struct ContentView: View {
                 Spacer()
                 if let project { Text(project.name).font(.headline).lineLimit(1) }
             }
-            Text("Yalnızca proje önizlemesi. Düzenleme, serileme, pastal ve üretim çıktıları desteklenmez.")
+            Text("Dosya görüntüleme yalnız önizlemedir. Yeni Kalıp Atölyesi ile basit şekiller oluşturup düzenleyebilirsiniz.")
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
+            if hasLocalDraft {
+                Button(action: resumeEditor) {
+                    Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityHint("Cihazda otomatik kaydedilmiş son çizimini açar.")
+            }
             if let project {
+                Button {
+                    openFreshEditor(example: false)
+                } label: {
+                    Label("Yeni çizim oluştur", systemImage: "plus.square")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                if let notice = project.formatNotice {
+                    Text(notice)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .accessibilityAddTraits(.isStaticText)
+                }
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
                         HStack {
@@ -69,13 +112,57 @@ private struct ContentView: View {
                 Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                Spacer()
-                Text("Önizlemek için bir .tcad dosyası açın.").foregroundStyle(.secondary)
-                Spacer()
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("MONO DI TREE").font(.caption.bold()).tracking(3)
+                            .foregroundStyle(.secondary)
+                        Text("Kalıbını kolayca oluştur").font(.title2.bold())
+                        Text("Başlamak için CAD bilmen gerekmiyor. Önce çiz, sonra ölçüsünü ve konumunu düzenle.")
+                            .foregroundStyle(.secondary)
+                    }
+                    Button {
+                        openFreshEditor(example: false)
+                    } label: {
+                        Label("Yeni proje oluştur", systemImage: "plus.square")
+                            .frame(maxWidth: .infinity, minHeight: 54)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Boş çizim atölyesi açılır; şekil ekleyebilir ve dosya oluşturabilirsiniz.")
+                    Button {
+                        openFreshEditor(example: true)
+                    } label: {
+                        Label("Örnekle dene", systemImage: "hand.tap")
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityHint("İki örnek parçayla çizim, taşıma ve geri alma işlemlerini deneyin.")
+                    Text("Elinde .tcad dosyası mı var? Üstteki '.tcad aç' düğmesiyle güvenli önizleme yap.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Text("Önizlemek için bir .tcad dosyası açın.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
             }
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
+        .sheet(item: $editorRoute, onDismiss: {
+            hasLocalDraft = CADLocalDraftStore.hasSavedDraft
+        }) { route in
+            EasyCADWorkspace(example: route == .example, resume: route == .resume)
+        }
+        .confirmationDialog("Kaydedilmiş bir çizimin var", isPresented: $showingReplaceDraftConfirmation,
+                            titleVisibility: .visible) {
+            Button("Yeni çizim başlat ve eskisini değiştir", role: .destructive) {
+                CADLocalDraftStore.discard()
+                hasLocalDraft = false
+                editorRoute = pendingFreshExample ? .example : .new
+            }
+            Button("Vazgeç", role: .cancel) { }
+        } message: {
+            Text("Yeni çalışma son taslağın yerini alır. Önce eski çizimini .tcad dosyası olarak kaydetmek için 'Son çizime devam et' seçeneğini kullan.")
+        }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
                 let url = try result.get()
@@ -105,6 +192,10 @@ private struct ContentView: View {
         }
         #if DEBUG && targetEnvironment(simulator)
         .onAppear {
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-draft") {
+                CADLocalDraftStore.discard()
+                hasLocalDraft = false
+            }
             guard ProcessInfo.processInfo.arguments.contains("--ui-test-fixture"),
                   let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
                   let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
@@ -154,6 +245,7 @@ private struct Drawing {
     }
     let name: String
     let pieces: [Piece]
+    let formatNotice: String?
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -174,13 +266,42 @@ private struct Drawing {
         if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         let data = try Data(contentsOf: url)
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        let root = try JSONSerialization.jsonObject(with: data)
+        let root: Any
+        do {
+            root = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw ViewerError.message("Desteklenmeyen proje biçimi.")
+        }
         let object: [String: Any]
+        var schemaVersion = 0
         if let array = root as? [Any], array.count == 2,
-           let version = array[0] as? Int, (1...5).contains(version), let body = array[1] as? [String: Any] {
+           let number = array[0] as? NSNumber,
+           CFGetTypeID(number) != CFBooleanGetTypeID(),
+           number.doubleValue.isFinite, number.doubleValue.rounded() == number.doubleValue,
+           (1...8).contains(number.intValue), let body = array[1] as? [String: Any] {
+            schemaVersion = number.intValue
             object = body
         } else if let body = root as? [String: Any] { object = body }
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
+        // Inspect only contours, not the full Windows production schema. Guard a few
+        // version-required envelopes to avoid silently accepting obviously broken files.
+        if schemaVersion == 6 {
+            let rawPieces = object["Pieces"] as? [[String: Any]] ?? []
+            guard rawPieces.contains(where: { $0["Notches"] != nil }) else {
+                throw ViewerError.message("Sürüm 6 çentik işareti içermiyor.")
+            }
+        }
+        if schemaVersion == 7 {
+            guard let nesting = object["NestingSnapshot"] as? [String: Any],
+                  nesting["RotationTrace"] is [String: Any] else {
+                throw ViewerError.message("Sürüm 7 döndürme izi eksik.")
+            }
+        }
+        if schemaVersion == 8 {
+            guard object["Layers"] is [[String: Any]] else {
+                throw ViewerError.message("Sürüm 8 katman listesi eksik.")
+            }
+        }
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
         }
@@ -227,7 +348,10 @@ private struct Drawing {
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
         }
-        return Drawing(name: name, pieces: pieces)
+        let formatNotice = schemaVersion >= 6
+            ? "Sürüm \(schemaVersion) yalnız kontur önizlemesi: çentikler, döndürülmüş pastal izleri ve katman görünürlüğü uygulanmaz. Fabrika veya kesim doğrulaması değildir."
+            : nil
+        return Drawing(name: name, pieces: pieces, formatNotice: formatNotice)
     }
 }
 

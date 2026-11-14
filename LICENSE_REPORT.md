@@ -1,12 +1,12 @@
 # Bağımlılık ve lisans envanteri
 
-31 Ekim 2026 kaynak incelemesi. Bu belge mevcut doğrudan bağımlılıkların envanteridir; tamamlanmış dağıtım/SBOM veya hukuki inceleme değildir. TekstilCAD'in kendi ürün lisansı henüz belirlenmedi.
+31 Ekim 2026 temel incelemesi, 14 Kasım 2026 kaynak güncellemesi. Bu belge doğrudan bağımlılıkların kısmi envanteridir; tamamlanmış dağıtım/SBOM veya hukuki inceleme değildir. TekstilCAD'in kendi ürün lisansı henüz belirlenmedi.
 
 ## Üretim kodu
 
-Mevcut C# üretim projelerinde harici NuGet PackageReference yoktur; .NET ve Windows WPF çerçevesi kullanılır. .NET runtime ve WPF depoları MIT lisansını belirtir: [.NET runtime lisansı](https://github.com/dotnet/runtime/blob/main/LICENSE.TXT), [WPF lisansı](https://github.com/dotnet/wpf/blob/main/LICENSE.TXT). Dağıtılan runtime'ın üçüncü taraf bildirimleri de korunmalıdır.
+`src/TekstilCAD.Patterns/TekstilCAD.Patterns.csproj` içinde **Clipper2 2.0.0** NuGet bağımlılığı bulunur (Boost Software License 1.0). `src/TekstilCAD.Patterns/THIRD_PARTY_NOTICES.txt` ve `CLIPPER2-LICENSE.txt` kaynakta mevcuttur ve proje yayın çıktısına kopyalanacak şekilde tanımlıdır. Bu bildirimlerin gerçek yükleyici/ZIP çıktısında bulunduğu ayrıca doğrulanmalıdır. Diğer modüllerdeki bağımlılık envanteri yayın paketinde yeniden kontrol edilmelidir. .NET ve Windows WPF çerçevesi kullanılır. .NET runtime ve WPF depoları MIT lisansını belirtir: [.NET runtime lisansı](https://github.com/dotnet/runtime/blob/main/LICENSE.TXT), [WPF lisansı](https://github.com/dotnet/wpf/blob/main/LICENSE.TXT). Dağıtılan runtime'ın üçüncü taraf bildirimleri de korunmalıdır.
 
-Uno, Skia, Clipper2, SQLite ve PostgreSQL mevcut derlemeye dahil değildir. Bunlar tercih/gelecek seçenekleridir; seçilecek kesin paket ve sürümlerin lisansı eklenmeden önce incelenmelidir. WearCAD kaynak kodu veya arayüz varlığı kullanılmaz.
+Uno, Skia, SQLite ve PostgreSQL doğrudan mevcut derlemeye dahil değildir. Bunlar tercih/gelecek seçenekleridir; seçilecek kesin paket ve sürümlerin lisansı eklenmeden önce incelenmelidir. WearCAD kaynak kodu veya arayüz varlığı kullanılmaz.
 
 ## Test bağımlılıkları
 
