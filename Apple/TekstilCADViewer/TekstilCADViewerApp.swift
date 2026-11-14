@@ -11,7 +11,7 @@ struct TekstilCADViewerApp: App {
 
 private struct ContentView: View {
     private enum EditorRoute: String, Identifiable {
-        case new, example, resume
+        case new, example, resume, imported
         var id: String { rawValue }
     }
 
@@ -20,11 +20,12 @@ private struct ContentView: View {
     @State private var editorRoute: EditorRoute?
     @State private var hasLocalDraft = CADLocalDraftStore.hasSavedDraft
     @State private var showingReplaceDraftConfirmation = false
-    @State private var pendingFreshExample = false
+    @State private var pendingRoute: EditorRoute = .new
+    @State private var importedDraft: DraftProject?
 
     private func openFreshEditor(example: Bool) {
         if hasLocalDraft {
-            pendingFreshExample = example
+            pendingRoute = example ? .example : .new
             showingReplaceDraftConfirmation = true
         } else {
             editorRoute = example ? .example : .new
@@ -33,6 +34,16 @@ private struct ContentView: View {
 
     private func resumeEditor() {
         editorRoute = .resume
+    }
+
+    private func editImportedCopy(_ draft: DraftProject) {
+        importedDraft = draft
+        if hasLocalDraft {
+            pendingRoute = .imported
+            showingReplaceDraftConfirmation = true
+        } else {
+            editorRoute = .imported
+        }
     }
     @State private var project: Drawing?
     @State private var error: String?
@@ -61,6 +72,16 @@ private struct ContentView: View {
                 .accessibilityHint("Cihazda otomatik kaydedilmiş son çizimini açar.")
             }
             if let project {
+                if let editableDraft = project.editableDraft {
+                    Button {
+                        editImportedCopy(editableDraft)
+                    } label: {
+                        Label("Kopyasını düzenle", systemImage: "square.on.square")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Bu basit çizimin yeni düzenlenebilir bir kopyasını açar. Kaynak dosyayı değiştirmez.")
+                }
                 Button {
                     openFreshEditor(example: false)
                 } label: {
@@ -150,18 +171,19 @@ private struct ContentView: View {
         .sheet(item: $editorRoute, onDismiss: {
             hasLocalDraft = CADLocalDraftStore.hasSavedDraft
         }) { route in
-            EasyCADWorkspace(example: route == .example, resume: route == .resume)
+            EasyCADWorkspace(example: route == .example, resume: route == .resume,
+                             imported: route == .imported ? importedDraft : nil)
         }
         .confirmationDialog("Kaydedilmiş bir çizimin var", isPresented: $showingReplaceDraftConfirmation,
                             titleVisibility: .visible) {
-            Button("Yeni çizim başlat ve eskisini değiştir", role: .destructive) {
+            Button("Yeni çalışma olarak aç ve eski taslağı değiştir", role: .destructive) {
                 CADLocalDraftStore.discard()
                 hasLocalDraft = false
-                editorRoute = pendingFreshExample ? .example : .new
+                editorRoute = pendingRoute
             }
             Button("Vazgeç", role: .cancel) { }
         } message: {
-            Text("Yeni çalışma son taslağın yerini alır. Önce eski çizimini .tcad dosyası olarak kaydetmek için 'Son çizime devam et' seçeneğini kullan.")
+            Text("Yeni çalışma, cihazda otomatik saklanan son taslağın yerini alır. Kaynak .tcad dosyasına dokunulmaz. Eski taslağı korumak için önce 'Son çizime devam et' üzerinden dışa aktarın.")
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
@@ -183,6 +205,7 @@ private struct ContentView: View {
                             selectedPiece = nil
                             drawingRevision = UUID()
                             project = drawing
+                            importedDraft = nil
                         case .failure(let error):
                             self.error = error.localizedDescription
                         }
@@ -246,6 +269,7 @@ private struct Drawing {
     let name: String
     let pieces: [Piece]
     let formatNotice: String?
+    let editableDraft: DraftProject?
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -351,7 +375,9 @@ private struct Drawing {
         let formatNotice = schemaVersion >= 6
             ? "Sürüm \(schemaVersion) yalnız kontur önizlemesi: çentikler, döndürülmüş pastal izleri ve katman görünürlüğü uygulanmaz. Fabrika veya kesim doğrulaması değildir."
             : nil
-        return Drawing(name: name, pieces: pieces, formatNotice: formatNotice)
+        let editableDraft = CADSketchImport.loadEditableCopy(from: data, jsonRoot: root)
+        return Drawing(name: name, pieces: pieces, formatNotice: formatNotice,
+                       editableDraft: editableDraft)
     }
 }
 
