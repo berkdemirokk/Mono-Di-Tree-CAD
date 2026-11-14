@@ -24,6 +24,9 @@ struct EasyCADWorkspace: View {
     @State private var editingPoints: DraftPiece?
     @State private var showingTouchComposer = false
     @State private var shouldStoreImportedSeed = false
+    // Last verified on-disk state, distinct from the next UI edit. An absent
+    // draft uses nil; resumed sessions start from their verified snapshot.
+    @State private var persistedSnapshot: DraftProject?
 
     init(example: Bool, imported: DraftProject? = nil) {
         let initial = imported ?? (example ? DraftProject.example : DraftProject.blank)
@@ -89,7 +92,8 @@ struct EasyCADWorkspace: View {
 
     private func persistDraft(_ project: DraftProject) -> Bool {
         do {
-            try CADLocalDraftStore.save(project)
+            try CADLocalDraftStore.save(project, replacing: persistedSnapshot)
+            persistedSnapshot = project
             return true
         } catch {
             problem = "Taslak kaydedilemedi. " + error.localizedDescription
@@ -422,8 +426,20 @@ struct EasyCADWorkspace: View {
             .onAppear {
                 if shouldStoreImportedSeed {
                     shouldStoreImportedSeed = false
-                    do { try CADLocalDraftStore.save(document) }
-                    catch { problem = "Kopya açıldı ancak cihazda saklanamadı. Kapatmadan önce dışa aktarın." }
+                    do {
+                        let stored = try CADLocalDraftStore.restore()
+                        if let stored {
+                            // A resumed scene must not silently overwrite a
+                            // different revision with the same project UUID.
+                            guard stored == document else { throw SketchStoreError.changed }
+                        } else {
+                            try CADLocalDraftStore.save(document, replacing: nil)
+                        }
+                        persistedSnapshot = document
+                    } catch {
+                        problem = "Kopya açılsa da taslak güvenle saklanamadı. " +
+                            error.localizedDescription + " Kapatmadan önce .tcad dışa aktarın."
+                    }
                 }
             }
             .sheet(item: $editingPoints) { piece in
