@@ -64,8 +64,9 @@ public abstract record CurveSegment
     private static void FlattenLength(Point2 a, Point2 b, Point2 c, Point2 d, double tolerance, ref double length)
     {
         var flatness = Math.Max(DistancePointToSegment(b, a, d), DistancePointToSegment(c, a, d));
-        var span = Math.Max(Geometry.Distance(a, b), Math.Max(Geometry.Distance(b, c), Geometry.Distance(c, d)));
-        if (flatness <= tolerance || span <= Geometry.Epsilon)
+        var chord = Geometry.Distance(a, d);
+        var polygonLength = Geometry.Distance(a, b) + Geometry.Distance(b, c) + Geometry.Distance(c, d);
+        if (flatness <= tolerance && polygonLength - chord <= tolerance)
         {
             length += Geometry.Distance(a, d);
             return;
@@ -183,8 +184,10 @@ public static class CurveSampler
         if (depth >= 64 || result.Count >= MaximumSamplePoints)
             throw new InvalidDataException("Bézier örnekleme sınırına ulaşıldı.");
         var flatness = Math.Max(CurveSegment.DistancePointToSegment(b, a, d), CurveSegment.DistancePointToSegment(c, a, d));
-        var span = Math.Max(Geometry.Distance(a, b), Math.Max(Geometry.Distance(b, c), Geometry.Distance(c, d)));
-        if (flatness <= tolerance || span <= Geometry.Epsilon)
+        var chord = Geometry.Distance(a, d);
+        var polygonLength = Geometry.Distance(a, b) + Geometry.Distance(b, c) + Geometry.Distance(c, d);
+        // Distance to the chord alone misses collinear controls that reverse direction.
+        if (flatness <= tolerance && polygonLength - chord <= tolerance)
         {
             result.Add(d);
             return;

@@ -190,4 +190,38 @@ public class CurveSegmentTests
         var seg = new CurveSegment.Arc(P(0, 0), 0, 0, Math.PI);
         Assert.Throws<ArgumentOutOfRangeException>(() => CurveSampler.Sample([seg], 0.1));
     }
+
+    [Fact]
+    public void CollinearBezierWithReversedControlsRetainsItsTravel()
+    {
+        var curve = new CurveSegment.CubicBezier(P(0, 0), P(10, 0), P(0, 0), P(10, 0));
+        // This curve is monotone, so a single chord is correct.
+        Assert.Equal(10, curve.Length, 8);
+
+        var reversed = new CurveSegment.CubicBezier(P(0, 0), P(10, 0), P(-10, 0), P(1, 0));
+        var samples = CurveSampler.Sample([reversed], 0.01);
+        var sampledLength = 0.0;
+        for (var i = 1; i < samples.Count; i++)
+            sampledLength += Geometry.Distance(samples[i - 1], samples[i]);
+        var referenceLength = 0.0;
+        var previous = reversed.PointAt(0);
+        for (var i = 1; i <= 10000; i++)
+        {
+            var point = reversed.PointAt(i / 10000.0);
+            referenceLength += Geometry.Distance(previous, point);
+            previous = point;
+        }
+        Assert.True(sampledLength > 1);
+        Assert.InRange(Math.Abs(sampledLength - referenceLength), 0, 0.05);
+        Assert.InRange(Math.Abs(reversed.Length - referenceLength), 0, 0.5);
+    }
+
+    [Fact]
+    public void VerySmallBezierDoesNotBypassRequestedTolerance()
+    {
+        var curve = new CurveSegment.CubicBezier(P(0, 0), P(0, 1e-8), P(1e-8, 1e-8), P(1e-8, 0));
+        var samples = CurveSampler.Sample([curve], 1e-10);
+        Assert.True(samples.Count > 2);
+        Assert.Contains(samples, point => point.Y > 1e-9);
+    }
 }
