@@ -194,6 +194,10 @@ private struct ContentView: View {
         }
         #if DEBUG && targetEnvironment(simulator)
         .onAppear {
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-draft") {
+                CADLocalDraftStore.discard()
+                hasLocalDraft = false
+            }
             guard ProcessInfo.processInfo.arguments.contains("--ui-test-fixture"),
                   let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
                   let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
