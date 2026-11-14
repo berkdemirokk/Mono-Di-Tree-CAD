@@ -1,10 +1,17 @@
+using System.Text.Json.Serialization;
+
 namespace TekstilCAD.Core;
 
 /// <summary>A single parametric contour segment. Curves keep their exact
 /// mathematical representation instead of being baked into a polyline.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+[JsonDerivedType(typeof(Line), "line")]
+[JsonDerivedType(typeof(CubicBezier), "cubicBezier")]
+[JsonDerivedType(typeof(Arc), "arc")]
 public abstract record CurveSegment
 {
     /// <summary>Parametric length of the segment in millimetres.</summary>
+    [JsonIgnore]
     public abstract double Length { get; }
 
     /// <summary>Point on the segment at parameter t in [0, 1]. Out-of-range
