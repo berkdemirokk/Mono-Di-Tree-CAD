@@ -394,26 +394,8 @@ struct EasyCADWorkspace: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("1 · Çizimin", systemImage: "pencil.tip").font(.headline)
-                        preview
-                        if !document.pieces.isEmpty {
-                            Toggle("Sürüklerken 5 mm'ye hizala", isOn: $snapToFiveMillimeters)
-                                .font(.caption)
-                            Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        if document.pieces.isEmpty {
-                            Text("Çalışma alanın boş. Aşağıdan dikdörtgen veya çizgi ekle.")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("2 · Parça ekle", systemImage: "plus.square.on.square").font(.headline)
+                        Label("1 · Parça ekle", systemImage: "plus.square.on.square").font(.headline)
                         HStack(spacing: 10) {
                             Button { addRectangle() } label: {
                                 Label("Dikdörtgen ekle", systemImage: "square")
@@ -433,6 +415,24 @@ struct EasyCADWorkspace: View {
                                 .frame(maxWidth: .infinity, minHeight: 50)
                         }
                         .buttonStyle(.bordered)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("2 · Çizimin", systemImage: "pencil.tip").font(.headline)
+                        preview
+                        if !document.pieces.isEmpty {
+                            Toggle("Sürüklerken 5 mm'ye hizala", isOn: $snapToFiveMillimeters)
+                                .font(.caption)
+                            Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        if document.pieces.isEmpty {
+                            Text("Çalışma alanın boş. Yukarıdan bir şekil seçerek başla.")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
 
                     if !document.pieces.isEmpty {
@@ -526,6 +526,7 @@ struct EasyCADWorkspace: View {
                     if let success { Text(success).font(.footnote).foregroundStyle(.secondary) }
                 }
                 .padding()
+                .controlSize(.large)
             }
             .navigationTitle("Kalıp atölyesi")
             .sheet(isPresented: $showingTouchComposer) {
