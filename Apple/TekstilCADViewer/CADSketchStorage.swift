@@ -124,9 +124,22 @@ enum CADLocalDraftStore {
         try data.write(to: url, options: .atomic)
     }
 
-    static func save(_ project: DraftProject) throws {
-        if let previous = try restore(), previous.id != project.id { throw SketchStoreError.changed }
-        try write(project, to: current)
+    /// Rejects edits based on a stale in-memory draft even when its UUID is the
+    /// same. A successful write must then become the next expected snapshot.
+    /// This is optimistic stale-session protection, not a cross-process lock.
+    static func save(_ project: DraftProject, replacing expected: DraftProject?, to url: URL) throws {
+        let previous: DraftProject?
+        if FileManager.default.fileExists(atPath: url.path) {
+            previous = try read(url)
+        } else {
+            previous = nil
+        }
+        guard previous == expected else { throw SketchStoreError.changed }
+        try write(project, to: url)
+    }
+
+    static func save(_ project: DraftProject, replacing expected: DraftProject?) throws {
+        try save(project, replacing: expected, to: current)
     }
 
     static func archiveBeforeSwitch() throws {
