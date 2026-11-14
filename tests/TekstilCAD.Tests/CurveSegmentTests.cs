@@ -6,6 +6,31 @@ public class CurveSegmentTests
 {
     private static Point2 P(double x, double y) => new(x, y);
 
+    // Trigonometric endpoints (pi/2, 2*pi) are only approximately representable.
+    private static void AssertPointNear(Point2 expected, Point2 actual, double tolerance = 1e-9)
+    {
+        Assert.InRange(Math.Abs(actual.X - expected.X), 0, tolerance);
+        Assert.InRange(Math.Abs(actual.Y - expected.Y), 0, tolerance);
+    }
+
+    // Measure the actual Bézier-to-polyline error, not the arbitrary chord length.
+    private static double DistanceToPolyline(Point2 p, IReadOnlyList<Point2> points)
+    {
+        var best = double.PositiveInfinity;
+        for (var i = 1; i < points.Count; i++)
+        {
+            var a = points[i - 1];
+            var b = points[i];
+            var dx = b.X - a.X;
+            var dy = b.Y - a.Y;
+            var lengthSquared = dx * dx + dy * dy;
+            var t = lengthSquared == 0 ? 0 : Math.Clamp(
+                ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / lengthSquared, 0, 1);
+            best = Math.Min(best, Math.Hypot(p.X - a.X - t * dx, p.Y - a.Y - t * dy));
+        }
+        return best;
+    }
+
     [Fact]
     public void LinePointAtEndpointsAndMidpoint()
     {
@@ -44,7 +69,7 @@ public class CurveSegmentTests
     {
         var seg = new CurveSegment.Arc(P(0, 0), 100, 0, 2 * Math.PI);
         Assert.Equal(P(100, 0), seg.PointAt(0));
-        Assert.Equal(P(100, 0), seg.PointAt(1));
+        AssertPointNear(P(100, 0), seg.PointAt(1));
         // Full circle length = 2 * pi * r.
         Assert.Equal(2 * Math.PI * 100, seg.Length, 10);
         Assert.Equal(2 * Math.PI * 100, CurveSampler.TotalLength([seg]), 10);
@@ -56,7 +81,7 @@ public class CurveSegmentTests
         // 90° arc from (r,0) to (0,r) CCW.
         var seg = new CurveSegment.Arc(P(0, 0), 100, 0, Math.PI / 2);
         Assert.Equal(P(100, 0), seg.PointAt(0));
-        Assert.Equal(P(0, 100), seg.PointAt(1));
+        AssertPointNear(P(0, 100), seg.PointAt(1));
         // t=0.5 -> 45°.
         var mid = seg.PointAt(0.5);
         Assert.Equal(70.71, mid.X, 2);
@@ -67,7 +92,7 @@ public class CurveSegmentTests
     public void ArcNegativeSweepGoesClockwise()
     {
         var seg = new CurveSegment.Arc(P(0, 0), 100, 0, -Math.PI / 2);
-        Assert.Equal(P(0, -100), seg.PointAt(1));
+        AssertPointNear(P(0, -100), seg.PointAt(1));
         Assert.Equal(Math.PI / 2 * 100, seg.Length, 10);
     }
 
@@ -87,9 +112,15 @@ public class CurveSegmentTests
         Assert.Equal(P(0, 0), points[0]);
         Assert.Equal(P(10, 0), points[^1]);
         Assert.True(points.Count >= 2);
-        // Every segment between consecutive samples should be short (flatness bound).
-        for (var i = 1; i < points.Count; i++)
-            Assert.True(Geometry.Distance(points[i - 1], points[i]) < 1, $"Sample step too long at {i}");
+        // The sampling contract is a maximum chord deviation, not a maximum
+        // segment length. Check independent analytic points against the polyline.
+        for (var i = 0; i <= 1_000; i++)
+        {
+            var actual = seg.PointAt(i / 1_000d);
+            var deviation = DistanceToPolyline(actual, points);
+            Assert.True(deviation <= 0.100001,
+                $"Curve deviates {deviation} mm at parameter {i}/1000.");
+        }
     }
 
     [Fact]
@@ -98,7 +129,7 @@ public class CurveSegmentTests
         var seg = new CurveSegment.Arc(P(0, 0), 100, 0, 2 * Math.PI);
         var points = CurveSampler.Sample([seg], 0.1);
         Assert.Equal(P(100, 0), points[0]);
-        Assert.Equal(P(100, 0), points[^1]);
+        AssertPointNear(P(100, 0), points[^1]);
         // All samples lie close to the radius circle.
         foreach (var p in points)
             Assert.True(Math.Abs(Geometry.Distance(P(0, 0), p) - 100) < 0.5, $"Point {p} off circle");
