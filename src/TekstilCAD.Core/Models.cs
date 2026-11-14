@@ -60,6 +60,14 @@ public sealed class PatternPiece
     public Guid LayerId { get; set; }
     public List<Point2> Points { get; set; } = [];
     public bool Closed { get; set; } = true;
+    /// <summary>
+    /// Optional exact source geometry for a v9 contour. Points are a deterministic
+    /// display approximation, never the editable source of truth. Any edit to
+    /// Points must either regenerate them from these segments or explicitly
+    /// detach Curves before saving, so control points cannot be lost silently.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<CurveSegment>? Curves { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public PieceMetadata? Metadata { get; set; }
@@ -67,7 +75,7 @@ public sealed class PatternPiece
     public Grainline? Grainline { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NotchMark>? Notches { get; set; }
-    public PatternPiece Clone() => new() { Id = Id, Name = Name, LayerId = LayerId, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
+    public PatternPiece Clone() => new() { Id = Id, Name = Name, LayerId = LayerId, Points = [.. Points], Closed = Closed, Curves = Curves is null ? null : [.. Curves], Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
 }
 
 // Rotation names describe mathematical Y-up coordinates. On the Y-down
