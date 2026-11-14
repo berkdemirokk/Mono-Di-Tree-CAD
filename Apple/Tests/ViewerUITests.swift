@@ -1,6 +1,35 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testBeginnerCanCreateAndUndoFirstShape() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        let start = app.buttons["Yeni proje oluştur"]
+        XCTAssertTrue(start.waitForExistence(timeout: 15))
+        start.tap()
+
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        let add = app.buttons["Dikdörtgen ekle"]
+        XCTAssertTrue(add.exists)
+        add.tap()
+        XCTAssertTrue(app.staticTexts["1 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Ölçüleri, konumu ve adı uygula"].exists)
+    }
+
+    func testExampleLetsNewUsersTryRealTools() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        let demo = app.buttons["Örnekle dene"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 15))
+        demo.tap()
+        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Dikdörtgen ekle"].exists)
+    }
+
     func testLaunchAndCancelFilePicker() {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
