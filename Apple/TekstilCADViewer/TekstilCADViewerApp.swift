@@ -181,14 +181,16 @@ private struct ContentView: View {
         .sheet(item: $editorRoute, onDismiss: {
             hasLocalDraft = CADLocalDraftStore.hasSavedDraft
         }) { route in
-            let imported: DraftProject?
-            if case .imported(let draft) = route {
-                imported = draft
-            } else {
-                imported = nil
+            switch route {
+            case .new:
+                EasyCADWorkspace(example: false)
+            case .example:
+                EasyCADWorkspace(example: true)
+            case .resume:
+                EasyCADWorkspace(example: false, resume: true)
+            case .imported(let draft):
+                EasyCADWorkspace(example: false, imported: draft)
             }
-            EasyCADWorkspace(example: route == .example, resume: route == .resume,
-                             imported: imported)
         }
         .confirmationDialog("Kaydedilmiş bir çizimin var", isPresented: $showingReplaceDraftConfirmation,
                             titleVisibility: .visible) {
