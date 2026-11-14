@@ -14,8 +14,8 @@ final class FixtureLoadingTests: XCTestCase {
     }
 
 
-    // These are parser/screen smoke checks, not Windows round-trip validation:
-    // production v7 rotation traces and v8 layers require independent C# validation.
+
+    // Preview parser smoke checks. Production traces still need Windows-side validation.
     private func launch(json: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
@@ -24,17 +24,39 @@ final class FixtureLoadingTests: XCTestCase {
         return app
     }
 
-    func testNewerWindowsEnvelopesShowReadOnlyLimitations() {
-        let body = #""Name":"Windows Önizleme","Pieces":[{"Name":"Kontur","Closed":true,"Points":[{"X":0,"Y":0},{"X":100,"Y":0},{"X":100,"Y":100}]}],"GradingRules":[]""#
-        let cases: [(Int, String)] = [
-            (6, "[6,{\(body),\"Pieces\":[{\"Name\":\"Kontur\",\"Closed\":true,\"Points\":[{\"X\":0,\"Y\":0},{\"X\":100,\"Y\":0},{\"X\":100,\"Y\":100}],\"Notches\":[{\"VertexIndex\":0,\"Position\":{\"X\":0,\"Y\":0}}]}]}]"),
-            (7, "[7,{\(body),\"NestingSnapshot\":{\"RotationTrace\":{}}}]"),
-            (8, "[8,{\(body),\"Layers\":[{\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"Katman 1\",\"Visible\":true,\"Locked\":false}]}]")
+    private func versionedProject(_ version: Any, includeRequiredMetadata: Bool = false) -> String {
+        var piece: [String: Any] = [
+            "Name": "Kontur", "Closed": true,
+            "Points": [["X": 0, "Y": 0], ["X": 100, "Y": 0], ["X": 100, "Y": 100]]
         ]
-        for (version, fixture) in cases {
-            let app = launch(json: fixture)
+        var body: [String: Any] = [
+            "Name": "Windows Önizleme", "Pieces": [piece], "GradingRules": []
+        ]
+        if includeRequiredMetadata, let number = version as? Int {
+            switch number {
+            case 6:
+                piece["Notches"] = [["VertexIndex": 0, "Position": ["X": 0, "Y": 0]]]
+                body["Pieces"] = [piece]
+            case 7:
+                body["NestingSnapshot"] = ["RotationTrace": [:] as [String: Any]]
+            case 8:
+                body["Layers"] = [[
+                    "Id": "00000000-0000-0000-0000-000000000000",
+                    "Name": "Katman 1", "Visible": true, "Locked": false
+                ]]
+            default:
+                break
+            }
+        }
+        let data = try! JSONSerialization.data(withJSONObject: [version, body], options: [.sortedKeys])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func testNewerWindowsEnvelopesShowReadOnlyLimitations() {
+        for version in [6, 7, 8] {
+            let app = launch(json: versionedProject(version, includeRequiredMetadata: true))
             XCTAssertTrue(app.staticTexts["Windows Önizleme"].waitForExistence(timeout: 15))
-            XCTAssertTrue(app.staticTexts["Kontur"].exists)
+            XCTAssertTrue(app.staticTexts["1 parça • Ölçekli üretim çıktısı değildir"].exists)
             let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Sürüm \(version) yalnız kontur önizlemesi")).firstMatch
             XCTAssertTrue(notice.exists)
             app.terminate()
@@ -42,13 +64,12 @@ final class FixtureLoadingTests: XCTestCase {
     }
 
     func testUnsupportedAndMalformedNewerVersionsAreRejected() {
-        let body = #""Name":"Hatalı","Pieces":[{"Name":"P","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":0}]}],"GradingRules":[]""#
         let cases: [(String, String)] = [
-            ("[9,{\(body)}]", "Desteklenmeyen proje biçimi."),
-            ("[8,{\(body)}]", "Sürüm 8 katman listesi eksik."),
-            ("[7,{\(body)}]", "Sürüm 7 döndürme izi eksik."),
-            ("[6,{\(body)}]", "Sürüm 6 çentik işareti içermiyor."),
-            ("[true,{\(body)}]", "Desteklenmeyen proje biçimi.")
+            (versionedProject(9), "Desteklenmeyen proje biçimi."),
+            (versionedProject(8), "Sürüm 8 katman listesi eksik."),
+            (versionedProject(7), "Sürüm 7 döndürme izi eksik."),
+            (versionedProject(6), "Sürüm 6 çentik işareti içermiyor."),
+            (versionedProject(true), "Desteklenmeyen proje biçimi.")
         ]
         for (fixture, message) in cases {
             let app = launch(json: fixture)
