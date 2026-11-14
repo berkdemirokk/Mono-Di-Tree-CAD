@@ -14,86 +14,24 @@ struct TouchContourComposer: View {
 
     private let extent = 300.0
     private let padding = 14.0
-    private let pointLimit = 250
 
-    private func transform(_ size: CGSize) -> (scale: Double, x: Double, y: Double)? {
-        let available = min(Double(size.width), Double(size.height)) - 2 * padding
-        guard available > 40 else { return nil }
-        let scale = available / extent
-        let x = (Double(size.width) - extent * scale) / 2
-        let y = (Double(size.height) - extent * scale) / 2
-        return (scale, x, y)
-    }
-
-    private func screenPoint(_ p: DraftPoint, size: CGSize) -> CGPoint {
-        guard let t = transform(size) else { return .zero }
-        return CGPoint(x: t.x + p.x * t.scale,
-                       y: t.y + (extent - p.y) * t.scale)
+    private func transform(_ size: CGSize) -> DraftCanvasMap? {
+        DraftCanvasMap(size: size, minX: 0, maxX: extent, minY: 0, maxY: extent, inset: padding)
     }
 
     private func appendPoint(at location: CGPoint, size: CGSize) {
-        guard let t = transform(size), points.count < pointLimit else {
+        guard points.count < DraftContourGeometry.pointLimit else {
             error = "Tek bir kontura en fazla 250 nokta ekleyebilirsiniz."
             return
         }
-        var x = (Double(location.x) - t.x) / t.scale
-        var y = extent - (Double(location.y) - t.y) / t.scale
-        guard x.isFinite, y.isFinite,
-              x >= 0, x <= extent, y >= 0, y <= extent else { return }
-        if snapToFive {
-            x = (x / 5).rounded() * 5
-            y = (y / 5).rounded() * 5
-        } else {
-            x = (x * 10).rounded() / 10
-            y = (y * 10).rounded() / 10
+        guard let p = transform(size)?.sketchPoint(at: location, extent: extent, snapToFive: snapToFive) else {
+            return
         }
-        let p = DraftPoint(x: x, y: y)
         if points.last == p {
             error = "Bu nokta bir önceki noktayla aynı. Farklı bir yere dokunun."
             return
         }
         points.append(p)
-    }
-
-    // Basic O(n²) self-intersection validation is bounded by the 250-point
-    // interactive sketch limit. Adjacent edges share a vertex by design.
-    private func edgesIntersect(_ a: DraftPoint, _ b: DraftPoint,
-                                _ c: DraftPoint, _ d: DraftPoint) -> Bool {
-        let epsilon = 1e-8
-        func orientation(_ p: DraftPoint, _ q: DraftPoint, _ r: DraftPoint) -> Double {
-            (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
-        }
-        func onSegment(_ p: DraftPoint, _ q: DraftPoint, _ r: DraftPoint) -> Bool {
-            q.x >= min(p.x, r.x) - epsilon && q.x <= max(p.x, r.x) + epsilon &&
-            q.y >= min(p.y, r.y) - epsilon && q.y <= max(p.y, r.y) + epsilon
-        }
-        let o1 = orientation(a, b, c), o2 = orientation(a, b, d)
-        let o3 = orientation(c, d, a), o4 = orientation(c, d, b)
-        if ((o1 > epsilon && o2 < -epsilon) || (o1 < -epsilon && o2 > epsilon)) &&
-            ((o3 > epsilon && o4 < -epsilon) || (o3 < -epsilon && o4 > epsilon)) {
-            return true
-        }
-        if abs(o1) <= epsilon && onSegment(a, c, b) { return true }
-        if abs(o2) <= epsilon && onSegment(a, d, b) { return true }
-        if abs(o3) <= epsilon && onSegment(c, a, d) { return true }
-        if abs(o4) <= epsilon && onSegment(c, b, d) { return true }
-        return false
-    }
-
-    private func closedContourIntersectsItself() -> Bool {
-        let n = points.count
-        guard n >= 3 else { return false }
-        if points[0] == points[n - 1] { return true }
-        for i in 0..<n {
-            for j in (i + 1)..<n {
-                if j == i + 1 || (i == 0 && j == n - 1) { continue }
-                if edgesIntersect(points[i], points[(i + 1) % n],
-                                  points[j], points[(j + 1) % n]) {
-                    return true
-                }
-            }
-        }
-        return false
     }
 
     private func finish() {
@@ -102,27 +40,9 @@ struct TouchContourComposer: View {
             error = "Kontura 1–128 karakterlik bir ad verin."
             return
         }
-        guard points.count >= (closed ? 3 : 2) else {
-            error = closed ? "Kapalı bir kalıp için en az 3 nokta gerekli."
-                : "Açık çizgi için en az 2 nokta gerekli."
+        if let message = DraftContourGeometry.validationError(points: points, closed: closed) {
+            error = message
             return
-        }
-        if closed {
-            guard !closedContourIntersectsItself() else {
-                error = "Kalıp çizgileri birbirini kesiyor. Son noktayı silip çizimi düzeltin."
-                return
-            }
-            // Reject collinear/zero-area closed paths. This is only a basic
-            // geometry safety check, not a self-intersection/production test.
-            var twiceArea = 0.0
-            for i in points.indices {
-                let a = points[i], b = points[(i + 1) % points.count]
-                twiceArea += a.x * b.y - b.x * a.y
-            }
-            guard abs(twiceArea) > 1e-6 else {
-                error = "Kalıp kapalı bir alan oluşturmuyor. Noktaları gözden geçirin."
-                return
-            }
         }
         onCreate(DraftPiece(name: clean, closed: closed, points: points))
         dismiss()
@@ -146,13 +66,15 @@ struct TouchContourComposer: View {
                     GeometryReader { geometry in
                         Canvas { context, size in
                             guard let t = transform(size) else { return }
-                            let left = t.x, top = t.y, edge = extent * t.scale
+                            let topLeft = t.screen(DraftPoint(x: 0, y: extent))
+                            let left = topLeft.x, top = topLeft.y
+                            let edge = t.screen(DraftPoint(x: extent, y: 0)).x - left
                             var border = Path()
                             border.addRect(CGRect(x: left, y: top, width: edge, height: edge))
                             context.stroke(border, with: .color(.secondary.opacity(0.6)),
                                            lineWidth: 1)
                             for mm in stride(from: 0.0, through: extent, by: 25.0) {
-                                let offset = mm * t.scale
+                                let offset = mm / extent * edge
                                 var grid = Path()
                                 grid.move(to: CGPoint(x: left + offset, y: top))
                                 grid.addLine(to: CGPoint(x: left + offset, y: top + edge))
@@ -163,16 +85,16 @@ struct TouchContourComposer: View {
                             }
                             var contour = Path()
                             if let first = points.first {
-                                contour.move(to: screenPoint(first, size: size))
+                                contour.move(to: t.screen(first))
                                 for p in points.dropFirst() {
-                                    contour.addLine(to: screenPoint(p, size: size))
+                                    contour.addLine(to: t.screen(p))
                                 }
                                 if closed && points.count > 2 { contour.closeSubpath() }
                                 context.stroke(contour, with: .color(.accentColor),
                                                style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
                             }
                             for p in points {
-                                let at = screenPoint(p, size: size)
+                                let at = t.screen(p)
                                 let dot = Path(ellipseIn: CGRect(x: at.x - 4.5, y: at.y - 4.5,
                                                                  width: 9, height: 9))
                                 context.fill(dot, with: .color(.accentColor))
@@ -187,7 +109,7 @@ struct TouchContourComposer: View {
                     .background(Color.secondary.opacity(0.06),
                                 in: RoundedRectangle(cornerRadius: 14))
                     .accessibilityLabel("Parmakla nokta ekleme tuvali")
-                    .accessibilityHint("Çizim alanına dokunarak yeni köşe ekleyin. Sayısal giriş ve gelişmiş CAD hassasiyeti için masaüstü kullanın.")
+                    .accessibilityHint("Çizim alanına dokunarak yeni köşe ekleyin. Konturu ekledikten sonra noktaların koordinatlarını düzenleyebilirsiniz.")
 
                     HStack {
                         Text("\(points.count) nokta")
