@@ -174,9 +174,24 @@ enum CADProjectLibrary {
     private static var folder: URL { CADLocalDraftStore.directory.appendingPathComponent("Projects", isDirectory: true) }
     static func url(_ id: UUID) -> URL { folder.appendingPathComponent(id.uuidString + ".json") }
 
-    static func save(_ project: DraftProject) throws {
-        let destination = url(project.id)
-        if FileManager.default.fileExists(atPath: destination.path) { _ = try open(project.id) }
+    /// Never overwrite a different version of a saved project without the
+    /// caller's verified snapshot. Repeated saves of identical content are safe.
+    /// Like autosave, this is optimistic protection, not an OS file lock.
+    static func save(_ project: DraftProject, replacing expected: DraftProject? = nil) throws {
+        try save(project, replacing: expected, to: url(project.id))
+    }
+
+    // Path-injectable for deterministic tests; production always uses url(id).
+    static func save(_ project: DraftProject, replacing expected: DraftProject?, to destination: URL) throws {
+        let previous: DraftProject?
+        if FileManager.default.fileExists(atPath: destination.path) {
+            let stored = try CADLocalDraftStore.read(destination)
+            guard stored.id == project.id else { throw SketchStoreError.identity }
+            previous = stored
+        } else {
+            previous = nil
+        }
+        guard previous == expected || previous == project else { throw SketchStoreError.changed }
         try CADLocalDraftStore.write(project, to: destination)
     }
 
