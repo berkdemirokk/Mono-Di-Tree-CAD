@@ -22,7 +22,7 @@ public sealed class IPhoneContourExportCompatibilityTests
             var input = MobileFixture;
             var output=Path.Combine(folder,"desktop.tcad");
             var imported=ProjectStorage.Load(input);
-            Assert.Equal("Mobil ön çizim", imported.Name);
+            Assert.Equal("Telefon çizimi", imported.Name);
             Assert.Equal(2,imported.Pieces.Count);
             Assert.Empty(imported.GradingRules);
             Assert.Null(imported.Layers);
@@ -65,3 +65,4 @@ public sealed class IPhoneContourExportCompatibilityTests
         finally { Directory.Delete(folder,recursive:true); }
     }
 }
+
