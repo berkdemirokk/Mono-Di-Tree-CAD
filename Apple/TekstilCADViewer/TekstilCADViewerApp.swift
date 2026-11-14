@@ -10,11 +10,14 @@ struct TekstilCADViewerApp: App {
 }
 
 private struct ContentView: View {
+    private enum EditorRoute: String, Identifiable {
+        case new, example, resume
+        var id: String { rawValue }
+    }
+
     @State private var showingImporter = false
     @State private var showingPieces = false
-    @State private var showingEditor = false
-    @State private var editorStartsWithExample = false
-    @State private var editorResumes = false
+    @State private var editorRoute: EditorRoute?
     @State private var hasLocalDraft = CADLocalDraftStore.hasSavedDraft
     @State private var showingReplaceDraftConfirmation = false
     @State private var pendingFreshExample = false
@@ -24,15 +27,12 @@ private struct ContentView: View {
             pendingFreshExample = example
             showingReplaceDraftConfirmation = true
         } else {
-            editorStartsWithExample = example
-            editorResumes = false
-            showingEditor = true
+            editorRoute = example ? .example : .new
         }
     }
 
     private func resumeEditor() {
-        editorResumes = true
-        showingEditor = true
+        editorRoute = .resume
     }
     @State private var project: Drawing?
     @State private var error: String?
@@ -147,19 +147,17 @@ private struct ContentView: View {
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
-        .sheet(isPresented: $showingEditor, onDismiss: {
+        .sheet(item: $editorRoute, onDismiss: {
             hasLocalDraft = CADLocalDraftStore.hasSavedDraft
-        }) {
-            EasyCADWorkspace(example: editorStartsWithExample, resume: editorResumes)
+        }) { route in
+            EasyCADWorkspace(example: route == .example, resume: route == .resume)
         }
         .confirmationDialog("Kaydedilmiş bir çizimin var", isPresented: $showingReplaceDraftConfirmation,
                             titleVisibility: .visible) {
             Button("Yeni çizim başlat ve eskisini değiştir", role: .destructive) {
                 CADLocalDraftStore.discard()
                 hasLocalDraft = false
-                editorStartsWithExample = pendingFreshExample
-                editorResumes = false
-                showingEditor = true
+                editorRoute = pendingFreshExample ? .example : .new
             }
             Button("Vazgeç", role: .cancel) { }
         } message: {
