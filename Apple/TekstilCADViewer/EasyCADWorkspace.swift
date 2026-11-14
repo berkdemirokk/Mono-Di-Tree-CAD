@@ -116,6 +116,7 @@ struct EasyCADWorkspace: View {
     @State private var dragStarted = false
     @State private var draggedPieceID: UUID?
     @State private var currentDrag = CGSize.zero
+    @State private var showingTouchComposer = false
 
     init(example: Bool, resume: Bool = false) {
         let initial = resume ? (CADLocalDraftStore.load() ?? DraftProject.blank)
@@ -181,6 +182,18 @@ struct EasyCADWorkspace: View {
         ])
         updated.pieces.append(piece)
         commit(updated, notice: "Yeni dikdörtgen eklendi. Ölçüleri milimetre cinsindendir.")
+        select(piece)
+    }
+
+    private func addTouchContour(_ piece: DraftPiece) {
+        guard document.pieces.count < 250,
+              document.pieces.reduce(0, { $0 + $1.points.count }) + piece.points.count <= 20_000 else {
+            problem = "Çizim sınırı doldu. Yeni kontur eklenemedi."
+            return
+        }
+        var updated = document
+        updated.pieces.append(piece)
+        commit(updated, notice: "Parmakla çizdiğiniz \(piece.points.count) noktalı kontur eklendi.")
         select(piece)
     }
 
@@ -409,6 +422,13 @@ struct EasyCADWorkspace: View {
                             }
                             .buttonStyle(.bordered)
                         }
+                        Button {
+                            showingTouchComposer = true
+                        } label: {
+                            Label("Parmakla yeni kontur çiz", systemImage: "pencil.tip.crop.circle")
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                        }
+                        .buttonStyle(.bordered)
                     }
 
                     if !document.pieces.isEmpty {
@@ -504,6 +524,11 @@ struct EasyCADWorkspace: View {
                 .padding()
             }
             .navigationTitle("Kalıp atölyesi")
+            .sheet(isPresented: $showingTouchComposer) {
+                TouchContourComposer { newPiece in
+                    addTouchContour(newPiece)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Kapat") { dismiss() }
