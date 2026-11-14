@@ -234,6 +234,9 @@ enum CADProjectLibrary {
                 previous = nil
             }
             guard previous == expected || previous == project else { throw SketchStoreError.changed }
+            // Repeating an identical library save must not rewrite bytes:
+            // JSONEncoder object key order is not a stable file identity.
+            if previous == project { return }
             try CADLocalDraftStore.write(project, to: destination)
         }
     }
