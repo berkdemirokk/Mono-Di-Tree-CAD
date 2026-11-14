@@ -55,6 +55,47 @@ struct TouchContourComposer: View {
         points.append(p)
     }
 
+    // Basic O(n²) self-intersection validation is bounded by the 250-point
+    // interactive sketch limit. Adjacent edges share a vertex by design.
+    private func edgesIntersect(_ a: DraftPoint, _ b: DraftPoint,
+                                _ c: DraftPoint, _ d: DraftPoint) -> Bool {
+        let epsilon = 1e-8
+        func orientation(_ p: DraftPoint, _ q: DraftPoint, _ r: DraftPoint) -> Double {
+            (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
+        }
+        func onSegment(_ p: DraftPoint, _ q: DraftPoint, _ r: DraftPoint) -> Bool {
+            q.x >= min(p.x, r.x) - epsilon && q.x <= max(p.x, r.x) + epsilon &&
+            q.y >= min(p.y, r.y) - epsilon && q.y <= max(p.y, r.y) + epsilon
+        }
+        let o1 = orientation(a, b, c), o2 = orientation(a, b, d)
+        let o3 = orientation(c, d, a), o4 = orientation(c, d, b)
+        if ((o1 > epsilon && o2 < -epsilon) || (o1 < -epsilon && o2 > epsilon)) &&
+            ((o3 > epsilon && o4 < -epsilon) || (o3 < -epsilon && o4 > epsilon)) {
+            return true
+        }
+        if abs(o1) <= epsilon && onSegment(a, c, b) { return true }
+        if abs(o2) <= epsilon && onSegment(a, d, b) { return true }
+        if abs(o3) <= epsilon && onSegment(c, a, d) { return true }
+        if abs(o4) <= epsilon && onSegment(c, b, d) { return true }
+        return false
+    }
+
+    private func closedContourIntersectsItself() -> Bool {
+        let n = points.count
+        guard n >= 3 else { return false }
+        if points[0] == points[n - 1] { return true }
+        for i in 0..<n {
+            for j in (i + 1)..<n {
+                if j == i + 1 || (i == 0 && j == n - 1) { continue }
+                if edgesIntersect(points[i], points[(i + 1) % n],
+                                  points[j], points[(j + 1) % n]) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     private func finish() {
         let clean = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, clean.count <= 128 else {
@@ -67,6 +108,10 @@ struct TouchContourComposer: View {
             return
         }
         if closed {
+            guard !closedContourIntersectsItself() else {
+                error = "Kalıp çizgileri birbirini kesiyor. Son noktayı silip çizimi düzeltin."
+                return
+            }
             // Reject collinear/zero-area closed paths. This is only a basic
             // geometry safety check, not a self-intersection/production test.
             var twiceArea = 0.0
