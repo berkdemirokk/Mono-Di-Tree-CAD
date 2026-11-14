@@ -14,6 +14,26 @@ private struct ContentView: View {
     @State private var showingPieces = false
     @State private var showingEditor = false
     @State private var editorStartsWithExample = false
+    @State private var editorResumes = false
+    @State private var hasLocalDraft = CADLocalDraftStore.hasSavedDraft
+    @State private var showingReplaceDraftConfirmation = false
+    @State private var pendingFreshExample = false
+
+    private func openFreshEditor(example: Bool) {
+        if hasLocalDraft {
+            pendingFreshExample = example
+            showingReplaceDraftConfirmation = true
+        } else {
+            editorStartsWithExample = example
+            editorResumes = false
+            showingEditor = true
+        }
+    }
+
+    private func resumeEditor() {
+        editorResumes = true
+        showingEditor = true
+    }
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -32,10 +52,17 @@ private struct ContentView: View {
             Text("Dosya görüntüleme yalnız önizlemedir. Yeni Kalıp Atölyesi ile basit şekiller oluşturup düzenleyebilirsiniz.")
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
+            if hasLocalDraft {
+                Button(action: resumeEditor) {
+                    Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityHint("Cihazda otomatik kaydedilmiş son çizimini açar.")
+            }
             if let project {
                 Button {
-                    editorStartsWithExample = false
-                    showingEditor = true
+                    openFreshEditor(example: false)
                 } label: {
                     Label("Yeni çizim oluştur", systemImage: "plus.square")
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -94,8 +121,7 @@ private struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     Button {
-                        editorStartsWithExample = false
-                        showingEditor = true
+                        openFreshEditor(example: false)
                     } label: {
                         Label("Yeni proje oluştur", systemImage: "plus.square")
                             .frame(maxWidth: .infinity, minHeight: 54)
@@ -103,8 +129,7 @@ private struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .accessibilityHint("Boş çizim atölyesi açılır; şekil ekleyebilir ve dosya oluşturabilirsiniz.")
                     Button {
-                        editorStartsWithExample = true
-                        showingEditor = true
+                        openFreshEditor(example: true)
                     } label: {
                         Label("Örnekle dene", systemImage: "hand.tap")
                             .frame(maxWidth: .infinity, minHeight: 50)
@@ -122,8 +147,23 @@ private struct ContentView: View {
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
-        .sheet(isPresented: $showingEditor) {
-            EasyCADWorkspace(example: editorStartsWithExample)
+        .sheet(isPresented: $showingEditor, onDismiss: {
+            hasLocalDraft = CADLocalDraftStore.hasSavedDraft
+        }) {
+            EasyCADWorkspace(example: editorStartsWithExample, resume: editorResumes)
+        }
+        .confirmationDialog("Kaydedilmiş bir çizimin var", isPresented: $showingReplaceDraftConfirmation,
+                            titleVisibility: .visible) {
+            Button("Yeni çizim başlat ve eskisini değiştir", role: .destructive) {
+                CADLocalDraftStore.discard()
+                hasLocalDraft = false
+                editorStartsWithExample = pendingFreshExample
+                editorResumes = false
+                showingEditor = true
+            }
+            Button("Vazgeç", role: .cancel) { }
+        } message: {
+            Text("Yeni çalışma son taslağın yerini alır. Önce eski çizimini .tcad dosyası olarak kaydetmek için 'Son çizime devam et' seçeneğini kullan.")
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
