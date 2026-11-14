@@ -86,6 +86,20 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(countLabel(3, in: app).exists)
     }
 
+    func testCopyAppliesTypedPieceNameBeforeCreatingDuplicate() {
+        let app = launchClean()
+        app.buttons["Örnekle dene"].tap()
+        let name = app.textFields["Seçili parçanın adı"]
+        tapBelow(name, in: app)
+        name.typeText(" 27")
+        guard let source = name.value as? String, source.contains("27") else {
+            return XCTFail("Parça adı alanda görünmeli.")
+        }
+        tapBelow(app.buttons["Kopyala"], in: app)
+        XCTAssertEqual(name.value as? String, source + " kopya")
+        XCTAssertTrue(countLabel(3, in: app).exists)
+    }
+
     func testClosingEditorPersistsTypedProjectNameAndArchivesItOnSwitch() {
         let app = launchClean()
         app.buttons["Yeni proje oluştur"].tap()

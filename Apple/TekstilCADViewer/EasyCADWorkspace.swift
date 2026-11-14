@@ -63,6 +63,13 @@ struct EasyCADWorkspace: View {
         pieceHeight = piece.map { DraftPiece.display($0.maxY - $0.minY) } ?? ""
     }
 
+    private func selectFromCanvasOrMenu(_ id: UUID?) -> Bool {
+        if id == selectedID { return true }
+        if hasPendingDetails && !saveDetails() { return false }
+        select(document.pieces.first { $0.id == id })
+        return true
+    }
+
     @discardableResult
     private func commit(_ updated: DraftProject, notice: String) -> Bool {
         guard updated != document else { return true }
@@ -91,6 +98,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func addRectangle() {
+        guard !hasPendingDetails || saveDetails() else { return }
         guard document.pieces.count < 250 else { problem = "Parça sınırına ulaşıldı."; return }
         var updated = document
         let start = Double(document.pieces.count) * 20
@@ -116,6 +124,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func addLine() {
+        guard !hasPendingDetails || saveDetails() else { return }
         guard document.pieces.count < 250 else { problem = "Parça sınırına ulaşıldı."; return }
         var updated = document
         let start = Double(document.pieces.count) * 20
@@ -155,6 +164,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func move(dx: Double, dy: Double) {
+        guard !hasPendingDetails || saveDetails() else { return }
         guard let index = selectedIndex else { return }
         var updated = document
         let points = updated.pieces[index].points.map { DraftPoint(x: $0.x + dx, y: $0.y + dy) }
@@ -167,6 +177,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func rotateSelected() {
+        guard !hasPendingDetails || saveDetails() else { return }
         guard let index = selectedIndex else { return }
         var updated = document
         let piece = updated.pieces[index]
@@ -180,6 +191,7 @@ struct EasyCADWorkspace: View {
     }
 
     private func duplicateSelected() {
+        guard !hasPendingDetails || saveDetails() else { return }
         guard let index = selectedIndex else { return }
         var updated = document
         var copy = updated.pieces[index]
@@ -265,7 +277,7 @@ struct EasyCADWorkspace: View {
                             .buttonStyle(.bordered)
                         }
                         Button {
-                            showingTouchComposer = true
+                            if !hasPendingDetails || saveDetails() { showingTouchComposer = true }
                         } label: {
                             Label("Parmakla yeni kontur çiz", systemImage: "pencil.tip.crop.circle")
                                 .frame(maxWidth: .infinity, minHeight: 50)
@@ -294,13 +306,13 @@ struct EasyCADWorkspace: View {
                     if !document.pieces.isEmpty {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("3 · Düzenle", systemImage: "slider.horizontal.3").font(.headline)
-                            Picker("Parça seç", selection: $selectedID) {
+                            Picker("Parça seç", selection: Binding(
+                                get: { selectedID },
+                                set: { _ = selectFromCanvasOrMenu($0) }
+                            )) {
                                 ForEach(document.pieces) { piece in
                                     Text(piece.name).tag(Optional(piece.id))
                                 }
-                            }
-                            .onChange(of: selectedID) { newValue in
-                                select(document.pieces.first(where: { $0.id == newValue }))
                             }
                             .pickerStyle(.menu)
                             if selectedIndex != nil {
@@ -339,7 +351,9 @@ struct EasyCADWorkspace: View {
                                     .buttonStyle(.borderedProminent)
                                 if let index = selectedIndex {
                                     if document.pieces[index].points.count <= DraftContourGeometry.pointLimit {
-                                        Button("Kontur noktalarını düzenle") { editingPoints = document.pieces[index] }
+                                        Button("Kontur noktalarını düzenle") {
+                                            if !hasPendingDetails || saveDetails() { editingPoints = document.pieces[index] }
+                                        }
                                             .buttonStyle(.bordered)
                                     } else {
                                         Text("Nokta düzenleme en fazla 250 noktalı konturlarda kullanılabilir.")
@@ -530,15 +544,15 @@ struct EasyCADWorkspace: View {
             }
             .contentShape(Rectangle())
             .simultaneousGesture(SpatialTapGesture().onEnded { value in
-                select(hitPiece(value.location, size: geometry.size))
+                _ = selectFromCanvasOrMenu(hitPiece(value.location, size: geometry.size)?.id)
             })
             .simultaneousGesture(DragGesture(minimumDistance: 8)
                 .onChanged { value in
                     if !dragStarted {
                         dragStarted = true
                         let piece = hitPiece(value.startLocation, size: geometry.size)
-                        draggedPieceID = piece?.id
-                        if let piece { select(piece) }
+                        if let piece, selectFromCanvasOrMenu(piece.id),
+                           !hasPendingDetails || saveDetails() { draggedPieceID = piece.id }
                     }
                     if draggedPieceID != nil { currentDrag = value.translation }
                 }

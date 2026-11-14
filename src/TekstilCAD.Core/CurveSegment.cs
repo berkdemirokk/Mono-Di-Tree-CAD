@@ -56,6 +56,10 @@ public abstract record CurveSegment
     /// de Casteljau subdivision until the control polygon is flat.</summary>
     private static double LengthFlattened(Point2 p0, Point2 p1, Point2 p2, Point2 p3, double tolerance)
     {
+        Geometry.Validate(p0);
+        Geometry.Validate(p1);
+        Geometry.Validate(p2);
+        Geometry.Validate(p3);
         var length = 0.0;
         FlattenLength(p0, p1, p2, p3, tolerance, ref length);
         return length;
@@ -68,7 +72,7 @@ public abstract record CurveSegment
         var polygonLength = Geometry.Distance(a, b) + Geometry.Distance(b, c) + Geometry.Distance(c, d);
         if (flatness <= tolerance && polygonLength - chord <= tolerance)
         {
-            length += Geometry.Distance(a, d);
+            length += chord;
             return;
         }
         var ab = (a + b) * 0.5;
@@ -85,7 +89,7 @@ public abstract record CurveSegment
     {
         var ab = b - a;
         var ab2 = Geometry.Dot(ab, ab);
-        if (ab2 <= Geometry.Epsilon) return Geometry.Distance(p, a);
+        if (ab2 == 0) return Geometry.Distance(p, a);
         var t = Geometry.Dot(p - a, ab) / ab2;
         t = Clamp(t);
         var closest = a + ab * t;

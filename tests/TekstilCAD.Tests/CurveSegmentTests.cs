@@ -182,6 +182,7 @@ public class CurveSegmentTests
         var bezier = new CurveSegment.CubicBezier(P(0, 0), P(0, 1e12), P(10, 0), P(10, 10));
         Assert.Throws<ArgumentOutOfRangeException>(() => CurveSampler.Sample([line], 0.1));
         Assert.Throws<ArgumentOutOfRangeException>(() => CurveSampler.Sample([bezier], 0.1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => bezier.Length);
     }
 
     [Fact]
