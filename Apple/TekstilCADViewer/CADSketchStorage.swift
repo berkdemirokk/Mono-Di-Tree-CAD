@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct DraftProject: Equatable, Codable {
     var id = UUID()
@@ -31,6 +32,25 @@ enum SketchStoreError: LocalizedError {
 }
 
 enum CADFileIO {
+    /// Lock a permanent sidecar inode rather than the atomically replaced data
+    /// file. Cooperating editors/processes serialize check-and-write this way.
+    /// Do not unlink the sidecar, even when the document is removed.
+    static func withExclusiveLock<T>(for target: URL, _ operation: () throws -> T) throws -> T {
+        try FileManager.default.createDirectory(
+            at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let lock = target.appendingPathExtension("lock")
+        let fd = Darwin.open(lock.path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, mode_t(0o600))
+        guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+        defer { _ = Darwin.close(fd) }
+
+        while Darwin.flock(fd, LOCK_EX) != 0 {
+            if errno == EINTR { continue }
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        defer { _ = Darwin.flock(fd, LOCK_UN) }
+        return try operation()
+    }
+
     static func read(_ url: URL, limit: Int) throws -> Data {
         let attributes = try url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard attributes.isRegularFile == true else { throw SketchStoreError.invalid }
@@ -128,14 +148,16 @@ enum CADLocalDraftStore {
     /// same. A successful write must then become the next expected snapshot.
     /// This is optimistic stale-session protection, not a cross-process lock.
     static func save(_ project: DraftProject, replacing expected: DraftProject?, to url: URL) throws {
-        let previous: DraftProject?
-        if FileManager.default.fileExists(atPath: url.path) {
-            previous = try read(url)
-        } else {
-            previous = nil
+        try CADFileIO.withExclusiveLock(for: url) {
+            let previous: DraftProject?
+            if FileManager.default.fileExists(atPath: url.path) {
+                previous = try read(url)
+            } else {
+                previous = nil
+            }
+            guard previous == expected else { throw SketchStoreError.changed }
+            try write(project, to: url)
         }
-        guard previous == expected else { throw SketchStoreError.changed }
-        try write(project, to: url)
     }
 
     static func save(_ project: DraftProject, replacing expected: DraftProject?) throws {
@@ -143,20 +165,23 @@ enum CADLocalDraftStore {
     }
 
     static func archiveBeforeSwitch() throws {
-        guard var previous = try restore() else { return }
-        let savedURL = CADProjectLibrary.url(previous.id)
-        if FileManager.default.fileExists(atPath: savedURL.path) {
-            let saved = try CADProjectLibrary.open(previous.id)
-            if saved != previous {
-                previous.id = UUID()
-                previous.name = String(previous.name.prefix(120)) + " (taslak)"
+        try CADFileIO.withExclusiveLock(for: current) {
+            guard var previous = try restore() else { return }
+            let savedURL = CADProjectLibrary.url(previous.id)
+            if FileManager.default.fileExists(atPath: savedURL.path) {
+                let saved = try CADProjectLibrary.open(previous.id)
+                if saved != previous {
+                    previous.id = UUID()
+                    previous.name = String(previous.name.prefix(120)) + " (taslak)"
+                    try CADProjectLibrary.save(previous)
+                }
+            } else {
                 try CADProjectLibrary.save(previous)
             }
-        } else {
-            try CADProjectLibrary.save(previous)
+            // Archive and remove under the same lock: no newer autosave can
+            // appear between copying the current file and deleting it.
+            try FileManager.default.removeItem(at: current)
         }
-        // The complete drawing is in the library before releasing the current slot.
-        try FileManager.default.removeItem(at: current)
     }
 
     #if DEBUG && targetEnvironment(simulator)
@@ -183,16 +208,18 @@ enum CADProjectLibrary {
 
     // Path-injectable for deterministic tests; production always uses url(id).
     static func save(_ project: DraftProject, replacing expected: DraftProject?, to destination: URL) throws {
-        let previous: DraftProject?
-        if FileManager.default.fileExists(atPath: destination.path) {
-            let stored = try CADLocalDraftStore.read(destination)
-            guard stored.id == project.id else { throw SketchStoreError.identity }
-            previous = stored
-        } else {
-            previous = nil
+        try CADFileIO.withExclusiveLock(for: destination) {
+            let previous: DraftProject?
+            if FileManager.default.fileExists(atPath: destination.path) {
+                let stored = try CADLocalDraftStore.read(destination)
+                guard stored.id == project.id else { throw SketchStoreError.identity }
+                previous = stored
+            } else {
+                previous = nil
+            }
+            guard previous == expected || previous == project else { throw SketchStoreError.changed }
+            try CADLocalDraftStore.write(project, to: destination)
         }
-        guard previous == expected || previous == project else { throw SketchStoreError.changed }
-        try CADLocalDraftStore.write(project, to: destination)
     }
 
     static func open(_ id: UUID) throws -> DraftProject {
