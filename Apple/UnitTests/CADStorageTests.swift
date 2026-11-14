@@ -71,7 +71,8 @@ final class CADStorageTests: XCTestCase {
         var stale = initial
         stale.name = "Eski oturum"
         XCTAssertThrowsError(try CADLocalDraftStore.save(stale, replacing: initial, to: url)) { error in
-            guard case SketchStoreError.changed = error else {
+            guard let storeError = error as? SketchStoreError,
+                  case .changed = storeError else {
                 return XCTFail("Stale revision should report a conflict, got \(error)")
             }
         }
