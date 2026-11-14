@@ -61,3 +61,17 @@ Elle başlatırken `marketing_version` ve o sürüm için App Store Connect'te h
 
 Kaynaklar: [Apple: derleme yükleme](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/), [Apple: dağıtım ve arşiv](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases), [GitHub: imzalama sertifikası ve profil](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
 
+
+## Ücretsiz, çevrimdışı dokunmatik editör (deneysel)
+
+Kalıp Atölyesi artık yalnızca düğmelerle değil, çizim tuvali üzerinden de kullanılabilir:
+
+- Kalıbın içi veya çizgisine dokunarak parça seç; çizginin üstünden sürükleyerek taşı
+- İsteğe bağlı **5 mm'ye hizalama** ile parmak hareketini CAD koordinatına çevir
+- Seçilen parçayı aynı düzenleme kontrolleriyle hassas mm sayısal girişten de değiştir
+- Her tamamlanan düzenlemede **2 MB sınırına sahip** yerel, atomik taslak kaydı oluştur; ana sayfada **Son çizime devam et** ile aç
+- Eski taslağın üzerine yeni çalışma başlatmadan önce açık uyarı ve onay göster
+
+Bu sistem yerel dosya depolamasına dayanır; ücretli AI, bulut servisi veya hesap gerektirmez. Otomatik taslak kurtarma **yalnızca uygulama tarafından oluşturulan basit kontur projeleri** içindir. İçe alınan karmaşık endüstriyel .tcad dosyaları salt okunur görüntüleyicidedir. Taslak dosyası harici yedek değildir: önemli işleri **Dosyalara Kaydet** üzerinden ayrıca dışa aktarın.
+
+**Kalite kapısı:** Bu dalın değişikliklerinin iOS CI'da, gerçek dokunmatik iPhone'da ve VoiceOver ile doğrulanması gerekir. Hareket hassasiyeti üretim veya kesim toleransı onayı değildir.
