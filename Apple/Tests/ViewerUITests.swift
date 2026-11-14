@@ -86,6 +86,26 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(countLabel(3, in: app).exists)
     }
 
+    func testClosingEditorPersistsTypedProjectNameAndArchivesItOnSwitch() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        app.buttons["Dikdörtgen ekle"].tap()
+        let name = app.textFields["Proje adı"]
+        tapBelow(name, in: app)
+        name.typeText(" 42")
+        let editedName = name.value as? String
+        XCTAssertTrue(editedName?.contains("42") == true)
+        app.buttons["Kapat"].tap()
+
+        app.buttons["Örnekle dene"].tap()
+        XCTAssertTrue(countLabel(2, in: app).waitForExistence(timeout: 10))
+        app.buttons["Kapat"].tap()
+        let archived = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "recent-")).firstMatch
+        XCTAssertTrue(archived.waitForExistence(timeout: 10))
+        XCTAssertTrue(archived.label.contains(editedName ?? "42"))
+        archived.tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 10))
+    }
     func testLaunchAndCancelFilePicker() {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

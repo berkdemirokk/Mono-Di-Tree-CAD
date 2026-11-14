@@ -44,6 +44,16 @@ struct EasyCADWorkspace: View {
         document.pieces.firstIndex(where: { $0.id == selectedID })
     }
 
+    private var hasPendingDetails: Bool {
+        if projectName != document.name { return true }
+        guard let index = selectedIndex else { return false }
+        let piece = document.pieces[index]
+        return pieceName != piece.name ||
+            pieceX != DraftPiece.display(piece.minX) ||
+            pieceY != DraftPiece.display(piece.minY) ||
+            pieceWidth != DraftPiece.display(piece.lineLength) ||
+            pieceHeight != DraftPiece.display(piece.maxY - piece.minY)
+    }
     private func select(_ piece: DraftPiece?) {
         selectedID = piece?.id
         pieceName = piece?.name ?? ""
@@ -379,7 +389,7 @@ struct EasyCADWorkspace: View {
                                 .frame(maxWidth: .infinity, minHeight: 48)
                         }
                         .buttonStyle(.borderedProminent)
-                        if let exportURL {
+                        if let exportURL, !hasPendingDetails {
                             ShareLink(item: exportURL, preview: SharePreview("Mono Di Tree CAD çizimi")) {
                                 Label("Paylaş veya Dosyalara kaydet", systemImage: "square.and.arrow.up")
                                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -417,10 +427,11 @@ struct EasyCADWorkspace: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Kapat") { dismiss() }
+                    Button("Kapat") { if saveDetails() { dismiss() } }
                 }
             }
         }
+        .interactiveDismissDisabled(hasPendingDetails)
         .alert("İşlem tamamlanamadı", isPresented: Binding(
             get: { problem != nil },
             set: { if !$0 { problem = nil } }
