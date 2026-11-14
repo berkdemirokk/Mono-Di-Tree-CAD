@@ -164,3 +164,11 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 - Bir projenin dosyası başka bir ekran tarafından değiştirilmişse önce projeyi yeniden açın; eski ekran üzerinden kaydetmeyi zorlamayın.
 - Bu **iyimser sürüm kontrolü**, farklı süreçlerin aynı anda okuma/yazma yaptığı son derece dar bir yarış aralığı için işletim sistemi düzeyinde kilit sağlamaz. Çoklu süreç atomik yazma/kilit sözleşmesi ayrıca doğrulanmalıdır.
 - `CADStorageTests` içinde aynı kimlikli eski sürüm ve beklenmeyen/silinmiş dosya regresyonları bulunur.
+
+## Son projeler için eşzamanlı kayıt güvenliği
+
+- **Projeyi kaydet**, açıldığı anda doğrulanmış kütüphane sürümüyle karşılaştırarak kaydeder. Arada başka bir oturum tarafından değiştirilmiş veya silinmiş dosya sessizce ezilmez.
+- Çakışma uyarısı görülürse **Farklı kopya kaydet** yeni proje UUID'siyle ikinci bir bağımsız kayıt üretir. Mevcut kütüphane dosyası korunur; çalışma alanı da kapanmaz.
+- **Farklı kopya kaydet** mevcut taslak veya başka bir proje üzerine yazmaz. Bir kopyanın oluştuğunu ana ekrandaki **Son projeler** listesinde doğrulayın.
+- `CADStorageTests`, aynı UUID'ye sahip eski kayıt sürümü, yanlış UUID ve idempotent yeniden kaydetme senaryolarını çalıştırır.
+- Sürüm denetimi eşzamanlı farklı süreçlerin okuma/yazma yarışını atomik kilitleme ile kapatmaz; gerçek çoklu süreç sözleşmesi ve fiziksel cihaz testleri ayrıca gereklidir.
