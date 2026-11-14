@@ -118,6 +118,7 @@ private struct ContentView: View {
                     }
                     DrawingView(
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces,
+                        bounds: selectedPiece.flatMap { project.pieces[$0].bounds } ?? project.bounds,
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi"
                     )
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
@@ -277,10 +278,38 @@ private enum ViewerError: LocalizedError {
 
 private struct Drawing {
     struct Point { let x: Double; let y: Double }
+    struct Bounds {
+        var minX: Double
+        var maxX: Double
+        var minY: Double
+        var maxY: Double
+
+        init(_ point: Point) {
+            minX = point.x
+            maxX = point.x
+            minY = point.y
+            maxY = point.y
+        }
+
+        mutating func include(_ point: Point) {
+            minX = min(minX, point.x)
+            maxX = max(maxX, point.x)
+            minY = min(minY, point.y)
+            maxY = max(maxY, point.y)
+        }
+
+        mutating func include(_ other: Bounds) {
+            minX = min(minX, other.minX)
+            maxX = max(maxX, other.maxX)
+            minY = min(minY, other.minY)
+            maxY = max(maxY, other.maxY)
+        }
+    }
     struct Grain { let start: Point; let end: Point; let needsReview: Bool }
     struct Piece {
         let name: String?
         let points: [Point]
+        let bounds: Bounds?
         let closed: Bool
         let role: String?
         let size: String?
@@ -298,6 +327,7 @@ private struct Drawing {
     }
     let name: String
     let pieces: [Piece]
+    let bounds: Bounds?
     let formatNotice: String?
     let editableDraft: DraftProject?
 
@@ -360,17 +390,22 @@ private struct Drawing {
         }
         var total = 0
         var pieces: [Piece] = []
+        var bounds: Bounds?
         for raw in rawPieces {
             guard let rawPoints = raw["Points"] as? [[String: Any]], rawPoints.count <= 10_000,
                   let closed = jsonBoolean(raw["Closed"]) else { throw ViewerError.message("Parça konturu eksik veya sınır dışında.") }
             total += rawPoints.count
             guard total <= 200_000 else { throw ViewerError.message("Toplam nokta sınırı aşıldı.") }
+            var pieceBounds: Bounds?
             let points: [Point] = try rawPoints.map { point in
                 guard let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
                       x.isFinite, y.isFinite, abs(x) < 1e100, abs(y) < 1e100 else {
                     throw ViewerError.message("Geçersiz veya gösterilemeyen koordinat.")
                 }
-                return Point(x: x, y: y)
+                let coordinate = Point(x: x, y: y)
+                if pieceBounds == nil { pieceBounds = Bounds(coordinate) }
+                else { pieceBounds?.include(coordinate) }
+                return coordinate
             }
             let metadata = raw["Metadata"] as? [String: Any]
             let quantityNumber = metadata?["Quantity"] as? NSNumber
@@ -396,7 +431,11 @@ private struct Drawing {
             } else {
                 grainStatus = "İplik yönü: Okunamadı"
             }
-            pieces.append(Piece(name: raw["Name"] as? String, points: points, closed: closed,
+            if points.count > 1, let pieceBounds {
+                if bounds == nil { bounds = pieceBounds }
+                else { bounds?.include(pieceBounds) }
+            }
+            pieces.append(Piece(name: raw["Name"] as? String, points: points, bounds: pieceBounds, closed: closed,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
@@ -405,7 +444,7 @@ private struct Drawing {
             ? "Sürüm \(schemaVersion) yalnız kontur önizlemesi: çentikler, döndürülmüş pastal izleri ve katman görünürlüğü uygulanmaz. Fabrika veya kesim doğrulaması değildir."
             : nil
         let editableDraft = CADSketchImport.loadEditableCopy(from: data, jsonRoot: root)
-        return Drawing(name: name, pieces: pieces, formatNotice: formatNotice,
+        return Drawing(name: name, pieces: pieces, bounds: bounds, formatNotice: formatNotice,
                        editableDraft: editableDraft)
     }
 }
@@ -468,18 +507,8 @@ private struct PiecePicker: View {
 private struct PieceDetails: View {
     let piece: Drawing.Piece
 
-    private var dimensions: (width: Double, height: Double)? {
-        guard let first = piece.points.first else { return nil }
-        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-        for point in piece.points.dropFirst() {
-            minX = min(minX, point.x); maxX = max(maxX, point.x)
-            minY = min(minY, point.y); maxY = max(maxY, point.y)
-        }
-        return (maxX - minX, maxY - minY)
-    }
-
     var body: some View {
-        if let dimensions {
+        if let bounds = piece.bounds {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Kontur bilgisi").font(.subheadline.bold())
                 Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
@@ -488,7 +517,7 @@ private struct PieceDetails: View {
                 if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 Text(piece.grainStatus)
-                Text("En: \(dimensions.width.formatted(.number.precision(.fractionLength(0...2)))) • Boy: \(dimensions.height.formatted(.number.precision(.fractionLength(0...2))))")
+                Text("En: \((bounds.maxX - bounds.minX).formatted(.number.precision(.fractionLength(0...2)))) • Boy: \((bounds.maxY - bounds.minY).formatted(.number.precision(.fractionLength(0...2))))")
                 Text("Boyutlar dosyadaki koordinat birimindedir.")
                     .foregroundStyle(.secondary)
             }
@@ -502,6 +531,7 @@ private struct PieceDetails: View {
 }
 private struct DrawingView: View {
     let pieces: [Drawing.Piece]
+    let bounds: Drawing.Bounds?
     let label: String
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
@@ -578,11 +608,8 @@ private struct DrawingView: View {
 
     private var drawing: some View {
         Canvas { context, size in
-            let points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
-            guard let first = points.first else { return }
-            var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-            for p in points { minX = min(minX, p.x); maxX = max(maxX, p.x); minY = min(minY, p.y); maxY = max(maxY, p.y) }
-            let width = maxX - minX, height = maxY - minY
+            guard let bounds else { return }
+            let width = bounds.maxX - bounds.minX, height = bounds.maxY - bounds.minY
             guard width > 0 || height > 0 else { return }
             let horizontalScale = width > 0 ? max(Double(size.width) - 32, 1) / max(width, 1e-100) : .infinity
             let verticalScale = height > 0 ? max(Double(size.height) - 32, 1) / max(height, 1e-100) : .infinity
@@ -590,7 +617,7 @@ private struct DrawingView: View {
             let offsetX = (Double(size.width) - width * scale) / 2
             let offsetY = (Double(size.height) - height * scale) / 2
             func position(_ p: Drawing.Point) -> CGPoint {
-                CGPoint(x: offsetX + (p.x - minX) * scale, y: Double(size.height) - offsetY - (p.y - minY) * scale)
+                CGPoint(x: offsetX + (p.x - bounds.minX) * scale, y: Double(size.height) - offsetY - (p.y - bounds.minY) * scale)
             }
             for piece in pieces {
                 guard let first = piece.points.first else { continue }
