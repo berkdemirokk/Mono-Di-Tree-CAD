@@ -39,7 +39,20 @@ public abstract record CurveSegment
     /// and sweep angle (radians, counter-clockwise positive).</summary>
     public sealed record Arc(Point2 Center, double Radius, double StartAngle, double SweepAngle) : CurveSegment
     {
-        public override double Length => Math.Abs(Radius * SweepAngle);
+        public override double Length
+        {
+            get
+            {
+                Geometry.Validate(Center);
+                if (!double.IsFinite(Radius) || Radius <= 0 ||
+                    !double.IsFinite(StartAngle) || !double.IsFinite(SweepAngle))
+                    throw new ArgumentOutOfRangeException(nameof(Radius), "Yayın yarıçapı ve açıları sonlu, yarıçap pozitif olmalıdır.");
+                var length = Math.Abs(Radius * SweepAngle);
+                if (!double.IsFinite(length))
+                    throw new InvalidDataException("Yay uzunluğu temsil edilemiyor.");
+                return length;
+            }
+        }
         public override Point2 PointAt(double t)
         {
             t = Clamp(t);
@@ -61,17 +74,24 @@ public abstract record CurveSegment
         Geometry.Validate(p2);
         Geometry.Validate(p3);
         var length = 0.0;
-        FlattenLength(p0, p1, p2, p3, tolerance, ref length);
+        var segments = 0;
+        FlattenLength(p0, p1, p2, p3, tolerance, ref length, ref segments);
         return length;
     }
 
-    private static void FlattenLength(Point2 a, Point2 b, Point2 c, Point2 d, double tolerance, ref double length)
+    private static void FlattenLength(Point2 a, Point2 b, Point2 c, Point2 d, double tolerance,
+                                      ref double length, ref int segments, int depth = 0)
     {
+        // Length is also used outside preview sampling. Bound it independently
+        // so an adversarial curve cannot exhaust the call stack or CPU.
+        if (depth >= 64 || segments >= 100_000)
+            throw new InvalidDataException("Bézier uzunluğu hesaplama sınırına ulaşıldı.");
         var flatness = Math.Max(DistancePointToSegment(b, a, d), DistancePointToSegment(c, a, d));
         var chord = Geometry.Distance(a, d);
         var polygonLength = Geometry.Distance(a, b) + Geometry.Distance(b, c) + Geometry.Distance(c, d);
         if (flatness <= tolerance && polygonLength - chord <= tolerance)
         {
+            segments++;
             length += chord;
             return;
         }
@@ -81,8 +101,8 @@ public abstract record CurveSegment
         var abbc = (ab + bc) * 0.5;
         var bccd = (bc + cd) * 0.5;
         var abbccd = (abbc + bccd) * 0.5;
-        FlattenLength(a, ab, abbc, abbccd, tolerance, ref length);
-        FlattenLength(abbccd, bccd, cd, d, tolerance, ref length);
+        FlattenLength(a, ab, abbc, abbccd, tolerance, ref length, ref segments, depth + 1);
+        FlattenLength(abbccd, bccd, cd, d, tolerance, ref length, ref segments, depth + 1);
     }
 
     internal static double DistancePointToSegment(Point2 p, Point2 a, Point2 b)
@@ -132,7 +152,13 @@ public static class CurveSampler
     {
         ArgumentNullException.ThrowIfNull(segments);
         var sum = 0.0;
-        foreach (var seg in segments) sum += seg.Length;
+        foreach (var seg in segments)
+        {
+            var length = seg.Length;
+            if (!double.IsFinite(length) || length < 0 || !double.IsFinite(sum + length))
+                throw new InvalidDataException("Toplam eğri uzunluğu sonlu değil.");
+            sum += length;
+        }
         return sum;
     }
 
@@ -165,7 +191,10 @@ public static class CurveSampler
             !double.IsFinite(arc.StartAngle) || !double.IsFinite(arc.SweepAngle))
             throw new ArgumentOutOfRangeException(nameof(arc), "Yay yarıçapı ve açıları sonlu, yarıçap pozitif olmalıdır.");
         var sweepAbs = Math.Abs(arc.SweepAngle);
-        if (sweepAbs <= Geometry.Epsilon) return new List<Point2> { arc.PointAt(0) };
+        // An angular epsilon is not a geometric epsilon: with a large radius,
+        // a tiny nonzero sweep can still span measurable millimetres.
+        // Preserve both endpoints unless the sweep is exactly zero.
+        if (sweepAbs == 0) return new List<Point2> { arc.PointAt(0) };
         // Maximum sub-sweep whose chord sagitta stays within tolerance:
         // sagitta = r * (1 - cos(delta/2)) <= tolerance.
         var ratio = tolerance / Math.Abs(arc.Radius);
