@@ -1,6 +1,19 @@
-# Mono Di Tree CAD Apple kontur görüntüleyici — başlangıç
+# Mono Di Tree CAD iPhone — başlangıç ve Kalıp Atölyesi
 
 Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` dosyası seçip parça konturlarını salt okunur gösterir. Eski JSON nesnesi ile 1–8 sürümlü `[sürüm, proje]` zarfındaki `Name`, `Pieces`, `Points`, `Closed` alanlarını **yalnız kontur önizlemesi amacıyla** okur. Sürüm 6–8 için zorunlu bazı zarf alanları kontrol edilir; Windows doğrulayıcısının tüm şema ve geometri kuralları uygulanmaz. Dosyaya yazmaz. Dosya seçiciden iCloud Drive dahil erişilebilir dosyalar açılabilir.
+
+## İlk açılış: yeni başlayan çalışma alanı
+
+Ana ekranda **Yeni proje oluştur** ve **Örnekle dene** düğmeleri bulunur. Bu seçenekler `EasyCADWorkspace.swift` içindeki gerçek, yerel bir çizim atölyesini açar; bağlantı, hesap veya ücretli API gerektirmez.
+
+- Yeni dikdörtgen veya çizgi ekle; parçayı seç ve değiştir.
+- Dikdörtgenin en ve boyunu, çizginin uzunluğunu ve parçanın X/Y konumunu milimetre cinsinden düzenle.
+- Parçayı 10 mm sağa/sola taşı, 90 derece döndür, çoğalt veya sil.
+- Son 50 değişiklik için geri al/ileri al.
+- `.tcad` dosyası hazırla; sistem Paylaş menüsünden Dosyalara Kaydet, AirDrop veya diğer seçeneği kullan.
+
+**Önemli:** Atölye yalnızca **yeni üretilen kontur projelerini** düzenler. İçeri aktarılan fabrika projeleri ayrı salt-okunur görüntüleyicide kalır; atölye bunları sessizce yeniden kaydetmez, AAMA/ASTM kuralları, serileme, katman, çentik veya geçmişi silmez. Dışa aktarılan dosyalar kontur/kimlik verisi ve boş serileme listesi içerir; üretim, kesim ya da gerçek CAD uyumluluğu sertifikası değildir. Dosyanın Windows uygulamasında açılıp tekrar okunması ve gerçek iPhone testleri ayrıca yapılmalıdır.
+
 
 ## Xcode'da oluşturma
 
