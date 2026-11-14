@@ -21,6 +21,7 @@ public abstract record CurveSegment
     /// <summary>A straight line segment.</summary>
     public sealed record Line(Point2 Start, Point2 End) : CurveSegment
     {
+        [JsonIgnore]
         public override double Length => Geometry.Distance(Start, End);
         public override Point2 PointAt(double t)
         {
@@ -33,6 +34,7 @@ public abstract record CurveSegment
     /// control points.</summary>
     public sealed record CubicBezier(Point2 P0, Point2 P1, Point2 P2, Point2 P3) : CurveSegment
     {
+        [JsonIgnore]
         public override double Length => LengthFlattened(P0, P1, P2, P3, BezierFlatnessTolerance);
         public override Point2 PointAt(double t)
         {
@@ -46,6 +48,7 @@ public abstract record CurveSegment
     /// and sweep angle (radians, counter-clockwise positive).</summary>
     public sealed record Arc(Point2 Center, double Radius, double StartAngle, double SweepAngle) : CurveSegment
     {
+        [JsonIgnore]
         public override double Length
         {
             get
