@@ -134,3 +134,16 @@ Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; Gi
 8. VoiceOver, Dynamic Type, küçük ekran, iPhone/iPad, Türkçe/İngilizce sistem dili, Dosyalar ve iCloud sağlayıcıları ile gerçek cihaz kabulü yapılmalı.
 
 `ViewerUITests.swift` başlangıç ve ilk düzenleme yolunu otomatik kontrol eder; testlerin varlığı fiziksel cihaz doğrulaması anlamına gelmez.
+
+## Dokunmatik ve çevrimdışı taslak kabulü
+
+1. Yeni proje aç, dikdörtgen ekle. Dikdörtgenin içine dokun, seçimin değiştiğini doğrula.
+2. Parmağınla seçili parçayı sürükle; çizim hareket esnasında önizlenmeli, bırakınca yeni konum kalıcı olmalı. 5 mm'ye hizala seçeneğinin açık/kapalı sonuçlarını karşılaştır.
+3. Sürüklemeden sonra Geri Al ve İleri Al orijinal ve yeni noktaları aynen geri getirmeli.
+4. Editörü kapat; **Son çizime devam et** ile aynı parçalar geri gelmeli. Uygulamayı kapatıp tekrar açıldığında da yerel taslak geri yüklenmeli.
+5. Kayıtlı taslak varken Yeni Proje/Örnekle Dene eski taslağın değiştirileceğini sormalı. İptal edildiğinde dosya korunmalı.
+6. Aşırı büyüklükte koordinat, sıfır uzunluk, bozuk taslak ve disk alanı hatalarında üretim dosyaları etkilenmemeli; kullanıcıya açık hata gösterilmeli.
+7. Büyük parça yoğunluğunda UI takılması, erişilebilirlik ve uygulama yeniden başlatılması test edilmeli; taslak 250 parça, 20.000 nokta ve 2 MB sınırına sahiptir.
+8. Bu özellik ücretli dış servis veya gizli API anahtarı gerektirmemeli.
+
+UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla sıfırlar; bu argüman yayın uygulamasında çalışmaz.
