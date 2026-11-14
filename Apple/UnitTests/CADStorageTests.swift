@@ -189,4 +189,70 @@ final class CADStorageTests: XCTestCase {
         XCTAssertEqual(piece.minX + delta.x, 10, accuracy: 1e-12)
         XCTAssertEqual(delta.y, 0)
     }
+
+    func testV9ExportAndReimportPreservesCurves() throws {
+        var doc = DraftProject.blank
+        var piece = DraftPiece(name: "Yay", closed: false, points: [], curves: [
+            .arc(center: DraftPoint(x: 100, y: 100), radius: 50, startAngle: 0, sweepAngle: .pi / 2)
+        ])
+        piece.points = piece.curves!.first!.sampled()
+        doc.pieces.append(piece)
+
+        let data = try CADSketchImport.encode(doc)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [Any])
+        XCTAssertEqual(json.first as? Int, 9)
+
+        let reimported = try XCTUnwrap(CADSketchImport.loadEditableCopy(from: data, jsonRoot: json))
+        XCTAssertEqual(reimported.name, doc.name)
+        XCTAssertEqual(reimported.pieces.count, 1)
+        XCTAssertEqual(reimported.pieces[0].name, "Yay")
+        XCTAssertEqual(reimported.pieces[0].curves?.count, 1)
+        switch reimported.pieces[0].curves?.first {
+        case .arc(let center, let radius, let startAngle, let sweepAngle):
+            XCTAssertEqual(center, DraftPoint(x: 100, y: 100))
+            XCTAssertEqual(radius, 50, accuracy: 1e-9)
+            XCTAssertEqual(startAngle, 0, accuracy: 1e-9)
+            XCTAssertEqual(sweepAngle, .pi / 2, accuracy: 1e-9)
+        default:
+            XCTFail("Arc segment expected")
+        }
+        // Örnekleme polylinesi de mevcut olmalı.
+        XCTAssertGreaterThan(reimported.pieces[0].points.count, 2)
+    }
+
+    func testV9ExportBezierRoundTrip() throws {
+        var doc = DraftProject.blank
+        var piece = DraftPiece(name: "Bézier", closed: false, points: [], curves: [
+            .cubicBezier(p0: DraftPoint(x: 0, y: 0),
+                         p1: DraftPoint(x: 0, y: 40),
+                         p2: DraftPoint(x: 40, y: 40),
+                         p3: DraftPoint(x: 40, y: 0))
+        ])
+        piece.points = piece.curves!.first!.sampled()
+        doc.pieces.append(piece)
+
+        let data = try CADSketchImport.encode(doc)
+        let reimported = try XCTUnwrap(CADSketchImport.loadEditableCopy(from: data, jsonRoot: JSONSerialization.jsonObject(with: data)))
+        XCTAssertEqual(reimported.pieces.count, 1)
+        switch reimported.pieces[0].curves?.first {
+        case .cubicBezier(let p0, let p1, let p2, let p3):
+            XCTAssertEqual(p0, DraftPoint(x: 0, y: 0))
+            XCTAssertEqual(p1, DraftPoint(x: 0, y: 40))
+            XCTAssertEqual(p2, DraftPoint(x: 40, y: 40))
+            XCTAssertEqual(p3, DraftPoint(x: 40, y: 0))
+        default:
+            XCTFail("CubicBezier segment expected")
+        }
+    }
+
+    func testPolylineFixtureStillRoundTripsAfterV9Support() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "mobile-simple", withExtension: "tcad"))
+        let bytes = try Data(contentsOf: url)
+        let fixture = try XCTUnwrap(CADSketchImport.loadEditableCopy(from: bytes, jsonRoot: JSONSerialization.jsonObject(with: bytes)))
+        XCTAssertEqual(fixture.pieces.count, 2)
+        XCTAssertNil(fixture.pieces[0].curves) // polyline-only, yok eğri
+        let encoded = try CADSketchImport.encode(fixture)
+        let reopened = try XCTUnwrap(CADSketchImport.loadEditableCopy(from: encoded, jsonRoot: JSONSerialization.jsonObject(with: encoded)))
+        XCTAssertEqual(reopened.pieces, fixture.pieces)
+    }
 }

@@ -1,6 +1,10 @@
 name: iPhone simulator build and UI test
 
 on:
+  push:
+    branches: [iphone-v1-0-tamamlama, main]
+  pull_request:
+    branches: [iphone-v1-0-tamamlama, main]
   workflow_dispatch:
 
 permissions:
@@ -35,19 +39,26 @@ jobs:
           print(sorted(candidates, key=lambda item: (item[0], item[1]["name"]))[-1][1]["udid"])
           ')
           echo "device_id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
-      - name: Build and test on iPhone Simulator
+      - name: Build and test Debug on iPhone Simulator
         run: >-
           xcodebuild -project TekstilCADViewer.xcodeproj
           -scheme TekstilCADViewerCI
           -configuration Debug
           -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.device_id }}'
-          -resultBundlePath "$RUNNER_TEMP/iPhoneTests.xcresult"
+          -resultBundlePath "$RUNNER_TEMP/iPhoneTests-Debug.xcresult"
           CODE_SIGNING_ALLOWED=NO test
+      - name: Build Release on iPhone Simulator
+        run: >-
+          xcodebuild -project TekstilCADViewer.xcodeproj
+          -scheme TekstilCADViewer
+          -configuration Release
+          -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.device_id }}'
+          CODE_SIGNING_ALLOWED=NO build
       - name: Save test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: iphone-test-results
-          path: ${{ runner.temp }}/iPhoneTests.xcresult
+          path: ${{ runner.temp }}/iPhoneTests-Debug.xcresult
           if-no-files-found: ignore
           retention-days: 7

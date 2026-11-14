@@ -7,7 +7,9 @@ Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` d
 Ana ekranda **Yeni proje oluştur** ve **Örnekle dene** düğmeleri bulunur. Bu seçenekler `EasyCADWorkspace.swift` içindeki gerçek, yerel bir çizim atölyesini açar; bağlantı, hesap veya ücretli API gerektirmez.
 
 - Yeni dikdörtgen veya çizgi ekle; parçayı seç ve değiştir.
+- **Kubik Bézier eğrisi ve dairesel yay ekle**; eğrinin kontrol noktalarını düzenle.
 - Dikdörtgenin en ve boyunu, çizginin uzunluğunu ve parçanın X/Y konumunu milimetre cinsinden düzenle.
+- **İki parmakla yakınlaştır, sürükleyerek kaydır; görünümü sıfırla.**
 - Parçayı 10 mm sağa/sola taşı, 90 derece döndür, çoğalt veya sil.
 - Son 50 değişiklik için geri al/ileri al.
 - `.tcad` dosyası hazırla; sistem Paylaş menüsünden Dosyalara Kaydet, AirDrop veya diğer seçeneği kullan.
@@ -25,7 +27,7 @@ iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı eri
 
 ## Sınırlar
 
-Uygulama GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Sürüm 6–8 için uygulama görünür bir uyarı verir: çentikler, döndürülmüş pastal izleri, katman görünürlüğü ve üretim semantiği dikkate alınmaz. Dolayısıyla Windows'ta gizli olan bir katman iPhone önizlemesinde görülebilir; bu görüntü üretim dosyası veya kullanıcı yetkilendirmesi değildir. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. **Salt okunur fabrika dosyası görüntüleyicisinde** serileme, pastal, kaynak geçmişi, üretim dışa aktarma ve cihaz bağlantıları işlenmez. **Ayrı basit çizim atölyesi** kontur oluşturma, düzenleme ve .tcad dosyası paylaşma sağlar. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
+Uygulama GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Sürüm 6–8 için uygulama görünür bir uyarı verir: çentikler, döndürülmüş pastal izleri, katman görünürlüğü ve üretim semantiği dikkate alınmaz. **Sürüm 9 (Bézier/yay)** dosyalarında parametrik kontrol parametreleri korunur ve iPhone'da düzenlenebilir; sürüm 9 dışındaki fabrika dosyaları salt okunur kalır. Dolayısıyla Windows'ta gizli olan bir katman iPhone önizlemesinde görülebilir; bu görüntü üretim dosyası veya kullanıcı yetkilendirmesi değildir. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. **Salt okunur fabrika dosyası görüntüleyicisinde** serileme, pastal, kaynak geçmişi, üretim dışa aktarma ve cihaz bağlantıları işlenmez. **Ayrı basit çizim atölyesi** kontur oluşturma (çizgi, dikdörtgen, Bézier, yay), düzenleme ve .tcad dosyası paylaşma sağlar. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
 
 Dağıtım öncesi en azından Xcode derlemesi, gerçek cihaz dosya sağlayıcıları ve masaüstü örnekleriyle uyumluluk, erişilebilirlik ve büyük dosya performansı doğrulanmalıdır.
 

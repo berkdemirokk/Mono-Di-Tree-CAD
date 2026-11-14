@@ -84,6 +84,8 @@ xcodegen generate --spec project.ci.yml
 |-------|---------------|
 | `ViewerUITests` | Başlangıç, örnek çizim, taslak kurtarma, dosya seçici, bozuk alan ve arama testleri |
 | `FixtureLoadingTests` | Sürüm zarfı, veri sınırları, parça seçimi, yalın iPhone çizimini kopya açma ve metaverili fabrika dosyası reddi |
+| `CurveSegmentTests` | Çizgi, kubik Bézier ve yay örnekleme/uzunluk; kapalı ve açık kontur sınırları |
+| `CADStorageTests` | .tcad v9 dışa aktarma/yeniden içe aktarma round-trip; backward-compatible polyline; kayıt çakışması |
 
 Güncel test ve fixture sayıları için `Apple/Tests/` kodunu temel alın; eski sabit sayıların tekrar edilmesi doğru değildir.
 
@@ -131,7 +133,8 @@ Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; Gi
 4. Parçayı sağa taşı, 90° döndür, kopyala, sil; her işlemde geri al/ileri al doğru sonucu vermeli.
 5. **Dosyayı hazırla** > **Paylaş veya Dosyalara kaydet** ile gerçekten `.tcad` dosyası dışa aktar. Windows masaüstünde açıp kimlik, ölçü ve geometriyi bağımsız doğrula.
 6. **Örnekle dene** seçeneği iki örnek parçayla açılmalı; yeni kullanıcı önceki CAD bilgisi olmadan işlemleri bulabilmeli.
-7. Boş projede dışa aktar reddedilmeli; 0/negatif/büyük, bozuk veya sonsuz sayılar kabul edilmemeli.
+7. **Bézier** ve **Yay** düğmeleriyle eğri çizdirilmesi; eğrinin önizlemede görünüp seçilebilir olması, kontrol noktası düzenlemesinin çalışması.
+8. Boş projede dışa aktar reddedilmeli; 0/negatif/büyük, bozuk veya sonsuz sayılar kabul edilmemeli.
 8. VoiceOver, Dynamic Type, küçük ekran, iPhone/iPad, Türkçe/İngilizce sistem dili, Dosyalar ve iCloud sağlayıcıları ile gerçek cihaz kabulü yapılmalı.
 
 `ViewerUITests.swift` başlangıç ve ilk düzenleme yolunu otomatik kontrol eder; testlerin varlığı fiziksel cihaz doğrulaması anlamına gelmez.
