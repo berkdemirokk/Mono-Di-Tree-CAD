@@ -224,7 +224,12 @@ private struct Drawing {
         if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         let data = try Data(contentsOf: url)
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        let root = try JSONSerialization.jsonObject(with: data)
+        let root: Any
+        do {
+            root = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw ViewerError.message("Desteklenmeyen proje biçimi.")
+        }
         let object: [String: Any]
         var schemaVersion = 0
         if let array = root as? [Any], array.count == 2,
