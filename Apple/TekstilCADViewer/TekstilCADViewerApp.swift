@@ -10,41 +10,49 @@ struct TekstilCADViewerApp: App {
 }
 
 private struct ContentView: View {
-    private enum EditorRoute: String, Identifiable {
-        case new, example, resume, imported
-        var id: String { rawValue }
+    private struct EditorRoute: Identifiable {
+        let id = UUID()
+        let example: Bool
+        let document: DraftProject?
+
+        init(example: Bool = false, document: DraftProject? = nil) {
+            self.example = example
+            self.document = document
+        }
     }
 
     @State private var showingImporter = false
     @State private var showingPieces = false
     @State private var editorRoute: EditorRoute?
-    @State private var hasLocalDraft = CADLocalDraftStore.hasSavedDraft
-    @State private var showingReplaceDraftConfirmation = false
-    @State private var pendingRoute: EditorRoute = .new
-    @State private var importedDraft: DraftProject?
+    @State private var hasLocalDraft = false
+    @State private var recentProjects: [CADProjectLibrary.Entry] = []
+    @State private var didStart = false
 
-    private func openFreshEditor(example: Bool) {
-        if hasLocalDraft {
-            pendingRoute = example ? .example : .new
-            showingReplaceDraftConfirmation = true
-        } else {
-            editorRoute = example ? .example : .new
-        }
+    private func refreshProjects() {
+        do { hasLocalDraft = try CADLocalDraftStore.restore() != nil }
+        catch { self.error = "Taslak okunamadı. \(error.localizedDescription)" }
+        do { recentProjects = try CADProjectLibrary.recent() }
+        catch { self.error = "Son projeler okunamadı. \(error.localizedDescription)" }
     }
 
     private func resumeEditor() {
-        editorRoute = .resume
+        do {
+            guard let draft = try CADLocalDraftStore.restore() else {
+                throw ViewerError.message("Kaydedilmiş taslak bulunamadı.")
+            }
+            editorRoute = EditorRoute(document: draft)
+        } catch { self.error = error.localizedDescription }
     }
 
-    private func editImportedCopy(_ draft: DraftProject) {
-        importedDraft = draft
-        if hasLocalDraft {
-            pendingRoute = .imported
-            showingReplaceDraftConfirmation = true
-        } else {
-            editorRoute = .imported
+    private func openEditor(_ route: EditorRoute) {
+        do {
+            try CADLocalDraftStore.archiveBeforeSwitch()
+            editorRoute = route
+        } catch {
+            self.error = "Önceki taslak korunamadığı için yeni çalışma açılmadı. \(error.localizedDescription)"
         }
     }
+
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -54,27 +62,25 @@ private struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack {
-                Button(".tcad aç") { loadRequest = UUID(); isLoading = false; showingImporter = true }
-                    .accessibilityHint("Önizlemek için bir proje dosyası seçin")
-                Spacer()
-                if let project { Text(project.name).font(.headline).lineLimit(1) }
-            }
-            Text("Dosya görüntüleme yalnız önizlemedir. Yeni Kalıp Atölyesi ile basit şekiller oluşturup düzenleyebilirsiniz.")
-                .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
-            if hasLocalDraft {
-                Button(action: resumeEditor) {
-                    Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityHint("Cihazda otomatik kaydedilmiş son çizimini açar.")
-            }
             if let project {
+                HStack {
+                    Button {
+                        loadRequest = UUID()
+                        isLoading = false
+                        self.project = nil
+                        selectedPiece = nil
+                    } label: {
+                        Label("Projeler", systemImage: "chevron.backward")
+                            .frame(minHeight: 44)
+                    }
+                    Spacer()
+                    Text(project.name).font(.headline).lineLimit(1)
+                }
+                if hasLocalDraft { resumeButton }
                 if let editableDraft = project.editableDraft {
                     Button {
-                        editImportedCopy(editableDraft)
+                        openEditor(EditorRoute(document: editableDraft))
                     } label: {
                         Label("Kopyasını düzenle", systemImage: "square.on.square")
                             .frame(maxWidth: .infinity, minHeight: 48)
@@ -82,13 +88,6 @@ private struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .accessibilityHint("Bu basit çizimin yeni düzenlenebilir bir kopyasını açar. Kaynak dosyayı değiştirmez.")
                 }
-                Button {
-                    openFreshEditor(example: false)
-                } label: {
-                    Label("Yeni çizim oluştur", systemImage: "plus.square")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.bordered)
                 if let notice = project.formatNotice {
                     Text(notice)
                         .font(.caption)
@@ -133,57 +132,13 @@ private struct ContentView: View {
                 Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("MONO DI TREE").font(.caption.bold()).tracking(3)
-                            .foregroundStyle(.secondary)
-                        Text("Kalıbını kolayca oluştur").font(.title2.bold())
-                        Text("Başlamak için CAD bilmen gerekmiyor. Önce çiz, sonra ölçüsünü ve konumunu düzenle.")
-                            .foregroundStyle(.secondary)
-                    }
-                    Button {
-                        openFreshEditor(example: false)
-                    } label: {
-                        Label("Yeni proje oluştur", systemImage: "plus.square")
-                            .frame(maxWidth: .infinity, minHeight: 54)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityHint("Boş çizim atölyesi açılır; şekil ekleyebilir ve dosya oluşturabilirsiniz.")
-                    Button {
-                        openFreshEditor(example: true)
-                    } label: {
-                        Label("Örnekle dene", systemImage: "hand.tap")
-                            .frame(maxWidth: .infinity, minHeight: 50)
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityHint("İki örnek parçayla çizim, taşıma ve geri alma işlemlerini deneyin.")
-                    Text("Elinde .tcad dosyası mı var? Üstteki '.tcad aç' düğmesiyle güvenli önizleme yap.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 12)
-                Text("Önizlemek için bir .tcad dosyası açın.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Spacer(minLength: 8)
+                home.disabled(isLoading)
             }
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
-        .sheet(item: $editorRoute, onDismiss: {
-            hasLocalDraft = CADLocalDraftStore.hasSavedDraft
-        }) { route in
-            EasyCADWorkspace(example: route == .example, resume: route == .resume,
-                             imported: route == .imported ? importedDraft : nil)
-        }
-        .confirmationDialog("Kaydedilmiş bir çizimin var", isPresented: $showingReplaceDraftConfirmation,
-                            titleVisibility: .visible) {
-            Button("Yeni çalışma olarak aç ve eski taslağı değiştir", role: .destructive) {
-                CADLocalDraftStore.discard()
-                hasLocalDraft = false
-                editorRoute = pendingRoute
-            }
-            Button("Vazgeç", role: .cancel) { }
-        } message: {
-            Text("Yeni çalışma, cihazda otomatik saklanan son taslağın yerini alır. Kaynak .tcad dosyasına dokunulmaz. Eski taslağı korumak için önce 'Son çizime devam et' üzerinden dışa aktarın.")
+        .sheet(item: $editorRoute, onDismiss: refreshProjects) { route in
+            EasyCADWorkspace(example: route.example, imported: route.document)
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
@@ -205,20 +160,26 @@ private struct ContentView: View {
                             selectedPiece = nil
                             drawingRevision = UUID()
                             project = drawing
-                            importedDraft = nil
                         case .failure(let error):
                             self.error = error.localizedDescription
                         }
                     }
                 }
+            } catch let failure as NSError where failure.domain == NSCocoaErrorDomain && failure.code == NSUserCancelledError {
+                // The Files picker was dismissed without selecting a project.
             } catch { self.error = error.localizedDescription }
         }
-        #if DEBUG && targetEnvironment(simulator)
         .onAppear {
+            guard !didStart else { return }
+            didStart = true
+            #if DEBUG && targetEnvironment(simulator)
             if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-draft") {
                 CADLocalDraftStore.discard()
-                hasLocalDraft = false
+                CADProjectLibrary.resetTestLibrary()
             }
+            #endif
+            refreshProjects()
+            #if DEBUG && targetEnvironment(simulator)
             guard ProcessInfo.processInfo.arguments.contains("--ui-test-fixture"),
                   let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
                   let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
@@ -232,12 +193,81 @@ private struct ContentView: View {
                 drawingRevision = UUID()
                 project = drawing
             } catch { self.error = error.localizedDescription }
+            #endif
         }
-        #endif
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
     }
+
+    private var resumeButton: some View {
+        Button(action: resumeEditor) {
+            Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityHint("Cihazda otomatik kaydedilmiş taslağı açar.")
+    }
+
+    private var home: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("MONO DI TREE").font(.caption.bold()).tracking(3)
+                    .foregroundStyle(.secondary)
+                Text("Kalıbını kolayca oluştur").font(.title.bold())
+                Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
+                    .foregroundStyle(.secondary)
+
+                Button { openEditor(EditorRoute()) } label: {
+                    Label("Yeni proje oluştur", systemImage: "plus.square")
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent)
+                Button { openEditor(EditorRoute(example: true)) } label: {
+                    Label("Örnekle dene", systemImage: "hand.tap")
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                }
+                .buttonStyle(.bordered)
+                Button { showingImporter = true } label: {
+                    Label("Dosya aç (.tcad)", systemImage: "folder")
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityHint("Dosyalardan bir proje seçerek konturlarını önizleyin.")
+
+                Divider()
+                Text("Son projeler").font(.headline).accessibilityAddTraits(.isHeader)
+                if hasLocalDraft { resumeButton }
+                if recentProjects.isEmpty && !hasLocalDraft {
+                    Text("Kaydettiğin projeler burada görünür.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                ForEach(recentProjects) { entry in
+                    Button {
+                        do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
+                        catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
+                    } label: {
+                        HStack {
+                            Image(systemName: "doc")
+                            VStack(alignment: .leading) {
+                                Text(entry.name)
+                                Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.forward").font(.caption)
+                        }
+                        .frame(minHeight: 48)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
 }
 
 private enum ViewerError: LocalizedError {
@@ -288,8 +318,7 @@ private struct Drawing {
     static func load(_ url: URL) throws -> Drawing {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
         if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        let data = try Data(contentsOf: url)
-        guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+        let data = try CADFileIO.read(url, limit: 64 * 1024 * 1024)
         let root: Any
         do {
             root = try JSONSerialization.jsonObject(with: data)

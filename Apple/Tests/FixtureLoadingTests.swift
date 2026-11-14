@@ -107,9 +107,15 @@ final class FixtureLoadingTests: XCTestCase {
         edit.tap()
         XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"]
             .waitForExistence(timeout: 15))
-        XCTAssertTrue(app.buttons["Dikdörtgen ekle"].exists)
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(app.staticTexts["3 parça • Önizleme ölçüye göre ekrana sığdırılır"].exists)
         app.buttons["Kapat"].tap()
-        XCTAssertTrue(app.buttons["Son çizime devam et"].waitForExistence(timeout: 10))
+        let resume = app.buttons["Son çizime devam et"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        resume.tap()
+        XCTAssertTrue(app.staticTexts["3 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        app.buttons["Kapat"].tap()
+        XCTAssertTrue(app.staticTexts["2 parça • Ölçekli üretim çıktısı değildir"].exists)
     }
 
     func testSketchWithProductionMetadataIsReadOnly() {
