@@ -92,6 +92,11 @@ final class ViewerUITests: XCTestCase {
         let name = app.textFields["Seçili parçanın adı"]
         tapBelow(name, in: app)
         name.typeText(" 27")
+        // The on-screen keyboard covers lower editing controls on an iPhone.
+        // Dismiss it through the real Done action before reaching Copy.
+        let done = app.keyboards.buttons["Done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
         guard let source = name.value as? String, source.contains("27") else {
             return XCTFail("Parça adı alanda görünmeli.")
         }
