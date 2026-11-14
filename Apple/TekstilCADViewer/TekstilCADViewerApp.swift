@@ -5,7 +5,11 @@ import UniformTypeIdentifiers
 @main
 struct TekstilCADViewerApp: App {
     var body: some Scene {
+        #if os(macOS)
+        Window("Mono Di Tree CAD", id: "workspace") { ContentView() }
+        #else
         WindowGroup { ContentView() }
+        #endif
     }
 }
 
@@ -27,12 +31,24 @@ private struct ContentView: View {
     @State private var hasLocalDraft = false
     @State private var recentProjects: [CADProjectLibrary.Entry] = []
     @State private var didStart = false
+    @State private var recentRefresh = UUID()
 
     private func refreshProjects() {
         do { hasLocalDraft = try CADLocalDraftStore.restore() != nil }
         catch { self.error = "Taslak okunamadı. \(error.localizedDescription)" }
-        do { recentProjects = try CADProjectLibrary.recent() }
-        catch { self.error = "Son projeler okunamadı. \(error.localizedDescription)" }
+        recentRefresh = UUID()
+    }
+
+    @MainActor
+    private func readRecentProjects() async {
+        let result = await Task.detached(priority: .userInitiated) {
+            Result { try CADProjectLibrary.recent() }
+        }.value
+        guard !Task.isCancelled else { return }
+        switch result {
+        case .success(let entries): recentProjects = entries
+        case .failure(let failure): error = "Son projeler okunamadı. \(failure.localizedDescription)"
+        }
     }
 
     private func resumeEditor() {
@@ -80,7 +96,9 @@ private struct ContentView: View {
                 if hasLocalDraft { resumeButton }
                 if let editableDraft = project.editableDraft {
                     Button {
-                        openEditor(EditorRoute(document: editableDraft))
+                        var copy = editableDraft
+                        copy.id = UUID()
+                        openEditor(EditorRoute(document: copy))
                     } label: {
                         Label("Kopyasını düzenle", systemImage: "square.on.square")
                             .frame(maxWidth: .infinity, minHeight: 48)
@@ -195,6 +213,9 @@ private struct ContentView: View {
                 project = drawing
             } catch { self.error = error.localizedDescription }
             #endif
+        }
+        .task(id: recentRefresh) {
+            if didStart { await readRecentProjects() }
         }
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
