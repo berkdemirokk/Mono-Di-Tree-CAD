@@ -27,6 +27,7 @@ struct EasyCADWorkspace: View {
     // Last verified on-disk state, distinct from the next UI edit. An absent
     // draft uses nil; resumed sessions start from their verified snapshot.
     @State private var persistedSnapshot: DraftProject?
+    @State private var savedLibrarySnapshot: DraftProject?
     @FocusState private var pieceNameFocused: Bool
 
     init(example: Bool, imported: DraftProject? = nil) {
@@ -398,7 +399,8 @@ struct EasyCADWorkspace: View {
                         Button {
                             guard saveDetails() else { return }
                             do {
-                                try CADProjectLibrary.save(document)
+                                try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
+                                savedLibrarySnapshot = document
                                 success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
                             } catch { problem = error.localizedDescription }
                         } label: {
@@ -406,6 +408,20 @@ struct EasyCADWorkspace: View {
                                 .frame(maxWidth: .infinity, minHeight: 48)
                         }
                         .buttonStyle(.borderedProminent)
+                        Button {
+                            guard saveDetails() else { return }
+                            var copy = document
+                            copy.id = UUID()
+                            copy.name = String(document.name.prefix(120)) + " (kopya)"
+                            do {
+                                try CADProjectLibrary.save(copy)
+                                success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
+                            } catch { problem = "Kopya kaydedilemedi. " + error.localizedDescription }
+                        } label: {
+                            Label("Farklı kopya kaydet", systemImage: "doc.on.doc")
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                        }
+                        .buttonStyle(.bordered)
                         Button { if saveDetails() { prepareExport() } } label: {
                             Label("Dosyayı hazırla (.tcad)", systemImage: "doc.badge.plus")
                                 .frame(maxWidth: .infinity, minHeight: 48)
@@ -430,6 +446,12 @@ struct EasyCADWorkspace: View {
             .onAppear {
                 if shouldStoreImportedSeed {
                     shouldStoreImportedSeed = false
+                    // Only attach a library revision when the opened file
+                    // exactly matches the document we actually displayed.
+                    // A resumed draft may be newer than its last library save.
+                    if let saved = try? CADProjectLibrary.open(document.id), saved == document {
+                        savedLibrarySnapshot = saved
+                    }
                     do {
                         let stored = try CADLocalDraftStore.restore()
                         if let stored {
