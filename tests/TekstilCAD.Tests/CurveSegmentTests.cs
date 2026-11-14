@@ -186,6 +186,42 @@ public class CurveSegmentTests
     }
 
     [Fact]
+    public void VerySmallNonZeroArcSweepStillEmitsItsEndPoint()
+    {
+        // With a 100 km radius, 9e-9 rad still represents 0.9 mm of travel.
+        // The previous angular-epsilon shortcut silently returned only start.
+        var arc = new CurveSegment.Arc(P(0, 0), 100_000_000, 0, 9e-9);
+        var points = CurveSampler.Sample([arc], 0.1);
+        Assert.True(points.Count >= 2);
+        Assert.Equal(arc.PointAt(0), points[0]);
+        Assert.Equal(arc.PointAt(1), points[^1]);
+        Assert.True(Geometry.Distance(points[0], points[^1]) > 0.8);
+        Assert.Equal(0.9, arc.Length, 12);
+    }
+
+    [Fact]
+    public void ExactZeroSweepOnlyHasOneSample()
+    {
+        var arc = new CurveSegment.Arc(P(0, 0), 100, 0, 0);
+        var points = CurveSampler.Sample([arc], 0.1);
+        Assert.Single(points);
+        Assert.Equal(P(100, 0), points[0]);
+        Assert.Equal(0, arc.Length);
+    }
+
+    [Fact]
+    public void InvalidArcLengthAndTotalLengthFailClosed()
+    {
+        var nan = new CurveSegment.Arc(P(0, 0), 100, 0, double.NaN);
+        var invalidCenter = new CurveSegment.Arc(P(double.PositiveInfinity, 0), 10, 0, 1);
+        var overflowing = new CurveSegment.Arc(P(0, 0), double.MaxValue, 0, double.MaxValue);
+        Assert.Throws<ArgumentOutOfRangeException>(() => nan.Length);
+        Assert.Throws<ArgumentOutOfRangeException>(() => invalidCenter.Length);
+        Assert.Throws<InvalidDataException>(() => overflowing.Length);
+        Assert.Throws<InvalidDataException>(() => CurveSampler.TotalLength([overflowing]));
+    }
+
+    [Fact]
     public void ArcRadiusMustBePositive()
     {
         var seg = new CurveSegment.Arc(P(0, 0), 0, 0, Math.PI);
