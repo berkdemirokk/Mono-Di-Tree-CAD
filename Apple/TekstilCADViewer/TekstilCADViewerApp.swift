@@ -12,6 +12,8 @@ struct TekstilCADViewerApp: App {
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var showingEditor = false
+    @State private var editorStartsWithExample = false
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -27,10 +29,18 @@ private struct ContentView: View {
                 Spacer()
                 if let project { Text(project.name).font(.headline).lineLimit(1) }
             }
-            Text("Yalnızca proje önizlemesi. Düzenleme, serileme, pastal ve üretim çıktıları desteklenmez.")
+            Text("Dosya görüntüleme yalnız önizlemedir. Yeni Kalıp Atölyesi ile basit şekiller oluşturup düzenleyebilirsiniz.")
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
             if let project {
+                Button {
+                    editorStartsWithExample = false
+                    showingEditor = true
+                } label: {
+                    Label("Yeni çizim oluştur", systemImage: "plus.square")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
                 if let notice = project.formatNotice {
                     Text(notice)
                         .font(.caption)
@@ -75,13 +85,46 @@ private struct ContentView: View {
                 Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                Spacer()
-                Text("Önizlemek için bir .tcad dosyası açın.").foregroundStyle(.secondary)
-                Spacer()
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("MONO DI TREE").font(.caption.bold()).tracking(3)
+                            .foregroundStyle(.secondary)
+                        Text("Kalıbını kolayca oluştur").font(.title2.bold())
+                        Text("Başlamak için CAD bilmen gerekmiyor. Önce çiz, sonra ölçüsünü ve konumunu düzenle.")
+                            .foregroundStyle(.secondary)
+                    }
+                    Button {
+                        editorStartsWithExample = false
+                        showingEditor = true
+                    } label: {
+                        Label("Yeni proje oluştur", systemImage: "plus.square")
+                            .frame(maxWidth: .infinity, minHeight: 54)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Boş çizim atölyesi açılır; şekil ekleyebilir ve dosya oluşturabilirsiniz.")
+                    Button {
+                        editorStartsWithExample = true
+                        showingEditor = true
+                    } label: {
+                        Label("Örnekle dene", systemImage: "hand.tap")
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityHint("İki örnek parçayla çizim, taşıma ve geri alma işlemlerini deneyin.")
+                    Text("Elinde .tcad dosyası mı var? Üstteki '.tcad aç' düğmesiyle güvenli önizleme yap.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Text("Önizlemek için bir .tcad dosyası açın.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
             }
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
+        .sheet(isPresented: $showingEditor) {
+            EasyCADWorkspace(example: editorStartsWithExample)
+        }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
                 let url = try result.get()
