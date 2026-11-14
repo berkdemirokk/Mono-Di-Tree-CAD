@@ -31,6 +31,12 @@ private struct ContentView: View {
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
             if let project {
+                if let notice = project.formatNotice {
+                    Text(notice)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .accessibilityAddTraits(.isStaticText)
+                }
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
                         HStack {
@@ -154,6 +160,7 @@ private struct Drawing {
     }
     let name: String
     let pieces: [Piece]
+    let formatNotice: String?
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -176,11 +183,35 @@ private struct Drawing {
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         let root = try JSONSerialization.jsonObject(with: data)
         let object: [String: Any]
+        var schemaVersion = 0
         if let array = root as? [Any], array.count == 2,
-           let version = array[0] as? Int, (1...5).contains(version), let body = array[1] as? [String: Any] {
+           let number = array[0] as? NSNumber,
+           CFGetTypeID(number) != CFBooleanGetTypeID(),
+           number.doubleValue.isFinite, number.doubleValue.rounded() == number.doubleValue,
+           (1...8).contains(number.intValue), let body = array[1] as? [String: Any] {
+            schemaVersion = number.intValue
             object = body
         } else if let body = root as? [String: Any] { object = body }
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
+        // Inspect only contours, not the full Windows production schema. Guard a few
+        // version-required envelopes to avoid silently accepting obviously broken files.
+        if schemaVersion == 6 {
+            let rawPieces = object["Pieces"] as? [[String: Any]] ?? []
+            guard rawPieces.contains(where: { $0["Notches"] != nil }) else {
+                throw ViewerError.message("Sürüm 6 çentik işareti içermiyor.")
+            }
+        }
+        if schemaVersion == 7 {
+            guard let nesting = object["NestingSnapshot"] as? [String: Any],
+                  nesting["RotationTrace"] is [String: Any] else {
+                throw ViewerError.message("Sürüm 7 döndürme izi eksik.")
+            }
+        }
+        if schemaVersion == 8 {
+            guard object["Layers"] is [[String: Any]] else {
+                throw ViewerError.message("Sürüm 8 katman listesi eksik.")
+            }
+        }
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
         }
@@ -227,7 +258,10 @@ private struct Drawing {
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
         }
-        return Drawing(name: name, pieces: pieces)
+        let formatNotice = schemaVersion >= 6
+            ? "Sürüm \(schemaVersion) yalnız kontur önizlemesi: çentikler, döndürülmüş pastal izleri ve katman görünürlüğü uygulanmaz. Fabrika veya kesim doğrulaması değildir."
+            : nil
+        return Drawing(name: name, pieces: pieces, formatNotice: formatNotice)
     }
 }
 
