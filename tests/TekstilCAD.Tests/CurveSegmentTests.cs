@@ -26,7 +26,9 @@ public class CurveSegmentTests
             var lengthSquared = dx * dx + dy * dy;
             var t = lengthSquared == 0 ? 0 : Math.Clamp(
                 ((p.X - a.X) * dx + (p.Y - a.Y) * dy) / lengthSquared, 0, 1);
-            best = Math.Min(best, Math.Hypot(p.X - a.X - t * dx, p.Y - a.Y - t * dy));
+            var ex = p.X - a.X - t * dx;
+            var ey = p.Y - a.Y - t * dy;
+            best = Math.Min(best, Math.Sqrt(ex * ex + ey * ey));
         }
         return best;
     }
