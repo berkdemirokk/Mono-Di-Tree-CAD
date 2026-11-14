@@ -10,9 +10,17 @@ struct TekstilCADViewerApp: App {
 }
 
 private struct ContentView: View {
-    private enum EditorRoute: String, Identifiable {
-        case new, example, resume, imported
-        var id: String { rawValue }
+    private enum EditorRoute: Identifiable, Equatable {
+        case new, example, resume, imported(DraftProject)
+
+        var id: String {
+            switch self {
+            case .new: return "new"
+            case .example: return "example"
+            case .resume: return "resume"
+            case .imported: return "imported"
+            }
+        }
     }
 
     @State private var showingImporter = false
@@ -21,7 +29,6 @@ private struct ContentView: View {
     @State private var hasLocalDraft = CADLocalDraftStore.hasSavedDraft
     @State private var showingReplaceDraftConfirmation = false
     @State private var pendingRoute: EditorRoute = .new
-    @State private var importedDraft: DraftProject?
 
     private func openFreshEditor(example: Bool) {
         if hasLocalDraft {
@@ -37,12 +44,15 @@ private struct ContentView: View {
     }
 
     private func editImportedCopy(_ draft: DraftProject) {
-        importedDraft = draft
+        // Keep the validated source snapshot inside the sheet route.
+        // Separate @State updates for the route and document can otherwise
+        // present a fresh empty editor before its imported seed arrives.
+        let route = EditorRoute.imported(draft)
         if hasLocalDraft {
-            pendingRoute = .imported
+            pendingRoute = route
             showingReplaceDraftConfirmation = true
         } else {
-            editorRoute = .imported
+            editorRoute = route
         }
     }
     @State private var project: Drawing?
@@ -171,8 +181,14 @@ private struct ContentView: View {
         .sheet(item: $editorRoute, onDismiss: {
             hasLocalDraft = CADLocalDraftStore.hasSavedDraft
         }) { route in
+            let imported: DraftProject?
+            if case .imported(let draft) = route {
+                imported = draft
+            } else {
+                imported = nil
+            }
             EasyCADWorkspace(example: route == .example, resume: route == .resume,
-                             imported: route == .imported ? importedDraft : nil)
+                             imported: imported)
         }
         .confirmationDialog("Kaydedilmiş bir çizimin var", isPresented: $showingReplaceDraftConfirmation,
                             titleVisibility: .visible) {
@@ -205,7 +221,6 @@ private struct ContentView: View {
                             selectedPiece = nil
                             drawingRevision = UUID()
                             project = drawing
-                            importedDraft = nil
                         case .failure(let error):
                             self.error = error.localizedDescription
                         }
