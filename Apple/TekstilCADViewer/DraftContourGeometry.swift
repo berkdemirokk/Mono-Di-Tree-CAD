@@ -110,6 +110,16 @@ struct DraftCanvasMap {
         DraftPoint(x: minX + (Double(p.x) - left) / scale, y: minY + (bottom - Double(p.y)) / scale)
     }
 
+    func translation(_ drag: CGSize, for piece: DraftPiece, snap: Bool) -> DraftPoint {
+        func delta(_ pixels: Double, origin: Double) -> Double {
+            guard pixels != 0 else { return 0 }
+            let distance = pixels / scale
+            return snap ? ((origin + distance) / 5).rounded() * 5 - origin : distance
+        }
+        return DraftPoint(x: delta(Double(drag.width), origin: piece.minX),
+                          y: delta(-Double(drag.height), origin: piece.minY))
+    }
+
     func sketchPoint(at location: CGPoint, extent: Double, snapToFive: Bool) -> DraftPoint? {
         let p = model(at: location)
         // Allow sub-nanometre round-off when tapping the border.

@@ -64,6 +64,19 @@ enum CADSketchImport {
             }
             pieces.append(DraftPiece(id: id, name: pieceName, closed: closed, points: points))
         }
+        guard CADFileIO.hasKeyCount(3 + 4 * pieces.count + 2 * totalPoints, in: data) else { return nil }
         return DraftProject(name: name, pieces: pieces)
+    }
+
+    static func encode(_ document: DraftProject) throws -> Data {
+        guard !document.pieces.isEmpty, CADLocalDraftStore.isValid(document) else { throw SketchStoreError.invalid }
+        let pieces: [[String: Any]] = document.pieces.map { piece in
+            ["Id": piece.id.uuidString, "Name": piece.name, "Closed": piece.closed,
+             "Points": piece.points.map { ["X": $0.x, "Y": $0.y] }]
+        }
+        let root: [String: Any] = ["Name": document.name, "GradingRules": [], "Pieces": pieces]
+        let data = try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
+        guard data.count <= maximumBytes else { throw SketchStoreError.oversized }
+        return data
     }
 }

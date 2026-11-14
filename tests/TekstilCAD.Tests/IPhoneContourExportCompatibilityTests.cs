@@ -9,34 +9,8 @@ namespace TekstilCAD.Tests;
 /// DXF/AAMA/ASTM certificate or a test of the iOS share sheet.</summary>
 public sealed class IPhoneContourExportCompatibilityTests
 {
-    private const string IOSShape = """
-    {
-      "GradingRules": [],
-      "Name": "Mobil ön çizim",
-      "Pieces": [
-        {
-          "Closed": true,
-          "Id": "11111111-1111-4111-8111-111111111111",
-          "Name": "Ön parça",
-          "Points": [
-            {"X":0,"Y":0},
-            {"X":100,"Y":0},
-            {"X":100,"Y":150},
-            {"X":0,"Y":150}
-          ]
-        },
-        {
-          "Closed": false,
-          "Id": "22222222-2222-4222-8222-222222222222",
-          "Name": "Çizgi",
-          "Points": [
-            {"X":150,"Y":40},
-            {"X":250,"Y":40}
-          ]
-        }
-      ]
-    }
-    """;
+    private static string MobileFixture => Path.Combine(
+        AppContext.BaseDirectory, "Fixtures", "mobile-simple.tcad");
 
     [Fact]
     public void MobileContourEnvelopeLoadsAndRoundTripsWithoutChangingGeometry()
@@ -45,9 +19,8 @@ public sealed class IPhoneContourExportCompatibilityTests
         Directory.CreateDirectory(folder);
         try
         {
-            var input=Path.Combine(folder,"mobile.tcad");
+            var input = MobileFixture;
             var output=Path.Combine(folder,"desktop.tcad");
-            File.WriteAllText(input, IOSShape, new UTF8Encoding(false,true));
             var imported=ProjectStorage.Load(input);
             Assert.Equal("Mobil ön çizim", imported.Name);
             Assert.Equal(2,imported.Pieces.Count);
@@ -80,7 +53,7 @@ public sealed class IPhoneContourExportCompatibilityTests
     [InlineData("bad-guid")]
     public void InvalidMobilePieceIdentityIsRejectedInsteadOfRepairedSilently(string invalidId)
     {
-        var json=IOSShape.Replace("11111111-1111-4111-8111-111111111111",invalidId,StringComparison.Ordinal);
+        var json = File.ReadAllText(MobileFixture).Replace("11111111-1111-4111-8111-111111111111",invalidId,StringComparison.Ordinal);
         var folder=Path.Combine(Path.GetTempPath(), "tcad-mobile-reject-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         try

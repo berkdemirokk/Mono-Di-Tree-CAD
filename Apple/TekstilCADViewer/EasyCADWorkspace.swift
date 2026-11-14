@@ -2,103 +2,6 @@ import SwiftUI
 
 // A deliberately small, genuinely editable workspace. It creates new contour-only
 // .tcad documents, never rewrites an imported factory project or strips metadata.
-struct DraftPoint: Equatable, Codable {
-    var x: Double
-    var y: Double
-}
-
-struct DraftPiece: Identifiable, Equatable, Codable {
-    var id = UUID()
-    var name: String
-    var closed: Bool
-    var points: [DraftPoint]
-
-    var minX: Double { points.map(\.x).min() ?? 0 }
-    var minY: Double { points.map(\.y).min() ?? 0 }
-    var maxX: Double { points.map(\.x).max() ?? 0 }
-    var maxY: Double { points.map(\.y).max() ?? 0 }
-    var lineLength: Double {
-        guard !closed, points.count >= 2 else { return maxX - minX }
-        return zip(points.dropFirst(), points).reduce(0.0) { length, pair in
-            length + hypot(pair.0.x - pair.1.x, pair.0.y - pair.1.y)
-        }
-    }
-}
-
-struct DraftProject: Equatable, Codable {
-    var name: String
-    var pieces: [DraftPiece]
-
-    static let blank = DraftProject(name: "Yeni kalıp", pieces: [])
-    static let example = DraftProject(name: "Örnek kalıp", pieces: [
-        DraftPiece(name: "Ön parça", closed: true, points: [
-            DraftPoint(x: 0, y: 0), DraftPoint(x: 100, y: 0),
-            DraftPoint(x: 100, y: 160), DraftPoint(x: 0, y: 160)
-        ]),
-        DraftPiece(name: "Çizgi", closed: false, points: [
-            DraftPoint(x: 125, y: 0), DraftPoint(x: 225, y: 100)
-        ])
-    ])
-}
-
-// Persistent offline draft for small, newly created drawings only.
- // Imported factory files are never written here; the draft is not a production file.
-enum CADLocalDraftStore {
-    private static let maximumBytes = 2 * 1024 * 1024
-    private static let maximumPieces = 250
-
-    private static var draftURL: URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("MonoDiTreeCAD", isDirectory: true)
-            .appendingPathComponent("current-draft.json")
-    }
-
-    static func load() -> DraftProject? {
-        guard let url = draftURL,
-              let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let size = attributes[.size] as? NSNumber, size.intValue <= maximumBytes,
-              let data = try? Data(contentsOf: url), data.count <= maximumBytes,
-              let project = try? JSONDecoder().decode(DraftProject.self, from: data),
-              isValid(project) else { return nil }
-        return project
-    }
-
-    static var hasSavedDraft: Bool { load() != nil }
-
-    private static func isValid(_ document: DraftProject) -> Bool {
-        guard !document.name.isEmpty, document.name.count <= 128,
-              document.pieces.count <= maximumPieces else { return false }
-        var ids = Set<UUID>()
-        var totalPoints = 0
-        for piece in document.pieces {
-            guard ids.insert(piece.id).inserted,
-                  !piece.name.isEmpty, piece.name.count <= 128,
-                  piece.points.count >= (piece.closed ? 3 : 2),
-                  piece.points.count <= 10_000 else { return false }
-            totalPoints += piece.points.count
-            guard totalPoints <= 20_000,
-                  piece.points.allSatisfy({ $0.x.isFinite && $0.y.isFinite &&
-                      abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else { return false }
-        }
-        return true
-    }
-
-    static func save(_ document: DraftProject) throws {
-        guard isValid(document), let url = draftURL else {
-            throw CocoaError(.fileWriteInvalidFileName)
-        }
-        let bytes = try JSONEncoder().encode(document)
-        guard bytes.count <= maximumBytes else { throw CocoaError(.fileWriteOutOfSpace) }
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                withIntermediateDirectories: true)
-        try bytes.write(to: url, options: .atomic)
-    }
-
-    static func discard() {
-        if let url = draftURL { try? FileManager.default.removeItem(at: url) }
-    }
-}
-
 struct EasyCADWorkspace: View {
     @Environment(\.dismiss) private var dismiss
     @State private var document: DraftProject
@@ -118,22 +21,22 @@ struct EasyCADWorkspace: View {
     @State private var dragStarted = false
     @State private var draggedPieceID: UUID?
     @State private var currentDrag = CGSize.zero
+    @State private var editingPoints: DraftPiece?
     @State private var showingTouchComposer = false
     @State private var shouldStoreImportedSeed = false
 
-    init(example: Bool, resume: Bool = false, imported: DraftProject? = nil) {
-        let initial = imported ?? (resume ? (CADLocalDraftStore.load() ?? DraftProject.blank)
-            : (example ? DraftProject.example : DraftProject.blank))
+    init(example: Bool, imported: DraftProject? = nil) {
+        let initial = imported ?? (example ? DraftProject.example : DraftProject.blank)
         _shouldStoreImportedSeed = State(initialValue: imported != nil)
         _document = State(initialValue: initial)
         _projectName = State(initialValue: initial.name)
         _selectedID = State(initialValue: initial.pieces.first?.id)
         if let first = initial.pieces.first {
             _pieceName = State(initialValue: first.name)
-            _pieceX = State(initialValue: Self.number(first.minX))
-            _pieceY = State(initialValue: Self.number(first.minY))
-            _pieceWidth = State(initialValue: Self.number(first.lineLength))
-            _pieceHeight = State(initialValue: Self.number(first.maxY - first.minY))
+            _pieceX = State(initialValue: DraftPiece.display(first.minX))
+            _pieceY = State(initialValue: DraftPiece.display(first.minY))
+            _pieceWidth = State(initialValue: DraftPiece.display(first.lineLength))
+            _pieceHeight = State(initialValue: DraftPiece.display(first.maxY - first.minY))
         }
     }
 
@@ -141,38 +44,39 @@ struct EasyCADWorkspace: View {
         document.pieces.firstIndex(where: { $0.id == selectedID })
     }
 
-    private static func number(_ value: Double) -> String {
-        value.formatted(.number.grouping(.never).precision(.fractionLength(0...3)))
-    }
-
-    private func numericInput(_ text: String) -> Double? {
-        guard let value = Double(text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")),
-              value.isFinite, abs(value) <= 100_000_000 else { return nil }
-        return value
-    }
-
     private func select(_ piece: DraftPiece?) {
         selectedID = piece?.id
         pieceName = piece?.name ?? ""
-        pieceX = piece.map { Self.number($0.minX) } ?? ""
-        pieceY = piece.map { Self.number($0.minY) } ?? ""
-        pieceWidth = piece.map { Self.number($0.lineLength) } ?? ""
-        pieceHeight = piece.map { Self.number($0.maxY - $0.minY) } ?? ""
+        pieceX = piece.map { DraftPiece.display($0.minX) } ?? ""
+        pieceY = piece.map { DraftPiece.display($0.minY) } ?? ""
+        pieceWidth = piece.map { DraftPiece.display($0.lineLength) } ?? ""
+        pieceHeight = piece.map { DraftPiece.display($0.maxY - $0.minY) } ?? ""
     }
 
-    private func commit(_ updated: DraftProject, notice: String) {
-        guard updated != document else { return }
+    @discardableResult
+    private func commit(_ updated: DraftProject, notice: String) -> Bool {
+        guard updated != document else { return true }
+        guard CADLocalDraftStore.isValid(updated) else {
+            problem = "Değişiklik çizimin parça, nokta veya koordinat sınırlarını aşıyor."
+            return false
+        }
+        guard persistDraft(updated) else { return false }
         undoStack.append(document)
         if undoStack.count > 50 { undoStack.removeFirst() }
         redoStack.removeAll()
         document = updated
         exportURL = nil
         success = notice
+        return true
+    }
+
+    private func persistDraft(_ project: DraftProject) -> Bool {
         do {
-            try CADLocalDraftStore.save(updated)
+            try CADLocalDraftStore.save(project)
+            return true
         } catch {
-            problem = "Değişiklik uygulandı ancak yerel taslak kaydedilemedi. Uygulamayı kapatmadan .tcad olarak dışa aktarın."
+            problem = "Taslak kaydedilemedi. " + error.localizedDescription
+            return false
         }
     }
 
@@ -185,7 +89,7 @@ struct EasyCADWorkspace: View {
             DraftPoint(x: start + 100, y: start + 150), DraftPoint(x: start, y: start + 150)
         ])
         updated.pieces.append(piece)
-        commit(updated, notice: "Yeni dikdörtgen eklendi. Ölçüleri milimetre cinsindendir.")
+        guard commit(updated, notice: "Yeni dikdörtgen eklendi. Ölçüleri milimetre cinsindendir.") else { return }
         select(piece)
     }
 
@@ -197,7 +101,7 @@ struct EasyCADWorkspace: View {
         }
         var updated = document
         updated.pieces.append(piece)
-        commit(updated, notice: "Parmakla çizdiğiniz \(piece.points.count) noktalı kontur eklendi.")
+        guard commit(updated, notice: "Parmakla çizdiğiniz \(piece.points.count) noktalı kontur eklendi.") else { return }
         select(piece)
     }
 
@@ -209,76 +113,35 @@ struct EasyCADWorkspace: View {
             DraftPoint(x: start, y: start), DraftPoint(x: start + 100, y: start)
         ])
         updated.pieces.append(piece)
-        commit(updated, notice: "100 mm uzunluğunda bir çizgi eklendi.")
+        guard commit(updated, notice: "100 mm uzunluğunda bir çizgi eklendi.") else { return }
         select(piece)
     }
 
-    private func saveDetails() {
+    @discardableResult
+    private func saveDetails() -> Bool {
         let name = projectName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= 128 else {
-            problem = "Proje adı 1–128 karakter arasında olmalı."; return
+            problem = "Proje adı 1–128 karakter arasında olmalı."
+            return false
         }
         var updated = document
         updated.name = name
         if let index = selectedIndex {
             let selectedName = pieceName.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !selectedName.isEmpty, selectedName.count <= 128,
-                  let x = numericInput(pieceX), let y = numericInput(pieceY) else {
-                problem = "Parça adını ve X/Y konumlarını kontrol edin. Ölçü birimi mm."; return
-            }
             let piece = updated.pieces[index]
-            // Move the *bounding-box origin* to X/Y. Never reset control point
-            // order or a 90°-rotated contour to the original rectangle when merely
-            // editing its name. That would silently change the user's pattern.
-            let dx = x - piece.minX, dy = y - piece.minY
-            var translated = piece.points.map { DraftPoint(x: $0.x + dx, y: $0.y + dy) }
-            if piece.closed {
-                guard let width = numericInput(pieceWidth), let height = numericInput(pieceHeight),
-                      width > 0, height > 0 else {
-                    problem = "En ve boy 0'dan büyük, geçerli milimetre değerleri olmalı."; return
-                }
-                let originalWidth = piece.maxX - piece.minX
-                let originalHeight = piece.maxY - piece.minY
-                guard originalWidth > 0, originalHeight > 0 else {
-                    problem = "Bu parçanın ölçüleri sıfır olamaz."; return
-                }
-                // Scale relative to the bounding box, preserving the four source
-                // vertices' order and the orientation after rotations/mirroring.
-                let sx = width / originalWidth, sy = height / originalHeight
-                translated = piece.points.map { p in
-                    DraftPoint(x: x + (p.x - piece.minX) * sx,
-                               y: y + (p.y - piece.minY) * sy)
-                }
-            } else if !piece.closed {
-                guard let length = numericInput(pieceWidth), length > 0 else {
-                    problem = "Çizgi uzunluğu sıfırdan büyük olmalı."; return
-                }
-                let original = piece.lineLength
-                guard original > 0, original.isFinite else {
-                    problem = "Çizgi uzunluğu geçersiz."; return
-                }
-                // Uniform scaling preserves all point directions in a multi-
-                // segment open contour, then moves the bounding box to X/Y.
-                let scale = length / original
-                let origin = piece.points[0]
-                let resized = piece.points.map { p in
-                    DraftPoint(x: origin.x + (p.x - origin.x) * scale,
-                               y: origin.y + (p.y - origin.y) * scale)
-                }
-                let minRX = resized.map(\.x).min() ?? 0
-                let minRY = resized.map(\.y).min() ?? 0
-                translated = resized.map {
-                    DraftPoint(x: x + $0.x - minRX, y: y + $0.y - minRY)
-                }
+            guard !selectedName.isEmpty, selectedName.count <= 128,
+                  let resized = piece.applyingDimensions(x: pieceX, y: pieceY,
+                                                         width: pieceWidth, height: pieceHeight) else {
+                problem = "Parça adını, konumunu ve milimetre ölçülerini kontrol edin."
+                return false
             }
-            guard translated.allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else {
-                problem = "Kalıp çalışma alanı sınırını aşıyor."; return
-            }
+            updated.pieces[index].points = resized
             updated.pieces[index].name = selectedName
-            updated.pieces[index].points = translated
         }
-        commit(updated, notice: "Değişiklikler uygulandı.")
-        if let index = selectedIndex { select(document.pieces[index]) }
+        guard commit(updated, notice: "Değişiklikler uygulandı.") else { return false }
+        projectName = updated.name
+        if let index = selectedIndex { select(updated.pieces[index]) }
+        return true
     }
 
     private func move(dx: Double, dy: Double) {
@@ -289,7 +152,7 @@ struct EasyCADWorkspace: View {
             problem = "Kalıp çalışma alanı sınırını aşıyor."; return
         }
         updated.pieces[index].points = points
-        commit(updated, notice: "Parça taşındı.")
+        guard commit(updated, notice: "Parça taşındı.") else { return }
         select(document.pieces[index])
     }
 
@@ -297,29 +160,27 @@ struct EasyCADWorkspace: View {
         guard let index = selectedIndex else { return }
         var updated = document
         let piece = updated.pieces[index]
-        let cx = (piece.minX + piece.maxX) / 2
-        let cy = (piece.minY + piece.maxY) / 2
-        let points = piece.points.map { DraftPoint(x: cx - ($0.y - cy), y: cy + ($0.x - cx)) }
+        let points = piece.rotatedQuarterTurn()
         guard points.allSatisfy({ abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else {
             problem = "Döndürülmüş parça çalışma alanı sınırını aşıyor."; return
         }
         updated.pieces[index].points = points
-        commit(updated, notice: "Parça 90° döndürüldü.")
+        guard commit(updated, notice: "Parça 90° döndürüldü.") else { return }
         select(document.pieces[index])
     }
 
     private func duplicateSelected() {
-        guard let index = selectedIndex, document.pieces.count < 250 else { return }
+        guard let index = selectedIndex else { return }
         var updated = document
         var copy = updated.pieces[index]
         copy.id = UUID()
-        copy.name += " kopya"
+        copy.name = String(copy.name.prefix(122)) + " kopya"
         copy.points = copy.points.map { DraftPoint(x: $0.x + 20, y: $0.y + 20) }
         guard copy.points.allSatisfy({ abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else {
             problem = "Kopya çalışma alanı sınırını aşıyor."; return
         }
         updated.pieces.append(copy)
-        commit(updated, notice: "Bağımsız bir parça kopyası oluşturuldu.")
+        guard commit(updated, notice: "Bağımsız bir parça kopyası oluşturuldu.") else { return }
         select(copy)
     }
 
@@ -327,53 +188,36 @@ struct EasyCADWorkspace: View {
         guard let index = selectedIndex else { return }
         var updated = document
         updated.pieces.remove(at: index)
-        commit(updated, notice: "Parça silindi. Geri Al ile geri getirebilirsiniz.")
+        guard commit(updated, notice: "Parça silindi. Geri Al ile geri getirebilirsiniz.") else { return }
         select(updated.pieces.first)
     }
 
     private func undo() {
-        guard let previous = undoStack.popLast() else { return }
+        guard let previous = undoStack.last, persistDraft(previous) else { return }
+        undoStack.removeLast()
         redoStack.append(document)
         document = previous
         exportURL = nil
         select(document.pieces.first(where: { $0.id == selectedID }) ?? document.pieces.first)
         projectName = document.name
-        do { try CADLocalDraftStore.save(document) }
-        catch { problem = "Geri alınan taslak otomatik kaydedilemedi." }
         success = "İşlem geri alındı."
     }
 
     private func redo() {
-        guard let next = redoStack.popLast() else { return }
+        guard let next = redoStack.last, persistDraft(next) else { return }
+        redoStack.removeLast()
         undoStack.append(document)
         document = next
         exportURL = nil
         select(document.pieces.first(where: { $0.id == selectedID }) ?? document.pieces.first)
         projectName = document.name
-        do { try CADLocalDraftStore.save(document) }
-        catch { problem = "Yenilenen taslak otomatik kaydedilemedi." }
         success = "İşlem yeniden uygulandı."
     }
 
     private func prepareExport() {
         guard !document.pieces.isEmpty else { problem = "Önce en az bir parça ekleyin."; return }
-        // Export v1 contour-only data, not an unsupported production metadata format.
-        // IDs are mandatory for the Windows loader; grading is intentionally empty.
-        let body: [String: Any] = [
-            "Name": document.name,
-            "GradingRules": [],
-            "Pieces": document.pieces.map { piece in
-                [
-                    "Id": piece.id.uuidString, "Name": piece.name, "Closed": piece.closed,
-                    "Points": piece.points.map { ["X": $0.x, "Y": $0.y] }
-                ] as [String: Any]
-            }
-        ]
         do {
-            let bytes = try JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted, .sortedKeys])
-            guard bytes.count < 64 * 1024 * 1024 else {
-                problem = "Dosya 64 MB sınırını aşıyor."; return
-            }
+            let bytes = try CADSketchImport.encode(document)
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("MonoDiTree-\(UUID().uuidString).tcad")
             try bytes.write(to: url, options: .atomic)
@@ -481,8 +325,17 @@ struct EasyCADWorkspace: View {
                                             .textFieldStyle(.roundedBorder)
                                     }
                                 }
-                                Button("Ölçüleri, konumu ve adı uygula") { saveDetails() }
+                                Button("Ölçüleri, konumu ve adı uygula") { _ = saveDetails() }
                                     .buttonStyle(.borderedProminent)
+                                if let index = selectedIndex {
+                                    if document.pieces[index].points.count <= DraftContourGeometry.pointLimit {
+                                        Button("Kontur noktalarını düzenle") { editingPoints = document.pieces[index] }
+                                            .buttonStyle(.bordered)
+                                    } else {
+                                        Text("Nokta düzenleme en fazla 250 noktalı konturlarda kullanılabilir.")
+                                            .font(.caption)
+                                    }
+                                }
                                 HStack {
                                     Button("← 10 mm") { move(dx: -10, dy: 0) }
                                     Button("10 mm →") { move(dx: 10, dy: 0) }
@@ -503,14 +356,25 @@ struct EasyCADWorkspace: View {
                         Label("4 · Dosyanı kaydet", systemImage: "square.and.arrow.up").font(.headline)
                         TextField("Proje adı", text: $projectName)
                             .textFieldStyle(.roundedBorder)
-                        Button("Proje adını uygula") { saveDetails() }
+                        Button("Proje adını uygula") { _ = saveDetails() }
                             .buttonStyle(.bordered)
                         HStack {
                             Button("Geri al", action: undo).disabled(undoStack.isEmpty)
                             Button("İleri al", action: redo).disabled(redoStack.isEmpty)
                         }
                         .buttonStyle(.bordered)
-                        Button { saveDetails(); if problem == nil { prepareExport() } } label: {
+                        Button {
+                            guard saveDetails() else { return }
+                            do {
+                                try CADProjectLibrary.save(document)
+                                success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
+                            } catch { problem = error.localizedDescription }
+                        } label: {
+                            Label("Projeyi kaydet", systemImage: "tray.and.arrow.down")
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Button { if saveDetails() { prepareExport() } } label: {
                             Label("Dosyayı hazırla (.tcad)", systemImage: "doc.badge.plus")
                                 .frame(maxWidth: .infinity, minHeight: 48)
                         }
@@ -538,6 +402,14 @@ struct EasyCADWorkspace: View {
                     catch { problem = "Kopya açıldı ancak cihazda saklanamadı. Kapatmadan önce dışa aktarın." }
                 }
             }
+            .sheet(item: $editingPoints) { piece in
+                ContourPointEditor(piece: piece) { edited in
+                    guard let index = document.pieces.firstIndex(where: { $0.id == edited.id }) else { return }
+                    var updated = document
+                    updated.pieces[index] = edited
+                    if commit(updated, notice: "Kontur noktaları güncellendi.") { select(edited) }
+                }
+            }
             .sheet(isPresented: $showingTouchComposer) {
                 TouchContourComposer { newPiece in
                     addTouchContour(newPiece)
@@ -560,36 +432,16 @@ struct EasyCADWorkspace: View {
     }
 
     // Drawing, hit testing and finger movement share the same transform.
-    private struct PreviewTransform {
-        let scale: Double
-        let minX: Double
-        let minY: Double
-        let offsetX: Double
-        let offsetY: Double
-        let height: Double
-
-        func point(_ p: DraftPoint) -> CGPoint {
-            CGPoint(x: offsetX + (p.x - minX) * scale,
-                    y: height - offsetY - (p.y - minY) * scale)
-        }
-    }
-
-    private func transform(_ size: CGSize) -> PreviewTransform? {
-        let points = document.pieces.flatMap(\.points)
-        guard let first = points.first, size.width > 40, size.height > 40 else { return nil }
+    private func transform(_ size: CGSize) -> DraftCanvasMap? {
+        guard let first = document.pieces.first?.points.first, size.width > 40, size.height > 40 else { return nil }
         var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-        for p in points {
-            minX = min(minX, p.x); maxX = max(maxX, p.x)
-            minY = min(minY, p.y); maxY = max(maxY, p.y)
+        for piece in document.pieces {
+            for p in piece.points {
+                minX = min(minX, p.x); maxX = max(maxX, p.x)
+                minY = min(minY, p.y); maxY = max(maxY, p.y)
+            }
         }
-        let w = max(maxX - minX, 1), h = max(maxY - minY, 1)
-        let scale = min(max((Double(size.width) - 32) / w, 0.000001),
-                        max((Double(size.height) - 32) / h, 0.000001))
-        guard scale.isFinite, scale > 0 else { return nil }
-        return PreviewTransform(scale: scale, minX: minX, minY: minY,
-            offsetX: (Double(size.width) - (maxX - minX) * scale) / 2,
-            offsetY: (Double(size.height) - (maxY - minY) * scale) / 2,
-            height: Double(size.height))
+        return DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 16)
     }
 
     private func segmentDistance(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> Double {
@@ -620,7 +472,7 @@ struct EasyCADWorkspace: View {
         guard let transform = transform(size) else { return nil }
         var closest: (piece: DraftPiece, distance: Double)?
         for piece in document.pieces.reversed() {
-            let vertices = piece.points.map(transform.point)
+            let vertices = piece.points.map(transform.screen)
             if piece.closed && inside(point, polygon: vertices) { return piece }
             guard vertices.count >= 2 else { continue }
             let count = piece.closed ? vertices.count : vertices.count - 1
@@ -634,14 +486,10 @@ struct EasyCADWorkspace: View {
 
     private func finishDrag(_ translation: CGSize, size: CGSize) {
         defer { dragStarted = false; draggedPieceID = nil; currentDrag = .zero }
-        guard draggedPieceID != nil, let transform = transform(size) else { return }
-        var dx = Double(translation.width) / transform.scale
-        var dy = -Double(translation.height) / transform.scale
-        guard dx.isFinite, dy.isFinite else { return }
-        if snapToFiveMillimeters {
-            dx = (dx / 5).rounded() * 5
-            dy = (dy / 5).rounded() * 5
-        }
+        guard let index = selectedIndex, document.pieces[index].id == draggedPieceID,
+              let transform = transform(size) else { return }
+        let delta = transform.translation(translation, for: document.pieces[index], snap: snapToFiveMillimeters)
+        let dx = delta.x, dy = delta.y
         guard dx.isFinite, dy.isFinite, abs(dx) <= 100_000_000, abs(dy) <= 100_000_000 else {
             problem = "Sürükleme çalışma alanını aşıyor."
             return
@@ -657,7 +505,7 @@ struct EasyCADWorkspace: View {
                     guard let first = piece.points.first else { continue }
                     let delta = piece.id == draggedPieceID ? currentDrag : .zero
                     func position(_ p: DraftPoint) -> CGPoint {
-                        let q = mapper.point(p)
+                        let q = mapper.screen(p)
                         return CGPoint(x: q.x + delta.width, y: q.y + delta.height)
                     }
                     var path = Path()

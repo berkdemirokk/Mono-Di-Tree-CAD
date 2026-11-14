@@ -1,3 +1,17 @@
+  TekstilCADSketchTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: UnitTests
+      - path: Tests/Fixtures/mobile-simple.tcad
+        buildPhase: resources
+    dependencies:
+      - target: TekstilCADViewer_iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.berkdemirokk.monoditreecad.sketchtests
+        SWIFT_VERSION: '5.0'
   TekstilCADViewerUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -19,7 +33,9 @@ schemes:
     build:
       targets:
         TekstilCADViewer_iOS: all
+        TekstilCADSketchTests: [test]
         TekstilCADViewerUITests: [test]
     test:
       targets:
+        - TekstilCADSketchTests
         - TekstilCADViewerUITests
