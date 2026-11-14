@@ -146,7 +146,7 @@ enum CADLocalDraftStore {
 
     /// Rejects edits based on a stale in-memory draft even when its UUID is the
     /// same. A successful write must then become the next expected snapshot.
-    /// This is optimistic stale-session protection, not a cross-process lock.
+    /// Cooperating writers are serialized by the adjacent permanent lock file.
     static func save(_ project: DraftProject, replacing expected: DraftProject?, to url: URL) throws {
         try CADFileIO.withExclusiveLock(for: url) {
             let previous: DraftProject?
@@ -201,7 +201,7 @@ enum CADProjectLibrary {
 
     /// Never overwrite a different version of a saved project without the
     /// caller's verified snapshot. Repeated saves of identical content are safe.
-    /// Like autosave, this is optimistic protection, not an OS file lock.
+    /// Cooperative processes serialize the compare-and-write through a lock sidecar.
     static func save(_ project: DraftProject, replacing expected: DraftProject? = nil) throws {
         try save(project, replacing: expected, to: url(project.id))
     }
