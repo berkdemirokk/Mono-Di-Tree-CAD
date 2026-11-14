@@ -1,6 +1,6 @@
 # Mono Di Tree CAD Apple kontur görüntüleyici — başlangıç
 
-Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` dosyası seçip parça konturlarını salt okunur gösterir. Eski JSON nesnesi ile 1–5 sürümlü `[sürüm, proje]` zarfındaki `Name`, `Pieces`, `Points`, `Closed` alanlarını okur. Dosyaya yazmaz. Dosya seçiciden iCloud Drive dahil erişilebilir dosyalar açılabilir.
+Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` dosyası seçip parça konturlarını salt okunur gösterir. Eski JSON nesnesi ile 1–8 sürümlü `[sürüm, proje]` zarfındaki `Name`, `Pieces`, `Points`, `Closed` alanlarını **yalnız kontur önizlemesi amacıyla** okur. Sürüm 6–8 için zorunlu bazı zarf alanları kontrol edilir; Windows doğrulayıcısının tüm şema ve geometri kuralları uygulanmaz. Dosyaya yazmaz. Dosya seçiciden iCloud Drive dahil erişilebilir dosyalar açılabilir.
 
 ## Xcode'da oluşturma
 
@@ -12,7 +12,7 @@ iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı eri
 
 ## Sınırlar
 
-Uygulama GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. Serileme, pastal, kaynak geçmişi, dışa aktarma, çizim araçları ve cihaz bağlantıları işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
+Uygulama GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Sürüm 6–8 için uygulama görünür bir uyarı verir: çentikler, döndürülmüş pastal izleri, katman görünürlüğü ve üretim semantiği dikkate alınmaz. Dolayısıyla Windows'ta gizli olan bir katman iPhone önizlemesinde görülebilir; bu görüntü üretim dosyası veya kullanıcı yetkilendirmesi değildir. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. Serileme, pastal, kaynak geçmişi, dışa aktarma, çizim araçları ve cihaz bağlantıları işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
 
 Dağıtım öncesi en azından Xcode derlemesi, gerçek cihaz dosya sağlayıcıları ve masaüstü örnekleriyle uyumluluk, erişilebilirlik ve büyük dosya performansı doğrulanmalıdır.
 
@@ -22,7 +22,7 @@ TestFlight için macOS üzerinde Xcode ve XcodeGen ile projenin üretilmesi, do�
 
 ## GitHub Actions ile derleme kontrolü
 
-`.github/workflows/apple-ci.yml` yalnızca Actions sekmesinden elle başlatıldığında GitHub'ın macOS çalıştırıcısında XcodeGen projesini üretir, iPhone simülatöründe derler ve temel arayüz testini çalıştırır. Her değişiklikte otomatik çalışmaz. Test uygulamanın açılışını ve dosya seçicisinin iptal edilmesini kontrol eder; dosya içe aktarmayı, gerçek cihazı veya TestFlight yüklemesini doğrulamaz. GitHub kullanım kotasını önce kontrol edin.
+`.github/workflows/apple-ci.yml` yalnızca Actions sekmesinden elle başlatıldığında GitHub'ın macOS çalıştırıcısında XcodeGen projesini üretir, iPhone simülatöründe derler ve temel arayüz testini çalıştırır. Her değişiklikte otomatik çalışmaz. Simülatör testleri uygulamanın açılışını, sistem dosya seçicisi iptalini, test fixture'larından kontur yükleme/hatalı dosya reddini ve yeni sürüm uyarısını kontrol eder; gerçek dosya sağlayıcısını, üretim-format round-trip'ini, gerçek cihazı veya TestFlight yüklemesini doğrulamaz. GitHub kullanım kotasını önce kontrol edin.
 
 TestFlight için ayrıca Apple Developer üyeliği, App Store Connect uygulama kaydı, dağıtım imzası ve arşiv/yükleme gerekir. İmzalama ve yükleme otomasyonu bu iş akışında bulunmaz; kimlik bilgilerini kaynak koduna veya günlüklere koymayın. Başvuru: [GitHub macOS çalıştırıcıları](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/customize-runners), [Apple simülatör hedefleri](https://developer.apple.com/documentation/xcode/building-and-running-an-app), [GitHub imzalama belgeleri](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
 
