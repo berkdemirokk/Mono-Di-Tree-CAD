@@ -28,8 +28,6 @@ struct EasyCADWorkspace: View {
     // Görünüm kamera durumu (çizim sekmesi için)
     @State private var viewZoom: CGFloat = 1
     @State private var viewOffset: CGSize = .zero
-    @GestureState private var viewPinch: CGFloat = 1
-    @GestureState private var viewDrag: CGSize = .zero
 
     init(example: Bool, imported: DraftProject? = nil) {
         let initial = imported ?? (example ? DraftProject.example : DraftProject.blank)
@@ -343,9 +341,7 @@ struct EasyCADWorkspace: View {
                 document: $document, selectedID: $selectedID,
                 addRectangle: addRectangle, addLine: addLine, addBezier: addBezier, addArc: addArc,
                 addTouchContour: { showingTouchComposer = true },
-                selectPiece: { id in _ = selectFromMenu(id) },
-                viewZoom: $viewZoom, viewOffset: $viewOffset,
-                viewPinch: viewPinch, viewDrag: viewDrag
+                selectPiece: { id in _ = selectFromMenu(id) }
             )
             .tabItem { Label("Çizim", systemImage: "pencil") }
             .tag(0)
@@ -440,10 +436,10 @@ private struct DrawTabView: View {
     let addArc: () -> Void
     let addTouchContour: () -> Void
     let selectPiece: (UUID?) -> Void
-    @Binding var viewZoom: CGFloat
-    @Binding var viewOffset: CGSize
-    let viewPinch: CGFloat
-    let viewDrag: CGSize
+    @State private var viewZoom: CGFloat = 1
+    @State private var viewOffset: CGSize = .zero
+    @GestureState private var viewPinch: CGFloat = 1
+    @GestureState private var viewDrag: CGSize = .zero
 
     private var selectedPiece: DraftPiece? {
         document.pieces.first { $0.id == selectedID }

@@ -23,3 +23,23 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.graphics-design
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
         INFOPLIST_KEY_UIFileSharingEnabled: YES
+        INFOPLIST_KEY_CFBundleShortVersionString: '1.0'
+        INFOPLIST_KEY_CFBundleVersion: '1'
+        INFOPLIST_KEY_NSFileProviderUsageDescription: "Mono Di Tree CAD, Dosyalar uygulaması üzerinden .tcad projelerini açmak ve kaydetmek için dosya erişimine ihtiyaç duyar."
+        INFOPLIST_KEY_UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.berkdemirokk.monoditreecad.tcad
+            UTTypeDescription: Mono Di Tree CAD drawing
+            UTTypeConformsTo:
+              - public.content
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - tcad
+        INFOPLIST_KEY_CFBundleDocumentTypes:
+          - CFBundleTypeName: Mono Di Tree CAD Drawing
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - com.berkdemirokk.monoditreecad.tcad
+              - public.content
+            CFBundleTypeIconFiles:
+              - AppIcon
