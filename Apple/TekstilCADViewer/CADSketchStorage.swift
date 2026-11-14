@@ -32,22 +32,38 @@ enum SketchStoreError: LocalizedError {
 }
 
 enum CADFileIO {
+    // POSIX fcntl record locks synchronize *processes*, but not independent
+    // threads in one process. Hold a recursive in-process lock too: archive
+    // may safely call library save while owning the current-draft lock.
+    private static let processLock = NSRecursiveLock()
+
     /// Lock a permanent sidecar inode rather than the atomically replaced data
     /// file. Cooperating editors/processes serialize check-and-write this way.
     /// Do not unlink the sidecar, even when the document is removed.
     static func withExclusiveLock<T>(for target: URL, _ operation: () throws -> T) throws -> T {
+        processLock.lock()
+        defer { processLock.unlock() }
+
         try FileManager.default.createDirectory(
             at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let lock = target.appendingPathExtension("lock")
-        let fd = Darwin.open(lock.path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, mode_t(0o600))
+        let lockURL = target.appendingPathExtension("lock")
+        let fd = Darwin.open(lockURL.path, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, mode_t(0o600))
         guard fd >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
         defer { _ = Darwin.close(fd) }
 
-        while Darwin.flock(fd, LOCK_EX) != 0 {
+        var request = Darwin.flock()
+        request.l_type = Int16(F_WRLCK)
+        request.l_whence = Int16(SEEK_SET)
+        request.l_start = 0
+        request.l_len = 0  // To EOF, including future writes.
+        while Darwin.fcntl(fd, F_SETLKW, &request) == -1 {
             if errno == EINTR { continue }
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
         }
-        defer { _ = Darwin.flock(fd, LOCK_UN) }
+        defer {
+            request.l_type = Int16(F_UNLCK)
+            _ = Darwin.fcntl(fd, F_SETLK, &request)
+        }
         return try operation()
     }
 
