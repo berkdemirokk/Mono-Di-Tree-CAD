@@ -58,6 +58,43 @@ final class CADStorageTests: XCTestCase {
         XCTAssertEqual(try CADLocalDraftStore.read(url), original)
     }
 
+    func testStaleEditWithSameProjectIdCannotOverwriteNewerDraft() throws {
+        let url = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let initial = DraftProject.example
+        var newer = initial
+        newer.name = "Güncel çizim"
+        try CADLocalDraftStore.save(initial, replacing: nil, to: url)
+        try CADLocalDraftStore.save(newer, replacing: initial, to: url)
+
+        let before = try Data(contentsOf: url)
+        var stale = initial
+        stale.name = "Eski oturum"
+        XCTAssertThrowsError(try CADLocalDraftStore.save(stale, replacing: initial, to: url)) { error in
+            guard case SketchStoreError.changed = error else {
+                return XCTFail("Stale revision should report a conflict, got \(error)")
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertEqual(try CADLocalDraftStore.read(url), newer)
+    }
+
+    func testReplacingUnexpectedOrDeletedDraftIsRejected() throws {
+        let url = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let original = DraftProject.example
+        var edited = original
+        edited.name = "Yeni isim"
+        // A missing draft is not silently recreated by a stale session.
+        XCTAssertThrowsError(try CADLocalDraftStore.save(edited, replacing: original, to: url))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+
+        try CADLocalDraftStore.save(original, replacing: nil, to: url)
+        // A new editor without an existing snapshot may not overwrite an older draft.
+        XCTAssertThrowsError(try CADLocalDraftStore.save(edited, replacing: nil, to: url))
+        XCTAssertEqual(try CADLocalDraftStore.read(url), original)
+    }
+
     func testUnchangedInputRotationAndSnappedDragKeepPrecision() throws {
         let piece = DraftPiece(name: "Çizgi", closed: false, points: [
             DraftPoint(x: 3.123456, y: -1.123456), DraftPoint(x: 6.123456, y: 2.876544)])
