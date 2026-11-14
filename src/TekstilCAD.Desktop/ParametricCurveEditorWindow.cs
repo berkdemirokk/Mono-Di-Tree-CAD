@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -42,11 +43,11 @@ internal sealed class ParametricCurveEditorWindow : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        var cancel = new Button { Content = "Vazgeç", Padding = new Thickness(14, 8), Margin = new Thickness(4) };
+        var cancel = new Button { Content = "Vazgeç", Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(4) };
         cancel.Click += (_, _) => Close();
         cancel.IsCancel = true;
         buttons.Children.Add(cancel);
-        var save = new Button { Content = "Kontrol noktalarını uygula", Padding = new Thickness(14, 8), Margin = new Thickness(4) };
+        var save = new Button { Content = "Kontrol noktalarını uygula", Padding = new Thickness(14, 8, 14, 8), Margin = new Thickness(4) };
         save.Click += (_, _) => Apply();
         save.IsDefault = true;
         buttons.Children.Add(save);
