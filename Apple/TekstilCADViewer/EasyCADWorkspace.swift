@@ -18,8 +18,10 @@ struct DraftPiece: Identifiable, Equatable, Codable {
     var maxX: Double { points.map(\.x).max() ?? 0 }
     var maxY: Double { points.map(\.y).max() ?? 0 }
     var lineLength: Double {
-        guard !closed, points.count == 2 else { return maxX - minX }
-        return hypot(points[1].x - points[0].x, points[1].y - points[0].y)
+        guard !closed, points.count >= 2 else { return maxX - minX }
+        return zip(points.dropFirst(), points).reduce(0.0) { length, pair in
+            length + hypot(pair.0.x - pair.1.x, pair.0.y - pair.1.y)
+        }
     }
 }
 
@@ -228,7 +230,7 @@ struct EasyCADWorkspace: View {
             // editing its name. That would silently change the user's pattern.
             let dx = x - piece.minX, dy = y - piece.minY
             var translated = piece.points.map { DraftPoint(x: $0.x + dx, y: $0.y + dy) }
-            if piece.closed, piece.points.count == 4 {
+            if piece.closed {
                 guard let width = numericInput(pieceWidth), let height = numericInput(pieceHeight),
                       width > 0, height > 0 else {
                     problem = "En ve boy 0'dan büyük, geçerli milimetre değerleri olmalı."; return
@@ -245,25 +247,27 @@ struct EasyCADWorkspace: View {
                     DraftPoint(x: x + (p.x - piece.minX) * sx,
                                y: y + (p.y - piece.minY) * sy)
                 }
-            } else if !piece.closed, piece.points.count == 2 {
+            } else if !piece.closed {
                 guard let length = numericInput(pieceWidth), length > 0 else {
                     problem = "Çizgi uzunluğu sıfırdan büyük olmalı."; return
                 }
-                let vx = piece.points[1].x - piece.points[0].x
-                let vy = piece.points[1].y - piece.points[0].y
-                let original = hypot(vx, vy)
-                guard original > 0 else { problem = "Çizgi uzunluğu geçersiz."; return }
-                // Preserve the line's direction including negative X/Y. Then
-                // shift its bounding box to the requested coordinates.
-                let resized = [
-                    piece.points[0],
-                    DraftPoint(x: piece.points[0].x + vx / original * length,
-                               y: piece.points[0].y + vy / original * length)
-                ]
-                let minRX = min(resized[0].x, resized[1].x)
-                let minRY = min(resized[0].y, resized[1].y)
-                translated = resized.map { DraftPoint(x: x + $0.x - minRX,
-                                                      y: y + $0.y - minRY) }
+                let original = piece.lineLength
+                guard original > 0, original.isFinite else {
+                    problem = "Çizgi uzunluğu geçersiz."; return
+                }
+                // Uniform scaling preserves all point directions in a multi-
+                // segment open contour, then moves the bounding box to X/Y.
+                let scale = length / original
+                let origin = piece.points[0]
+                let resized = piece.points.map { p in
+                    DraftPoint(x: origin.x + (p.x - origin.x) * scale,
+                               y: origin.y + (p.y - origin.y) * scale)
+                }
+                let minRX = resized.map(\.x).min() ?? 0
+                let minRY = resized.map(\.y).min() ?? 0
+                translated = resized.map {
+                    DraftPoint(x: x + $0.x - minRX, y: y + $0.y - minRY)
+                }
             }
             guard translated.allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else {
                 problem = "Kalıp çalışma alanı sınırını aşıyor."; return
@@ -470,7 +474,7 @@ struct EasyCADWorkspace: View {
                                             }
                                         }
                                     } else {
-                                        Text("Çizgi uzunluğu (mm)").font(.caption)
+                                        Text("Toplam çizgi uzunluğu (mm)").font(.caption)
                                         TextField("Uzunluk", text: $pieceWidth)
                                             .textFieldStyle(.roundedBorder)
                                     }
