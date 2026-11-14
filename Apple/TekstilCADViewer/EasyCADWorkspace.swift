@@ -17,6 +17,10 @@ struct DraftPiece: Identifiable, Equatable, Codable {
     var minY: Double { points.map(\.y).min() ?? 0 }
     var maxX: Double { points.map(\.x).max() ?? 0 }
     var maxY: Double { points.map(\.y).max() ?? 0 }
+    var lineLength: Double {
+        guard !closed, points.count == 2 else { return maxX - minX }
+        return hypot(points[1].x - points[0].x, points[1].y - points[0].y)
+    }
 }
 
 struct DraftProject: Equatable, Codable {
@@ -123,7 +127,7 @@ struct EasyCADWorkspace: View {
             _pieceName = State(initialValue: first.name)
             _pieceX = State(initialValue: Self.number(first.minX))
             _pieceY = State(initialValue: Self.number(first.minY))
-            _pieceWidth = State(initialValue: Self.number(first.maxX - first.minX))
+            _pieceWidth = State(initialValue: Self.number(first.lineLength))
             _pieceHeight = State(initialValue: Self.number(first.maxY - first.minY))
         }
     }
@@ -148,7 +152,7 @@ struct EasyCADWorkspace: View {
         pieceName = piece?.name ?? ""
         pieceX = piece.map { Self.number($0.minX) } ?? ""
         pieceY = piece.map { Self.number($0.minY) } ?? ""
-        pieceWidth = piece.map { Self.number($0.maxX - $0.minX) } ?? ""
+        pieceWidth = piece.map { Self.number($0.lineLength) } ?? ""
         pieceHeight = piece.map { Self.number($0.maxY - $0.minY) } ?? ""
     }
 
@@ -206,21 +210,29 @@ struct EasyCADWorkspace: View {
                 problem = "Parça adını ve X/Y konumlarını kontrol edin. Ölçü birimi mm."; return
             }
             let piece = updated.pieces[index]
+            // Move the *bounding-box origin* to X/Y. Never reset control point
+            // order or a 90°-rotated contour to the original rectangle when merely
+            // editing its name. That would silently change the user's pattern.
             let dx = x - piece.minX, dy = y - piece.minY
             var translated = piece.points.map { DraftPoint(x: $0.x + dx, y: $0.y + dy) }
             if piece.closed, piece.points.count == 4 {
-                // The starter only creates axis-aligned four-point rectangles.
                 guard let width = numericInput(pieceWidth), let height = numericInput(pieceHeight),
                       width > 0, height > 0 else {
                     problem = "En ve boy 0'dan büyük, geçerli milimetre değerleri olmalı."; return
                 }
-                translated = [
-                    DraftPoint(x: x, y: y), DraftPoint(x: x + width, y: y),
-                    DraftPoint(x: x + width, y: y + height), DraftPoint(x: x, y: y + height)
-                ]
+                let originalWidth = piece.maxX - piece.minX
+                let originalHeight = piece.maxY - piece.minY
+                guard originalWidth > 0, originalHeight > 0 else {
+                    problem = "Bu parçanın ölçüleri sıfır olamaz."; return
+                }
+                // Scale relative to the bounding box, preserving the four source
+                // vertices' order and the orientation after rotations/mirroring.
+                let sx = width / originalWidth, sy = height / originalHeight
+                translated = piece.points.map { p in
+                    DraftPoint(x: x + (p.x - piece.minX) * sx,
+                               y: y + (p.y - piece.minY) * sy)
+                }
             } else if !piece.closed, piece.points.count == 2 {
-                // Length is edited along the existing line direction. For the
-                // initial horizontal line it directly controls its width.
                 guard let length = numericInput(pieceWidth), length > 0 else {
                     problem = "Çizgi uzunluğu sıfırdan büyük olmalı."; return
                 }
@@ -228,10 +240,17 @@ struct EasyCADWorkspace: View {
                 let vy = piece.points[1].y - piece.points[0].y
                 let original = hypot(vx, vy)
                 guard original > 0 else { problem = "Çizgi uzunluğu geçersiz."; return }
-                translated = [
-                    DraftPoint(x: x, y: y),
-                    DraftPoint(x: x + vx / original * length, y: y + vy / original * length)
+                // Preserve the line's direction including negative X/Y. Then
+                // shift its bounding box to the requested coordinates.
+                let resized = [
+                    piece.points[0],
+                    DraftPoint(x: piece.points[0].x + vx / original * length,
+                               y: piece.points[0].y + vy / original * length)
                 ]
+                let minRX = min(resized[0].x, resized[1].x)
+                let minRY = min(resized[0].y, resized[1].y)
+                translated = resized.map { DraftPoint(x: x + $0.x - minRX,
+                                                      y: y + $0.y - minRY) }
             }
             guard translated.allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else {
                 problem = "Kalıp çalışma alanı sınırını aşıyor."; return
