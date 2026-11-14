@@ -76,15 +76,16 @@ xcodegen generate --spec project.ci.yml
 | `missing-closed.tcad` | Kapalı alan alanı yok (hata beklenir) |
 | `nan-coordinate.tcad` | NaN koordinat (hata beklenir) |
 | `many-pieces.tcad` | Çok parçalı proje |
+| `mobile-simple.tcad` | iPhone tarafından üretilen yalın çizim; güvenli düzenlenebilir kopya testi |
 
 ## Test sınıfları
 
 | Sınıf | Test metotları |
 |-------|---------------|
-| `ViewerUITests` | 3 test (başlatma/dosya seçici iptali, bozuk alanlar, arama/seçim) |
-| `FixtureLoadingTests` | 7 test (fixture yükleme, hata durumları) |
+| `ViewerUITests` | Başlangıç, örnek çizim, taslak kurtarma, dosya seçici, bozuk alan ve arama testleri |
+| `FixtureLoadingTests` | Sürüm zarfı, veri sınırları, parça seçimi, yalın iPhone çizimini kopya açma ve metaverili fabrika dosyası reddi |
 
-Toplam: **10 UI testi**, **7 fixture dosyası**.
+Güncel test ve fixture sayıları için `Apple/Tests/` kodunu temel alın; eski sabit sayıların tekrar edilmesi doğru değildir.
 
 ## TestFlight dağıtımı
 
@@ -106,7 +107,7 @@ Workflow girdileri:
 
 ## Sınırlar
 
-- Uygulama **salt-okunur** önizleme sürümüdür; düzenleme, serileme, pastal ve üretim çıktıları desteklenmez
+- **İçe alınan fabrika projesi** salt okunur gösterilir. Ayrı başlangıç atölyesi yeni kontur oluşturur ve yalnız yalın iPhone `.tcad` dosyalarının düzenlenebilir kopyasını açabilir. Serileme, pastal ve üretim çıktıları desteklenmez.
 - Maksimum dosya boyutu: 64 MB
 - Maksimum parça sayısı: 10.000
 - Maksimum nokta sayısı (parça başına): 10,000
@@ -116,7 +117,7 @@ Workflow girdileri:
 
 ## GitHub Actions
 
-- `apple-ci.yml` — Sadece elle tetiklenir (`workflow_dispatch`), iPhone simülatöründe derleme + UI testi
+- `apple-ci.yml` — Elle veya Apple dosyalarını etkileyen ana dal PR'larında tetiklenir, iPhone simülatöründe derleme + UI testi; aynı PR'daki eski denemeler iptal edilir
 - `apple-testflight.yml` — Sadece elle tetiklenir, IPA derleme + App Store Connect yükleme
 
 Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; GitHub Secrets aracılığıyla saklayın.
@@ -147,3 +148,11 @@ Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; Gi
 8. Bu özellik ücretli dış servis veya gizli API anahtarı gerektirmemeli.
 
 UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla sıfırlar; bu argüman yayın uygulamasında çalışmaz.
+
+## Yeni test: iPhone çizim kopyasını yeniden düzenleme
+
+1. `mobile-simple.tcad` önizlemesinde **Kopyasını düzenle** düğmesi görünmeli. Başka bir yerel taslak yoksa direkt açılmalı; varsa mevcut taslağı değiştirmeden önce onay sorulmalı.
+2. Açılan düzenleyicide kaynak çizimdeki iki parçanın adları, açık/kapalı bilgisi, UUID ve mm koordinatları korunmalı. Kaydedilen kopya Windows C# dosya okuyucusuyla tekrar yüklenmeli.
+3. `mobile-simple.tcad` içinde `Metadata`, `Notches`, `Layers`, sürüm zarfı, dolu `GradingRules` veya bilinmeyen alan varsa **Kopyasını düzenle** görünmemeli. Dosya kontur önizlemesine uygun olsa bile metaveriler düzenleme yoluyla kaybolmamalı.
+4. Düzenleyici kapatılınca yerel otomatik taslak **Son çizime devam et** ile geri açılmalı. Kaynak `.tcad` dosyasının baytları değişmemeli.
+5. `CADSketchImport.swift` ayrık, yalnız basit format kabul eden bir geçittir; üretim için yetkili DXF/veri korunumu doğrulayıcısının yerini almaz.
