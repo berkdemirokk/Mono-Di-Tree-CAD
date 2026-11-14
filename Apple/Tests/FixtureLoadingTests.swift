@@ -13,6 +13,73 @@ final class FixtureLoadingTests: XCTestCase {
         return app
     }
 
+
+
+    // Preview parser smoke checks. Production traces still need Windows-side validation.
+    private func launch(json: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(json.utf8).base64EncodedString()
+        app.launch()
+        return app
+    }
+
+    private func versionedProject(_ version: Any, includeRequiredMetadata: Bool = false) -> String {
+        var piece: [String: Any] = [
+            "Name": "Kontur", "Closed": true,
+            "Points": [["X": 0, "Y": 0], ["X": 100, "Y": 0], ["X": 100, "Y": 100]]
+        ]
+        var body: [String: Any] = [
+            "Name": "Windows Önizleme", "Pieces": [piece], "GradingRules": []
+        ]
+        if includeRequiredMetadata, let number = version as? Int {
+            switch number {
+            case 6:
+                piece["Notches"] = [["VertexIndex": 0, "Position": ["X": 0, "Y": 0]]]
+                body["Pieces"] = [piece]
+            case 7:
+                body["NestingSnapshot"] = ["RotationTrace": [:] as [String: Any]]
+            case 8:
+                body["Layers"] = [[
+                    "Id": "00000000-0000-0000-0000-000000000000",
+                    "Name": "Katman 1", "Visible": true, "Locked": false
+                ]]
+            default:
+                break
+            }
+        }
+        let data = try! JSONSerialization.data(withJSONObject: [version, body], options: [.sortedKeys])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func testNewerWindowsEnvelopesShowReadOnlyLimitations() {
+        for version in [6, 7, 8] {
+            let app = launch(json: versionedProject(version, includeRequiredMetadata: true))
+            XCTAssertTrue(app.staticTexts["Windows Önizleme"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.staticTexts["1 parça • Ölçekli üretim çıktısı değildir"].exists)
+            let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Sürüm \(version) yalnız kontur önizlemesi")).firstMatch
+            XCTAssertTrue(notice.exists)
+            app.terminate()
+        }
+    }
+
+    func testUnsupportedAndMalformedNewerVersionsAreRejected() {
+        let cases: [(String, String)] = [
+            (versionedProject(9), "Desteklenmeyen proje biçimi."),
+            (versionedProject(8), "Sürüm 8 katman listesi eksik."),
+            (versionedProject(7), "Sürüm 7 döndürme izi eksik."),
+            (versionedProject(6), "Sürüm 6 çentik işareti içermiyor."),
+            (versionedProject(true), "Desteklenmeyen proje biçimi.")
+        ]
+        for (fixture, message) in cases {
+            let app = launch(json: fixture)
+            let alert = app.alerts["Dosya açılamadı"]
+            XCTAssertTrue(alert.waitForExistence(timeout: 15))
+            XCTAssertTrue(alert.staticTexts[message].exists)
+            app.terminate()
+        }
+    }
+
     func testEmptyProjectLoadsWithoutError() {
         let app = launch(with: "empty-project")
         XCTAssertTrue(app.staticTexts["Boş Proje"].waitForExistence(timeout: 15))
