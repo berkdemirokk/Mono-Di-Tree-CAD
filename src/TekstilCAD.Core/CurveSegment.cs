@@ -5,9 +5,9 @@ namespace TekstilCAD.Core;
 /// <summary>A single parametric contour segment. Curves keep their exact
 /// mathematical representation instead of being baked into a polyline.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(Line), "line")]
-[JsonDerivedType(typeof(CubicBezier), "cubicBezier")]
-[JsonDerivedType(typeof(Arc), "arc")]
+[JsonDerivedType(typeof(CurveSegment.Line), "line")]
+[JsonDerivedType(typeof(CurveSegment.CubicBezier), "cubicBezier")]
+[JsonDerivedType(typeof(CurveSegment.Arc), "arc")]
 public abstract record CurveSegment
 {
     /// <summary>Parametric length of the segment in millimetres.</summary>
