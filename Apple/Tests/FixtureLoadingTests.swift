@@ -4,7 +4,7 @@ final class FixtureLoadingTests: XCTestCase {
 
     private func launch(with fixture: String) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-reset-draft", "--ui-test-fixture"]
         if let url = Bundle(for: Self.self).url(forResource: fixture, withExtension: "tcad"),
            let data = try? Data(contentsOf: url) {
             app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = data.base64EncodedString()
@@ -18,7 +18,7 @@ final class FixtureLoadingTests: XCTestCase {
     // Preview parser smoke checks. Production traces still need Windows-side validation.
     private func launch(json: String) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-reset-draft", "--ui-test-fixture"]
         app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(json.utf8).base64EncodedString()
         app.launch()
         return app
@@ -59,6 +59,8 @@ final class FixtureLoadingTests: XCTestCase {
             XCTAssertTrue(app.staticTexts["1 parça • Ölçekli üretim çıktısı değildir"].exists)
             let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Sürüm \(version) yalnız kontur önizlemesi")).firstMatch
             XCTAssertTrue(notice.exists)
+            XCTAssertFalse(app.buttons["Kopyasını düzenle"].exists,
+                           "A versioned production project must remain read-only.")
             app.terminate()
         }
     }
@@ -95,6 +97,33 @@ final class FixtureLoadingTests: XCTestCase {
         app.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS %@", text))
             .firstMatch.exists
+    }
+
+    func testOwnSimpleMobileFileCanBeEditedAsACopy() {
+        let app = launch(with: "mobile-simple")
+        XCTAssertTrue(app.staticTexts["Telefon çizimi"].waitForExistence(timeout: 15))
+        let edit = app.buttons["Kopyasını düzenle"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 10))
+        edit.tap()
+        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"]
+            .waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Dikdörtgen ekle"].exists)
+        app.buttons["Kapat"].tap()
+        XCTAssertTrue(app.buttons["Son çizime devam et"].waitForExistence(timeout: 10))
+    }
+
+    func testSketchWithProductionMetadataIsReadOnly() {
+        let sketch = #"""
+        {"Name":"Özel üretim","GradingRules":[],
+         "Pieces":[{"Id":"11111111-1111-4111-8111-111111111111",
+           "Name":"İşaretli","Closed":true,
+           "Points":[{"X":0,"Y":0},{"X":100,"Y":0},{"X":100,"Y":100}],
+           "Metadata":{"Role":"Kesim","Size":"M"}}]}
+        """#
+        let app = launch(json: sketch)
+        XCTAssertTrue(app.staticTexts["Özel üretim"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["Kopyasını düzenle"].exists,
+                       "Unsupported metadata must not be discarded silently.")
     }
 
     func testEmptyProjectLoadsWithoutError() {
