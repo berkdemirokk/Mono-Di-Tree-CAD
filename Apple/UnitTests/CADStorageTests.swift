@@ -96,6 +96,49 @@ final class CADStorageTests: XCTestCase {
         XCTAssertEqual(try CADLocalDraftStore.read(url), original)
     }
 
+    func testSavedProjectRejectsStaleUpdateWithoutTouchingLatestBytes() throws {
+        let url = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let original = DraftProject.example
+        var newer = original
+        newer.name = "Güncel proje"
+        try CADProjectLibrary.save(original, replacing: nil, to: url)
+        try CADProjectLibrary.save(newer, replacing: original, to: url)
+
+        let before = try Data(contentsOf: url)
+        var stale = original
+        stale.name = "Eski editör"
+        XCTAssertThrowsError(try CADProjectLibrary.save(stale, replacing: original, to: url)) { error in
+            guard let storeError = error as? SketchStoreError,
+                  case .changed = storeError else {
+                return XCTFail("Expected saved-project revision conflict, got \(error)")
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertEqual(try CADLocalDraftStore.read(url), newer)
+    }
+
+    func testLibraryRejectsMismatchedIdentityAndAllowsIdenticalRetry() throws {
+        let url = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let stored = DraftProject.example
+        try CADProjectLibrary.save(stored, replacing: nil, to: url)
+        let originalBytes = try Data(contentsOf: url)
+
+        // Idempotent retry may not erase the only copy.
+        try CADProjectLibrary.save(stored, replacing: nil, to: url)
+        XCTAssertEqual(try CADLocalDraftStore.read(url), stored)
+        var other = stored
+        other.id = UUID()
+        XCTAssertThrowsError(try CADProjectLibrary.save(other, replacing: stored, to: url)) { error in
+            guard let storeError = error as? SketchStoreError,
+                  case .identity = storeError else {
+                return XCTFail("Expected mismatched identity, got \(error)")
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: url), originalBytes)
+    }
+
     func testUnchangedInputRotationAndSnappedDragKeepPrecision() throws {
         let piece = DraftPiece(name: "Çizgi", closed: false, points: [
             DraftPoint(x: 3.123456, y: -1.123456), DraftPoint(x: 6.123456, y: 2.876544)])
