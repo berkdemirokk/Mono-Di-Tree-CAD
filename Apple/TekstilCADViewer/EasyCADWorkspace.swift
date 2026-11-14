@@ -119,10 +119,12 @@ struct EasyCADWorkspace: View {
     @State private var draggedPieceID: UUID?
     @State private var currentDrag = CGSize.zero
     @State private var showingTouchComposer = false
+    @State private var shouldStoreImportedSeed = false
 
-    init(example: Bool, resume: Bool = false) {
-        let initial = resume ? (CADLocalDraftStore.load() ?? DraftProject.blank)
-            : (example ? DraftProject.example : DraftProject.blank)
+    init(example: Bool, resume: Bool = false, imported: DraftProject? = nil) {
+        let initial = imported ?? (resume ? (CADLocalDraftStore.load() ?? DraftProject.blank)
+            : (example ? DraftProject.example : DraftProject.blank))
+        _shouldStoreImportedSeed = State(initialValue: imported != nil)
         _document = State(initialValue: initial)
         _projectName = State(initialValue: initial.name)
         _selectedID = State(initialValue: initial.pieces.first?.id)
@@ -529,6 +531,13 @@ struct EasyCADWorkspace: View {
                 .controlSize(.large)
             }
             .navigationTitle("Kalıp atölyesi")
+            .onAppear {
+                if shouldStoreImportedSeed {
+                    shouldStoreImportedSeed = false
+                    do { try CADLocalDraftStore.save(document) }
+                    catch { problem = "Kopya açıldı ancak cihazda saklanamadı. Kapatmadan önce dışa aktarın." }
+                }
+            }
             .sheet(isPresented: $showingTouchComposer) {
                 TouchContourComposer { newPiece in
                     addTouchContour(newPiece)
