@@ -42,7 +42,7 @@ public sealed class ParametricCurvePersistenceTests
         {
             ProjectStorage.Save(source, path);
             var text = File.ReadAllText(path);
-            Assert.StartsWith("[\n  9,", text);
+            Assert.Equal(9, JsonNode.Parse(text)!.AsArray()[0]!.GetValue<int>());
             Assert.Contains("\"$type\"", text);
             var loaded = ProjectStorage.Load(path);
             Assert.True(DocumentSession.ContentEquals(source, loaded));
