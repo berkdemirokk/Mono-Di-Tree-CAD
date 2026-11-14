@@ -2,12 +2,12 @@ import SwiftUI
 
 // A deliberately small, genuinely editable workspace. It creates new contour-only
 // .tcad documents, never rewrites an imported factory project or strips metadata.
-private struct DraftPoint: Equatable {
+struct DraftPoint: Equatable, Codable {
     var x: Double
     var y: Double
 }
 
-private struct DraftPiece: Identifiable, Equatable {
+struct DraftPiece: Identifiable, Equatable, Codable {
     var id = UUID()
     var name: String
     var closed: Bool
@@ -19,7 +19,7 @@ private struct DraftPiece: Identifiable, Equatable {
     var maxY: Double { points.map(\.y).max() ?? 0 }
 }
 
-private struct DraftProject: Equatable {
+struct DraftProject: Equatable, Codable {
     var name: String
     var pieces: [DraftPiece]
 
@@ -33,6 +33,64 @@ private struct DraftProject: Equatable {
             DraftPoint(x: 125, y: 0), DraftPoint(x: 225, y: 100)
         ])
     ])
+}
+
+// Persistent offline draft for small, newly created drawings only.
+ // Imported factory files are never written here; the draft is not a production file.
+enum CADLocalDraftStore {
+    private static let maximumBytes = 2 * 1024 * 1024
+    private static let maximumPieces = 250
+
+    private static var draftURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("MonoDiTreeCAD", isDirectory: true)
+            .appendingPathComponent("current-draft.json")
+    }
+
+    static func load() -> DraftProject? {
+        guard let url = draftURL,
+              let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber, size.intValue <= maximumBytes,
+              let data = try? Data(contentsOf: url), data.count <= maximumBytes,
+              let project = try? JSONDecoder().decode(DraftProject.self, from: data),
+              isValid(project) else { return nil }
+        return project
+    }
+
+    static var hasSavedDraft: Bool { load() != nil }
+
+    private static func isValid(_ document: DraftProject) -> Bool {
+        guard !document.name.isEmpty, document.name.count <= 128,
+              document.pieces.count <= maximumPieces else { return false }
+        var ids = Set<UUID>()
+        var totalPoints = 0
+        for piece in document.pieces {
+            guard ids.insert(piece.id).inserted,
+                  !piece.name.isEmpty, piece.name.count <= 128,
+                  piece.points.count >= (piece.closed ? 3 : 2),
+                  piece.points.count <= 10_000 else { return false }
+            totalPoints += piece.points.count
+            guard totalPoints <= 20_000,
+                  piece.points.allSatisfy({ $0.x.isFinite && $0.y.isFinite &&
+                      abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else { return false }
+        }
+        return true
+    }
+
+    static func save(_ document: DraftProject) throws {
+        guard isValid(document), let url = draftURL else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
+        let bytes = try JSONEncoder().encode(document)
+        guard bytes.count <= maximumBytes else { throw CocoaError(.fileWriteOutOfSpace) }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try bytes.write(to: url, options: .atomic)
+    }
+
+    static func discard() {
+        if let url = draftURL { try? FileManager.default.removeItem(at: url) }
+    }
 }
 
 struct EasyCADWorkspace: View {
@@ -51,8 +109,9 @@ struct EasyCADWorkspace: View {
     @State private var success: String?
     @State private var exportURL: URL?
 
-    init(example: Bool) {
-        let initial = example ? DraftProject.example : DraftProject.blank
+    init(example: Bool, resume: Bool = false) {
+        let initial = resume ? (CADLocalDraftStore.load() ?? DraftProject.blank)
+            : (example ? DraftProject.example : DraftProject.blank)
         _document = State(initialValue: initial)
         _projectName = State(initialValue: initial.name)
         _selectedID = State(initialValue: initial.pieces.first?.id)
@@ -97,6 +156,11 @@ struct EasyCADWorkspace: View {
         document = updated
         exportURL = nil
         success = notice
+        do {
+            try CADLocalDraftStore.save(updated)
+        } catch {
+            problem = "Değişiklik uygulandı ancak yerel taslak kaydedilemedi. Uygulamayı kapatmadan .tcad olarak dışa aktarın."
+        }
     }
 
     private func addRectangle() {
@@ -232,6 +296,8 @@ struct EasyCADWorkspace: View {
         exportURL = nil
         select(document.pieces.first(where: { $0.id == selectedID }) ?? document.pieces.first)
         projectName = document.name
+        do { try CADLocalDraftStore.save(document) }
+        catch { problem = "Geri alınan taslak otomatik kaydedilemedi." }
         success = "İşlem geri alındı."
     }
 
@@ -242,6 +308,8 @@ struct EasyCADWorkspace: View {
         exportURL = nil
         select(document.pieces.first(where: { $0.id == selectedID }) ?? document.pieces.first)
         projectName = document.name
+        do { try CADLocalDraftStore.save(document) }
+        catch { problem = "Yenilenen taslak otomatik kaydedilemedi." }
         success = "İşlem yeniden uygulandı."
     }
 
@@ -282,7 +350,7 @@ struct EasyCADWorkspace: View {
                         Text("Kalıbını oluştur").font(.title2.bold())
                         Text("Ölçüler milimetre (mm). Önce bir şekil ekle, sonra aşağıdaki araçlarla düzenle.")
                             .foregroundStyle(.secondary)
-                        Text("Yeni çizim atölyesi • Üretim/kesim onayı değildir.")
+                        Text("Çizimler cihazda otomatik saklanır • Üretim/kesim onayı değildir.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
 
