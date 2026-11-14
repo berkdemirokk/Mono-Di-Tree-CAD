@@ -1020,7 +1020,8 @@ public class MainWindow : Window
         dirty = session.IsDirty; Refresh(); SetStatus(changed ? description : "Değişiklik yok · Çalışmanız ve işlem geçmişi korundu");
     }
     public void AddPiece(List<Point2> points,bool closed) => AddPiece(points,closed,null);
-    internal void AddPiece(List<Point2> points,bool closed,Action? onCommitted)
+    internal void AddPiece(List<Point2> points,bool closed,Action? onCommitted,
+                           IReadOnlyList<CurveSegment>? curves = null)
     {
         if (points.Count < (closed ? 3 : 2)) return;
         // New geometry goes to the layer selected in the panel. A hidden or locked
@@ -1031,7 +1032,7 @@ public class MainWindow : Window
         if (target is not { Visible: true, Locked: false })
         { SetStatus("Kalıp eklenmedi · Seçili ve varsayılan katman gizli veya kilitli. Önce bir katmanı görünür ve kilitsiz yapın."); return; }
         var layerId = target.Id;
-        CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", LayerId=layerId, Points=[.. points], Closed=closed }; Document.Pieces.Add(p); SetSelectionCore([p.Id],p.Id); },onCommitted);
+        CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", LayerId=layerId, Points=[.. points], Closed=closed, Curves=curves is null ? null : [..curves] }; Document.Pieces.Add(p); SetSelectionCore([p.Id],p.Id); },onCommitted);
     }
     internal Action? AfterDxfLoadBeforeRefreshForVerification { get; set; }
     internal Action? AfterProjectLoadBeforeRefreshForVerification { get; set; }
