@@ -156,3 +156,11 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 3. `mobile-simple.tcad` içinde `Metadata`, `Notches`, `Layers`, sürüm zarfı, dolu `GradingRules` veya bilinmeyen alan varsa **Kopyasını düzenle** görünmemeli. Dosya kontur önizlemesine uygun olsa bile metaveriler düzenleme yoluyla kaybolmamalı.
 4. Düzenleyici kapatılınca yerel otomatik taslak **Son çizime devam et** ile geri açılmalı. Kaynak `.tcad` dosyasının baytları değişmemeli.
 5. `CADSketchImport.swift` ayrık, yalnız basit format kabul eden bir geçittir; üretim için yetkili DXF/veri korunumu doğrulayıcısının yerini almaz.
+
+## Taslak kayıt çakışması
+
+- Otomatik kayıt artık yalnız proje UUID'sini değil, düzenleme başlamadan önce bilinen son disk içeriğini de kontrol eder. Aynı UUID'li eski bir ekranın yaptığı kaydetme girişimi reddedilir; daha yeni taslak sessizce değiştirilmez.
+- Geri al/ileri al ve normal düzenleme aynı kontrolü kullanır. Çakışmada hata gösterilir, çalışma alanındaki değişiklikler kullanıcı tarafından dışa aktarılabilir.
+- Bir projenin dosyası başka bir ekran tarafından değiştirilmişse önce projeyi yeniden açın; eski ekran üzerinden kaydetmeyi zorlamayın.
+- Bu **iyimser sürüm kontrolü**, farklı süreçlerin aynı anda okuma/yazma yaptığı son derece dar bir yarış aralığı için işletim sistemi düzeyinde kilit sağlamaz. Çoklu süreç atomik yazma/kilit sözleşmesi ayrıca doğrulanmalıdır.
+- `CADStorageTests` içinde aynı kimlikli eski sürüm ve beklenmeyen/silinmiş dosya regresyonları bulunur.
