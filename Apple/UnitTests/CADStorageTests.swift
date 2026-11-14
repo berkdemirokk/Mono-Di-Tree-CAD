@@ -139,6 +139,40 @@ final class CADStorageTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url), originalBytes)
     }
 
+    func testConcurrentDraftWritesRejectOneStaleSession() throws {
+        let url = temporaryFile()
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.appendingPathExtension("lock"))
+        }
+        let base = DraftProject.example
+        try CADLocalDraftStore.save(base, replacing: nil, to: url)
+
+        let gate = DispatchSemaphore(value: 0)
+        let group = DispatchGroup()
+        let counterLock = NSLock()
+        var committed = 0
+        for index in 0..<2 {
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+                gate.wait()
+                var updated = base
+                updated.name = "Editör \(index)"
+                if (try? CADLocalDraftStore.save(updated, replacing: base, to: url)) != nil {
+                    counterLock.lock()
+                    committed += 1
+                    counterLock.unlock()
+                }
+                group.leave()
+            }
+        }
+        gate.signal()
+        gate.signal()
+        XCTAssertEqual(group.wait(timeout: .now() + 10), .success)
+        XCTAssertEqual(committed, 1)
+        XCTAssertNotEqual(try CADLocalDraftStore.read(url), base)
+    }
+
     func testUnchangedInputRotationAndSnappedDragKeepPrecision() throws {
         let piece = DraftPiece(name: "Çizgi", closed: false, points: [
             DraftPoint(x: 3.123456, y: -1.123456), DraftPoint(x: 6.123456, y: 2.876544)])
