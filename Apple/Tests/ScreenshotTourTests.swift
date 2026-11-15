@@ -67,6 +67,14 @@ final class ScreenshotTourTests: XCTestCase {
         XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
         snap("03-editor-one-piece")
 
+        // The drawing should stay on screen while a dimension is being typed.
+        if reachAndTap(app.textFields["En"], in: app) {
+            sleep(1)
+            snap("03b-editor-typing-dimension")
+            let done = app.keyboards.buttons["Done"]
+            if done.exists { done.tap() }
+        }
+
         for step in 1...4 {
             app.scrollViews.firstMatch.swipeUp()
             snap("0\(3 + step)-editor-scrolled-\(step)")

@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // A deliberately small, genuinely editable workspace. It creates new contour-only
 // .tcad documents, never rewrites an imported factory project or strips metadata.
@@ -28,6 +31,11 @@ struct EasyCADWorkspace: View {
     // draft uses nil; resumed sessions start from their verified snapshot.
     @State private var persistedSnapshot: DraftProject?
     @State private var savedLibrarySnapshot: DraftProject?
+    // The pinned drawing gives way to the keyboard so the focused field stays reachable.
+    @State private var keyboardVisible = false
+    #if os(iOS)
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #endif
     @FocusState private var pieceNameFocused: Bool
 
     init(example: Bool, imported: DraftProject? = nil) {
@@ -256,192 +264,252 @@ struct EasyCADWorkspace: View {
         }
     }
 
+    // MARK: Layout
+    // The drawing stays on screen while the tools below it scroll, so a dimension can be
+    // typed while looking at the piece it changes.
+
+    private var canvasHeight: CGFloat {
+        if keyboardVisible { return 110 }
+        #if os(iOS)
+        if verticalSizeClass == .compact { return 130 }
+        #endif
+        return 230
+    }
+
+    /// With the keyboard up in landscape there is no room left for both the drawing and a field.
+    private var showsCanvas: Bool {
+        #if os(iOS)
+        if keyboardVisible && verticalSizeClass == .compact { return false }
+        #endif
+        return true
+    }
+
+    private var canvasPanel: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            preview
+            if !document.pieces.isEmpty {
+                Text("\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let success {
+                Text(success).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+    }
+
+    private var addRectangleButton: some View {
+        Button { addRectangle() } label: {
+            Label("Dikdörtgen ekle", systemImage: "square")
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.borderedProminent)
+    }
+
+    private var addLineButton: some View {
+        Button { addLine() } label: {
+            Label("Çizgi ekle", systemImage: "line.diagonal")
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var addSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("1 · Parça ekle", systemImage: "plus.square.on.square").font(.headline)
+            // Side by side when both labels fit on one line, otherwise stacked (narrow
+            // screens, large text), so a label is never broken inside a word.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    addRectangleButton
+                    addLineButton
+                }
+                VStack(spacing: 10) {
+                    addRectangleButton
+                    addLineButton
+                }
+            }
+            Button {
+                if !hasPendingDetails || saveDetails() { showingTouchComposer = true }
+            } label: {
+                Label("Parmakla yeni kontur çiz", systemImage: "pencil.tip.crop.circle")
+                    .frame(maxWidth: .infinity, minHeight: 50)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func millimetreField(_ title: String, label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading) {
+            Text(label).font(.caption)
+            TextField(title, text: text)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.done)
+                #if os(iOS)
+                // Digits, minus, comma and point without switching keyboards.
+                .keyboardType(.numbersAndPunctuation)
+                #endif
+        }
+    }
+
+    @ViewBuilder
+    private var moveButtons: some View {
+        Button("← 10 mm") { move(dx: -10, dy: 0) }
+        Button("10 mm →") { move(dx: 10, dy: 0) }
+        Button("90° döndür") { rotateSelected() }
+    }
+
+    @ViewBuilder
+    private var copyDeleteButtons: some View {
+        Button("Kopyala", action: duplicateSelected)
+        Button("Sil", role: .destructive, action: deleteSelected)
+    }
+
+    @ViewBuilder
+    private func selectedPieceControls(_ index: Int) -> some View {
+        TextField("Parça adı", text: $pieceName)
+            .textFieldStyle(.roundedBorder)
+            .accessibilityLabel("Seçili parçanın adı")
+            .submitLabel(.done)
+            .focused($pieceNameFocused)
+            .onSubmit { pieceNameFocused = false }
+        HStack {
+            millimetreField("X", label: "X (mm)", text: $pieceX)
+            millimetreField("Y", label: "Y (mm)", text: $pieceY)
+        }
+        if document.pieces[index].closed {
+            HStack {
+                millimetreField("En", label: "En (mm)", text: $pieceWidth)
+                millimetreField("Boy", label: "Boy (mm)", text: $pieceHeight)
+            }
+        } else {
+            millimetreField("Uzunluk", label: "Toplam çizgi uzunluğu (mm)", text: $pieceWidth)
+        }
+        Button("Ölçüleri, konumu ve adı uygula") { _ = saveDetails() }
+            .buttonStyle(.borderedProminent)
+        if document.pieces[index].points.count <= DraftContourGeometry.pointLimit {
+            Button("Kontur noktalarını düzenle") {
+                if !hasPendingDetails || saveDetails() { editingPoints = document.pieces[index] }
+            }
+            .buttonStyle(.bordered)
+        } else {
+            Text("Nokta düzenleme en fazla 250 noktalı konturlarda kullanılabilir.")
+                .font(.caption)
+        }
+        ViewThatFits(in: .horizontal) {
+            HStack { moveButtons }
+            VStack(alignment: .leading) { moveButtons }
+        }
+        .buttonStyle(.bordered)
+        .font(.caption)
+        ViewThatFits(in: .horizontal) {
+            HStack { copyDeleteButtons }
+            VStack(alignment: .leading) { copyDeleteButtons }
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var editSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("2 · Düzenle", systemImage: "slider.horizontal.3").font(.headline)
+            Toggle("Sürüklerken 5 mm'ye hizala", isOn: $snapToFiveMillimeters)
+                .font(.caption)
+            Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir.")
+                .font(.caption).foregroundStyle(.secondary)
+            Picker("Parça seç", selection: Binding(
+                get: { selectedID },
+                set: { _ = selectFromCanvasOrMenu($0) }
+            )) {
+                ForEach(document.pieces) { piece in
+                    Text(piece.name).tag(Optional(piece.id))
+                }
+            }
+            .pickerStyle(.menu)
+            if let index = selectedIndex {
+                selectedPieceControls(index)
+            }
+        }
+    }
+
+    private var saveSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("3 · Kaydet", systemImage: "square.and.arrow.up").font(.headline)
+            TextField("Proje adı", text: $projectName)
+                .textFieldStyle(.roundedBorder)
+            Button("Proje adını uygula") { _ = saveDetails() }
+                .buttonStyle(.bordered)
+            Button {
+                guard saveDetails() else { return }
+                do {
+                    try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
+                    savedLibrarySnapshot = document
+                    success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
+                } catch { problem = error.localizedDescription }
+            } label: {
+                Label("Projeyi kaydet", systemImage: "tray.and.arrow.down")
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.borderedProminent)
+            Button {
+                guard saveDetails() else { return }
+                var copy = document
+                copy.id = UUID()
+                copy.name = String(document.name.prefix(120)) + " (kopya)"
+                do {
+                    try CADProjectLibrary.save(copy)
+                    success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
+                } catch { problem = "Kopya kaydedilemedi. " + error.localizedDescription }
+            } label: {
+                Label("Farklı kopya kaydet", systemImage: "doc.on.doc")
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.bordered)
+            // One prominent action per section: saving the project. Preparing a file is secondary
+            // until it is ready to share.
+            Button { if saveDetails() { prepareExport() } } label: {
+                Label("Dosyayı hazırla (.tcad)", systemImage: "doc.badge.plus")
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.bordered)
+            if let exportURL, !hasPendingDetails {
+                ShareLink(item: exportURL, preview: SharePreview("Mono Di Tree CAD çizimi")) {
+                    Label("Paylaş veya Dosyalara kaydet", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            Text("Yalnız yeni çizim parçaları dışa aktarılır. Bu araç, içe alınmış fabrika dosyalarını değiştirmez.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Kalıbını oluştur").font(.title2.bold())
-                        Text("Ölçüler milimetre (mm). Önce bir şekil ekle, sonra aşağıdaki araçlarla düzenle.")
-                            .foregroundStyle(.secondary)
-                        Text("Çizimler cihazda otomatik saklanır • Üretim/kesim onayı değildir.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("1 · Parça ekle", systemImage: "plus.square.on.square").font(.headline)
-                        HStack(spacing: 10) {
-                            Button { addRectangle() } label: {
-                                Label("Dikdörtgen ekle", systemImage: "square")
-                                    .frame(maxWidth: .infinity, minHeight: 48)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            Button { addLine() } label: {
-                                Label("Çizgi ekle", systemImage: "line.diagonal")
-                                    .frame(maxWidth: .infinity, minHeight: 48)
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        Button {
-                            if !hasPendingDetails || saveDetails() { showingTouchComposer = true }
-                        } label: {
-                            Label("Parmakla yeni kontur çiz", systemImage: "pencil.tip.crop.circle")
-                                .frame(maxWidth: .infinity, minHeight: 50)
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("2 · Çizimin", systemImage: "pencil.tip").font(.headline)
-                        preview
-                        if !document.pieces.isEmpty {
-                            Toggle("Sürüklerken 5 mm'ye hizala", isOn: $snapToFiveMillimeters)
-                                .font(.caption)
-                            Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        if document.pieces.isEmpty {
-                            Text("Çalışma alanın boş. Yukarıdan bir şekil seçerek başla.")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if !document.pieces.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("3 · Düzenle", systemImage: "slider.horizontal.3").font(.headline)
-                            Picker("Parça seç", selection: Binding(
-                                get: { selectedID },
-                                set: { _ = selectFromCanvasOrMenu($0) }
-                            )) {
-                                ForEach(document.pieces) { piece in
-                                    Text(piece.name).tag(Optional(piece.id))
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            if selectedIndex != nil {
-                                TextField("Parça adı", text: $pieceName)
-                                    .textFieldStyle(.roundedBorder)
-                                    .accessibilityLabel("Seçili parçanın adı")
-                                    .submitLabel(.done)
-                                    .focused($pieceNameFocused)
-                                    .onSubmit { pieceNameFocused = false }
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        Text("X (mm)").font(.caption)
-                                        TextField("X", text: $pieceX).textFieldStyle(.roundedBorder)
-                                    }
-                                    VStack(alignment: .leading) {
-                                        Text("Y (mm)").font(.caption)
-                                        TextField("Y", text: $pieceY).textFieldStyle(.roundedBorder)
-                                    }
-                                }
-                                if let selectedIndex {
-                                    if document.pieces[selectedIndex].closed {
-                                        HStack {
-                                            VStack(alignment: .leading) {
-                                                Text("En (mm)").font(.caption)
-                                                TextField("En", text: $pieceWidth).textFieldStyle(.roundedBorder)
-                                            }
-                                            VStack(alignment: .leading) {
-                                                Text("Boy (mm)").font(.caption)
-                                                TextField("Boy", text: $pieceHeight).textFieldStyle(.roundedBorder)
-                                            }
-                                        }
-                                    } else {
-                                        Text("Toplam çizgi uzunluğu (mm)").font(.caption)
-                                        TextField("Uzunluk", text: $pieceWidth)
-                                            .textFieldStyle(.roundedBorder)
-                                    }
-                                }
-                                Button("Ölçüleri, konumu ve adı uygula") { _ = saveDetails() }
-                                    .buttonStyle(.borderedProminent)
-                                if let index = selectedIndex {
-                                    if document.pieces[index].points.count <= DraftContourGeometry.pointLimit {
-                                        Button("Kontur noktalarını düzenle") {
-                                            if !hasPendingDetails || saveDetails() { editingPoints = document.pieces[index] }
-                                        }
-                                            .buttonStyle(.bordered)
-                                    } else {
-                                        Text("Nokta düzenleme en fazla 250 noktalı konturlarda kullanılabilir.")
-                                            .font(.caption)
-                                    }
-                                }
-                                HStack {
-                                    Button("← 10 mm") { move(dx: -10, dy: 0) }
-                                    Button("10 mm →") { move(dx: 10, dy: 0) }
-                                    Button("90° döndür") { rotateSelected() }
-                                }
-                                .buttonStyle(.bordered)
-                                .font(.caption)
-                                HStack {
-                                    Button("Kopyala", action: duplicateSelected)
-                                    Button("Sil", role: .destructive, action: deleteSelected)
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("4 · Dosyanı kaydet", systemImage: "square.and.arrow.up").font(.headline)
-                        TextField("Proje adı", text: $projectName)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Proje adını uygula") { _ = saveDetails() }
-                            .buttonStyle(.bordered)
-                        HStack {
-                            Button("Geri al", action: undo).disabled(undoStack.isEmpty)
-                            Button("İleri al", action: redo).disabled(redoStack.isEmpty)
-                        }
-                        .buttonStyle(.bordered)
-                        Button {
-                            guard saveDetails() else { return }
-                            do {
-                                try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
-                                savedLibrarySnapshot = document
-                                success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
-                            } catch { problem = error.localizedDescription }
-                        } label: {
-                            Label("Projeyi kaydet", systemImage: "tray.and.arrow.down")
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        Button {
-                            guard saveDetails() else { return }
-                            var copy = document
-                            copy.id = UUID()
-                            copy.name = String(document.name.prefix(120)) + " (kopya)"
-                            do {
-                                try CADProjectLibrary.save(copy)
-                                success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
-                            } catch { problem = "Kopya kaydedilemedi. " + error.localizedDescription }
-                        } label: {
-                            Label("Farklı kopya kaydet", systemImage: "doc.on.doc")
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                        }
-                        .buttonStyle(.bordered)
-                        Button { if saveDetails() { prepareExport() } } label: {
-                            Label("Dosyayı hazırla (.tcad)", systemImage: "doc.badge.plus")
-                                .frame(maxWidth: .infinity, minHeight: 48)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        if let exportURL, !hasPendingDetails {
-                            ShareLink(item: exportURL, preview: SharePreview("Mono Di Tree CAD çizimi")) {
-                                Label("Paylaş veya Dosyalara kaydet", systemImage: "square.and.arrow.up")
-                                    .frame(maxWidth: .infinity, minHeight: 48)
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        Text("Yalnız yeni çizim parçaları dışa aktarılır. Bu araç, içe alınmış fabrika dosyalarını değiştirmez.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let success { Text(success).font(.footnote).foregroundStyle(.secondary) }
+            VStack(spacing: 0) {
+                if showsCanvas {
+                    canvasPanel
+                    Divider()
                 }
-                .padding()
-                .controlSize(.large)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Ölçüler milimetredir. Çizimler cihazda otomatik saklanır • Üretim/kesim onayı değildir.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        addSection
+                        if !document.pieces.isEmpty { editSection }
+                        saveSection
+                    }
+                    .padding()
+                    .controlSize(.large)
+                }
+                .scrollDismissesKeyboard(.interactively)
             }
+            .animation(.default, value: keyboardVisible)
+            .modifier(KeyboardVisibility(visible: $keyboardVisible))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .navigationTitle("Kalıp atölyesi")
             .onAppear {
                 if shouldStoreImportedSeed {
@@ -492,6 +560,17 @@ struct EasyCADWorkspace: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Kapat") { if saveDetails() { dismiss() } }
+                }
+                // Always in reach, wherever the tools below are scrolled to.
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button(action: undo) {
+                        Label("Geri al", systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(undoStack.isEmpty)
+                    Button(action: redo) {
+                        Label("İleri al", systemImage: "arrow.uturn.forward")
+                    }
+                    .disabled(redoStack.isEmpty)
                 }
             }
         }
@@ -610,10 +689,41 @@ struct EasyCADWorkspace: View {
                     finishDrag(value.translation, size: geometry.size)
                 })
         }
-        .frame(height: 260)
+        .frame(height: canvasHeight)
         .frame(maxWidth: .infinity)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
         .accessibilityLabel("Dokunarak parça seçebileceğiniz kalıp önizlemesi")
         .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Alternatif: Parça seç menüsü.")
+        .overlay {
+            if document.pieces.isEmpty {
+                VStack(spacing: 4) {
+                    Text("Kalıbını oluştur").font(.headline)
+                    Text("Aşağıdan bir şekil ekle. Ölçüler milimetredir.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(8)
+                .allowsHitTesting(false)
+            }
+        }
+    }
+}
+
+/// Reports whether the software keyboard is showing. It does nothing on macOS.
+private struct KeyboardVisibility: ViewModifier {
+    @Binding var visible: Bool
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                visible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                visible = false
+            }
+        #else
+        content
+        #endif
     }
 }

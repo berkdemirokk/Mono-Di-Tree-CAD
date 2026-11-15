@@ -125,6 +125,29 @@ final class ViewerUITests: XCTestCase {
         archived.tap()
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 10))
     }
+    func testDrawingAndUndoStayInReachWhileTypingADimension() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+
+        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğiniz kalıp önizlemesi"]
+        XCTAssertTrue(drawing.waitForExistence(timeout: 5))
+        let width = app.textFields["En"]
+        tapBelow(width, in: app)
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        sleep(1)
+
+        // The piece being measured is still visible above the keyboard, with the field in between.
+        XCTAssertGreaterThan(drawing.frame.height, 80)
+        XCTAssertLessThanOrEqual(drawing.frame.maxY, width.frame.minY)
+        XCTAssertLessThanOrEqual(width.frame.maxY, keyboard.frame.minY)
+        // Undo sits in the navigation bar, not at the end of the scrolling form.
+        XCTAssertTrue(app.buttons["Geri al"].isHittable)
+    }
+
     func testResumedDraftNewerThanSavedProjectCanBeSavedAgain() {
         let app = launchClean()
         app.buttons["Örnekle dene"].tap()
