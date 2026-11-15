@@ -36,6 +36,8 @@ public static class DxfAamaLayerPreset
         [6] = "Ayna çizgisi",
         [7] = "İplik yönü",
         [8] = "İç çizgiler",
+        [10] = "Ekose/çizgi eşleme noktaları",
+        [11] = "İç kesikler",
         [13] = "Delik işaretleri",
         [14] = "Dikiş çizgisi",
         [15] = "Açıklama metni",
@@ -43,6 +45,10 @@ public static class DxfAamaLayerPreset
         [81] = "Kale çentik",
         [82] = "Çek çentik",
         [83] = "U çentik",
+        [84] = "Parça sınırı kalite doğrulama eğrileri",
+        [85] = "İç çizgi kalite doğrulama eğrileri",
+        [86] = "İç kesik kalite doğrulama eğrileri",
+        [87] = "Dikiş çizgisi kalite doğrulama eğrileri",
     }.ToImmutableSortedDictionary();
 
     public static DxfAamaLayerSuggestion Suggest(DxfImportResult import, CancellationToken cancellationToken = default)
