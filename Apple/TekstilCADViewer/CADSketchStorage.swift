@@ -200,8 +200,58 @@ enum CADLocalDraftStore {
         }
     }
 
+    /// True when the file is there but its content is not a draft this version can read.
+    /// A failure to read the file at all (an I/O error on a possibly good draft) does not count:
+    /// such a draft must not be offered for moving aside.
+    static func hasUnreadableContent(_ url: URL) -> Bool {
+        do {
+            _ = try read(url)
+            return false
+        } catch is SketchStoreError {
+            return true
+        } catch is DecodingError {
+            return true
+        } catch {
+            // 3840 is what JSONSerialization reports for bytes that are not JSON.
+            let failure = error as NSError
+            return failure.domain == NSCocoaErrorDomain && failure.code == 3840
+        }
+    }
+
+    /// True when a current draft file exists but cannot be read as a draft.
+    static func hasUnreadableDraft() -> Bool {
+        guard FileManager.default.fileExists(atPath: current.path) else { return false }
+        return hasUnreadableContent(current)
+    }
+
+    /// Moves an unreadable current draft aside so that a new drawing can start.
+    /// The bytes are kept, never deleted, and a draft that can still be read stays
+    /// where it is. Returns the new location, or nil when nothing was moved.
+    @discardableResult
+    static func setAsideUnreadableDraft() throws -> URL? {
+        try setAsideUnreadableDraft(
+            at: current, into: directory.appendingPathComponent("Unreadable", isDirectory: true))
+    }
+
+    // Path-injectable for deterministic tests; production always uses current.
+    static func setAsideUnreadableDraft(at url: URL, into folder: URL) throws -> URL? {
+        return try CADFileIO.withExclusiveLock(for: url) { () throws -> URL? in
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            guard hasUnreadableContent(url) else { return nil }
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let destination = folder.appendingPathComponent("draft-\(UUID().uuidString).json")
+            try FileManager.default.moveItem(at: url, to: destination)
+            return destination
+        }
+    }
+
     #if DEBUG && targetEnvironment(simulator)
     static func discard() { try? FileManager.default.removeItem(at: current) }
+    /// UI-test hook: leaves a current draft that no reader accepts.
+    static func writeUnreadableDraftForTesting() {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? Data("{\"version\":99}".utf8).write(to: current, options: .atomic)
+    }
     #endif
 }
 

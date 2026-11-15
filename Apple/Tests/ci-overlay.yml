@@ -18,6 +18,7 @@
     sources:
       - path: Tests/ViewerUITests.swift
       - path: Tests/FixtureLoadingTests.swift
+      - path: Tests/ScreenshotTourTests.swift
       - path: Tests/Fixtures
         buildPhase: resources
     dependencies:
