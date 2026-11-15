@@ -44,6 +44,16 @@ final class FixtureLoadingTests: XCTestCase {
                     "Id": "00000000-0000-0000-0000-000000000000",
                     "Name": "Katman 1", "Visible": true, "Locked": false
                 ]]
+            case 9:
+                // This is a real deterministic two-point line in the v9 shape.
+                piece["Closed"] = false
+                piece["Points"] = [["X": 0, "Y": 0], ["X": 100, "Y": 0]]
+                piece["Curves"] = [[
+                    "$type": "line",
+                    "Start": ["X": 0, "Y": 0],
+                    "End": ["X": 100, "Y": 0]
+                ]]
+                body["Pieces"] = [piece]
             default:
                 break
             }
@@ -53,7 +63,7 @@ final class FixtureLoadingTests: XCTestCase {
     }
 
     func testNewerWindowsEnvelopesShowReadOnlyLimitations() {
-        for version in [6, 7, 8] {
+        for version in [6, 7, 8, 9] {
             let app = launch(json: versionedProject(version, includeRequiredMetadata: true))
             XCTAssertTrue(app.staticTexts["Windows Önizleme"].waitForExistence(timeout: 15))
             XCTAssertTrue(app.staticTexts["1 parça • Ölçekli üretim çıktısı değildir"].exists)
@@ -67,7 +77,8 @@ final class FixtureLoadingTests: XCTestCase {
 
     func testUnsupportedAndMalformedNewerVersionsAreRejected() {
         let cases: [(String, String)] = [
-            (versionedProject(9), "Desteklenmeyen proje biçimi."),
+            (versionedProject(10), "Desteklenmeyen proje biçimi."),
+            (versionedProject(9), "Sürüm 9 parametrik kontur içermiyor."),
             (versionedProject(8), "Sürüm 8 katman listesi eksik."),
             (versionedProject(7), "Sürüm 7 döndürme izi eksik."),
             (versionedProject(6), "Sürüm 6 çentik işareti içermiyor."),

@@ -172,3 +172,11 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 - **Farklı kopya kaydet** mevcut taslak veya başka bir proje üzerine yazmaz. Bir kopyanın oluştuğunu ana ekrandaki **Son projeler** listesinde doğrulayın.
 - `CADStorageTests`, aynı UUID'ye sahip eski kayıt sürümü, yanlış UUID ve idempotent yeniden kaydetme senaryolarını çalıştırır.
 - Taslak ve kütüphane kayıtlarında, uygulamanın kendi yazıcıları arasında `.json.lock` yan dosyasıyla işlem/kontrol/kayıt bir dosya kilidi altında tutulur; mevcut taslağın arşivlenmesi ve silinmesi de aynı kilitle yapılır. Yan kilit dosyaları başka açık süreçlerin kilidini geçersiz kılmamak için silinmez. Eşzamanlı eski-sürüm yazımlarını reddeden bir regresyon testi bulunur. Kilidi kullanmayan harici yazıcılar, farklı dosya alias'ları ve fiziksel cihaz testi bu garantinin dışındadır.
+
+## Sürüm 9 parametrik WPF çizimleri
+
+- Windows WPF Bézier/Yay aracı analitik kontrol noktaları ve örneklenmiş kontur önizlemesini ayrı tutar. Parametrik geometri içeren dosya `.tcad` v9 olarak kaydedilir. Önceki sürümlerin noktaları varsayılan olarak değiştirilmez.
+- iPhone sürüm 9 için **yalnız kontur önizlemesi** yapar. Kaynak segment yapısında beklenen türler ve zorunlu alanlar denetlenir; kontrol noktaları iPhone üzerinden düzenlenmez ve kayıp yaşanmaması için **Kopyasını düzenle** görünmez.
+- Önizleme, v9 matematiksel segmentleri yeniden örnekleyip Windows dosyasıyla geometrik olarak doğrulamaz. Kaynağı doğrulamak ve kontrol noktalarını düzenlemek için Windows CAD uygulamasını kullanın.
+- Bozuk/eksik v9 `Curves` alanı, bilinmeyen segment türleri ve yanlış sürüm zarfı iPhone görüntüleyicide reddedilir. Dosya değiştirilmez.
+- Gerçek iPhone üzerinde Dosyalar sağlayıcısı, ölçek/segment doğruluğu, erişilebilirlik ve kullanıcı kabulü ayrıca test edilmelidir.

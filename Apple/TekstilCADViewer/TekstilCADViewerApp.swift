@@ -382,7 +382,7 @@ private struct Drawing {
            let number = array[0] as? NSNumber,
            CFGetTypeID(number) != CFBooleanGetTypeID(),
            number.doubleValue.isFinite, number.doubleValue.rounded() == number.doubleValue,
-           (1...8).contains(number.intValue), let body = array[1] as? [String: Any] {
+           (1...9).contains(number.intValue), let body = array[1] as? [String: Any] {
             schemaVersion = number.intValue
             object = body
         } else if let body = root as? [String: Any] { object = body }
@@ -405,6 +405,58 @@ private struct Drawing {
             guard object["Layers"] is [[String: Any]] else {
                 throw ViewerError.message("Sürüm 8 katman listesi eksik.")
             }
+        }
+        if schemaVersion == 9 {
+            let rawPieces = object["Pieces"] as? [[String: Any]] ?? []
+            var foundControls = false
+            for piece in rawPieces {
+                guard let curves = piece["Curves"] else { continue }
+                foundControls = true
+                guard jsonBoolean(piece["Closed"]) == false,
+                      let elements = curves as? [[String: Any]],
+                      !elements.isEmpty, elements.count <= 2_000 else {
+                    throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                }
+                for curve in elements {
+                    guard let kind = curve["$type"] as? String else {
+                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                    }
+                    let expected: Set<String>
+                    switch kind {
+                    case "line": expected = ["$type", "Start", "End"]
+                    case "cubicBezier": expected = ["$type", "P0", "P1", "P2", "P3"]
+                    case "arc": expected = ["$type", "Center", "Radius", "StartAngle", "SweepAngle"]
+                    default: throw ViewerError.message("Bilinmeyen parametrik kontur türü.")
+                    }
+                    guard Set(curve.keys) == expected else {
+                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                    }
+                    for key in expected where key != "$type" {
+                        if ["Radius", "StartAngle", "SweepAngle"].contains(key) {
+                            guard let number = jsonNumber(curve[key]),
+                                  number.isFinite,
+                                  (key != "Radius" || number > 0) else {
+                                throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                            }
+                        } else {
+                            guard let point = curve[key] as? [String: Any],
+                                  Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                                  let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
+                                  x.isFinite, y.isFinite,
+                                  abs(x) <= 100_000_000, abs(y) <= 100_000_000,
+                                  (point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true) else {
+                                throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
+                            }
+                        }
+                    }
+                }
+            }
+            guard foundControls else {
+                throw ViewerError.message("Sürüm 9 parametrik kontur içermiyor.")
+            }
+        } else if let pieces = object["Pieces"] as? [[String: Any]],
+                  pieces.contains(where: { $0["Curves"] != nil }) {
+            throw ViewerError.message("Parametrik kontur için sürüm 9 gerekir.")
         }
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
@@ -461,7 +513,9 @@ private struct Drawing {
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
         }
-        let formatNotice = schemaVersion >= 6
+        let formatNotice = schemaVersion == 9
+            ? "Sürüm 9 yalnız kontur önizlemesi: Bézier/yay kontrol parametreleri iPhone'da düzenlenemez veya bağımsız doğrulanamaz. Windows CAD ile açın. Fabrika veya kesim doğrulaması değildir."
+            : schemaVersion >= 6
             ? "Sürüm \(schemaVersion) yalnız kontur önizlemesi: çentikler, döndürülmüş pastal izleri ve katman görünürlüğü uygulanmaz. Fabrika veya kesim doğrulaması değildir."
             : nil
         let editableDraft = CADSketchImport.loadEditableCopy(from: data, jsonRoot: root)

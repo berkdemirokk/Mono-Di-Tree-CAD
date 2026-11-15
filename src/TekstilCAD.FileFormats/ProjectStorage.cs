@@ -54,9 +54,10 @@ public static class ProjectStorage
             RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
+                ValidateSerializedCurves(root[1], version);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
                     throw new InvalidDataException("Sürümlü projede serileme listesi eksik veya geçersiz; dosya açılmadı.");
                 if (version == 1 && HasSerializedMetadata(root[1])) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
@@ -94,6 +95,7 @@ public static class ProjectStorage
             else if (root.ValueKind == JsonValueKind.Object)
             {
                 ValidateSerializedIdentityAndPoints(root);
+                ValidateSerializedCurves(root, 0);
                 ValidateSerializedGrainlines(root, 0);
                 ValidateSerializedNotches(root,0);
                 ValidateSerializedImportProvenance(root, 0);
@@ -225,6 +227,69 @@ public static class ProjectStorage
                 throw new InvalidDataException("Pastal eşlemesi eksik veya geçersiz.");
         }
     }
+    // v9 is opt-in only: old serializers reject the envelope rather than
+    // dropping editable curve controls. Verify all required fields *before*
+    // record constructors can synthesize missing zero values.
+    private static void ValidateSerializedCurves(JsonElement project, int version)
+    {
+        if (!project.TryGetProperty("Pieces", out var pieces) || pieces.ValueKind != JsonValueKind.Array)
+            return;
+        var found = false;
+        foreach (var piece in pieces.EnumerateArray())
+        {
+            if (piece.ValueKind != JsonValueKind.Object || !piece.TryGetProperty("Curves", out var curves))
+                continue;
+            if (version != 9) throw new InvalidDataException("Parametrik kontur için .tcad sürüm 9 gereklidir.");
+            found = true;
+            if (curves.ValueKind != JsonValueKind.Array ||
+                curves.GetArrayLength() is < 1 or > ParametricContour.MaximumSegments)
+                throw new InvalidDataException("Geçersiz parametrik kontur listesi.");
+            foreach (var curve in curves.EnumerateArray())
+            {
+                if (curve.ValueKind != JsonValueKind.Object ||
+                    !curve.TryGetProperty("$type", out var kind) || kind.ValueKind != JsonValueKind.String)
+                    throw new InvalidDataException("Parametrik segment türü eksik veya geçersiz.");
+                var expected = kind.GetString() switch
+                {
+                    "line" => new[] { "$type", "Start", "End" },
+                    "cubicBezier" => new[] { "$type", "P0", "P1", "P2", "P3" },
+                    "arc" => new[] { "$type", "Center", "Radius", "StartAngle", "SweepAngle" },
+                    _ => throw new InvalidDataException("Bilinmeyen parametrik eğri türü; dosya açılmadı.")
+                };
+                var names = curve.EnumerateObject().Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
+                if (!names.SetEquals(expected))
+                    throw new InvalidDataException("Parametrik segment alanları eksik veya fazladan.");
+                foreach (var name in expected)
+                {
+                    if (name == "$type") continue;
+                    var raw = curve.GetProperty(name);
+                    if (name is "Radius" or "StartAngle" or "SweepAngle")
+                    {
+                        if (raw.ValueKind != JsonValueKind.Number ||
+                            !raw.TryGetDouble(out var value) || !double.IsFinite(value))
+                            throw new InvalidDataException("Parametrik açı veya yarıçap geçersiz.");
+                    }
+                    else
+                    {
+                        if (raw.ValueKind != JsonValueKind.Object ||
+                            !raw.TryGetProperty("X", out var x) || x.ValueKind != JsonValueKind.Number ||
+                            !x.TryGetDouble(out var px) || !double.IsFinite(px) ||
+                            !raw.TryGetProperty("Y", out var y) || y.ValueKind != JsonValueKind.Number ||
+                            !y.TryGetDouble(out var py) || !double.IsFinite(py) ||
+                            (raw.TryGetProperty("IsFinite", out var finite) && finite.ValueKind != JsonValueKind.True))
+                            throw new InvalidDataException("Parametrik kontrol noktası eksik veya geçersiz.");
+                        var coordinateNames = raw.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+                        if (!coordinateNames.IsSubsetOf(new[] { "X", "Y", "IsFinite" }) ||
+                            coordinateNames.Count is < 2 or > 3)
+                            throw new InvalidDataException("Parametrik noktada tanınmayan alan var.");
+                    }
+                }
+            }
+        }
+        if (version == 9 && !found)
+            throw new InvalidDataException("Sürüm 9 parametrik kontur içermiyor.");
+    }
+
     // Legacy files include piece IDs and may include the computed IsFinite field. Never
     // silently synthesize an ID or ignore an inconsistent computed field on load.
     private static void ValidateSerializedIdentityAndPoints(JsonElement project)
@@ -378,7 +443,9 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var text = project.Layers is not null
+        var text = project.Pieces.Any(p => p.Curves is not null)
+            ? JsonSerializer.Serialize<object[]>([9, project], Options)
+            : project.Layers is not null
             ? JsonSerializer.Serialize<object[]>([8, project], Options)
             : project.NestingSnapshot?.RotationTrace is not null
             ? JsonSerializer.Serialize<object[]>([7, project], Options)
@@ -397,8 +464,11 @@ public static class ProjectStorage
         // Never replace a usable project with bytes this version cannot reopen.
         if (Encoding.UTF8.GetByteCount(text) > MaximumProjectBytes)
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");
-        if(project.NestingSnapshot?.RotationTrace is not null)
+        if(project.NestingSnapshot?.RotationTrace is not null || project.Pieces.Any(p => p.Curves is not null))
         {
+            // Validate the newly introduced control data and its exact preview,
+            // then prove this file can be reloaded without losing any controls.
+            Validate(project, cancellationToken);
             var reread=DeserializeProject(Encoding.UTF8.GetBytes(text),cancellationToken);
             if(!DocumentSession.ContentEquals(project,reread))
                 throw new InvalidDataException("Döndürme izi dosyada kayıpsız yeniden okunamadı; mevcut dosya korunuyor.");
@@ -475,6 +545,19 @@ public static class ProjectStorage
             if (piece is null || piece.Points is null || piece.Points.Count > MaximumPointsPerPiece || piece.Points.Count < (piece.Closed ? 3 : 2))
                 throw new InvalidDataException("Geçersiz kontur veya nokta sınırı aşıldı.");
             if (piece.Name is null || piece.Name.Length > 1024 || (!allowInvalidPieceNameUtf16 && !IsWellFormedUtf16(piece.Name))) throw new InvalidDataException("Geçersiz parça adı veya eksik Unicode karakteri.");
+            if (piece.Curves is not null)
+            {
+                if (piece.Closed || piece.Curves.Count is < 1 or > ParametricContour.MaximumSegments)
+                    throw new InvalidDataException("Parametrik kontur açık olmalı ve segment sınırlarını aşmamalı.");
+                try
+                {
+                    if (!ParametricContour.MatchesPreview(piece))
+                        throw new InvalidDataException("Parametrik kontrol noktaları ile kayıtlı kontur örneklemesi uyuşmuyor; veri kaybını önlemek için kayıt reddedildi.");
+                }
+                catch (ArgumentException ex)
+                { throw new InvalidDataException("Parametrik geometri geçersiz; kayıt reddedildi.", ex); }
+            }
+
             if (piece.Metadata is { } metadata)
             {
                 static bool ValidText(string? value) => value is null || (value.Length is > 0 and <= 128 && value == value.Trim() && !value.Any(char.IsControl) && IsWellFormedUtf16(value));
