@@ -59,10 +59,10 @@ internal sealed class DxfGrainlineOverlayPreview : FrameworkElement
         var all=contour.Concat(marker);double minX=all.Min(p=>p.X),maxX=all.Max(p=>p.X),minY=all.Min(p=>p.Y),maxY=all.Max(p=>p.Y);
         double scale=Math.Min((ActualWidth-20)/Math.Max(maxX-minX,1e-12),(ActualHeight-20)/Math.Max(maxY-minY,1e-12));
         Point Map(Point2 p)=>new(10+(p.X-minX)*scale,10+(p.Y-minY)*scale);
-        var outline=new Pen(Brushes.DimGray,1.5);var line=new Pen(Brushes.Crimson,3);
+        var outline=new Pen(StudioTheme.PreviewOutline,1.5);var line=new Pen(StudioTheme.PreviewLine,3);
         for(int i=0;i<contour.Length-1;i++)dc.DrawLine(outline,Map(contour[i]),Map(contour[i+1]));
         if(contour[^1]!=contour[0])dc.DrawLine(outline,Map(contour[^1]),Map(contour[0]));
         dc.DrawLine(line,Map(marker[0]),Map(marker[1]));
-        dc.DrawEllipse(Brushes.RoyalBlue,null,Map(marker[0]),4,4);dc.DrawEllipse(Brushes.DarkGreen,null,Map(marker[1]),4,4);
+        dc.DrawEllipse(StudioTheme.PreviewStart,null,Map(marker[0]),4,4);dc.DrawEllipse(StudioTheme.PreviewEnd,null,Map(marker[1]),4,4);
     }
 }

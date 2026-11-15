@@ -808,24 +808,24 @@ internal sealed class ProductionNestingWindow : Window
             if(geometry is null)return;
             if(fabricWidth<=0||usedLength<=0)return;
             var scale=Math.Min((ActualWidth-24)/fabricWidth,(ActualHeight-24)/usedLength);
-            dc.DrawRectangle(Brushes.Transparent,new Pen(Brushes.SlateGray,1),new Rect(12,12,fabricWidth*scale,usedLength*scale));
+            dc.DrawRectangle(Brushes.Transparent,new Pen(StudioTheme.PreviewFrame,1),new Rect(12,12,fabricWidth*scale,usedLength*scale));
             // Cache model-space contours once per result; only the scale changes on resize.
             // Compensate the stroke width for the transform so it remains one screen unit.
             dc.PushTransform(new MatrixTransform(new Matrix(scale,0,0,scale,12,12)));
             if(edgeMargin>0 && fabricWidth>2*edgeMargin && usedLength>2*edgeMargin)
             {
-                var guidePen=new Pen(Brushes.Goldenrod,1/scale) { DashStyle=DashStyles.Dash };
+                var guidePen=new Pen(StudioTheme.PreviewGuide,1/scale) { DashStyle=DashStyles.Dash };
                 dc.DrawRectangle(null,guidePen,new Rect(edgeMargin,edgeMargin,fabricWidth-2*edgeMargin,usedLength-2*edgeMargin));
             }
-            dc.DrawGeometry(null,new Pen(Brushes.MediumTurquoise,1/scale),geometry);
+            dc.DrawGeometry(null,new Pen(StudioTheme.PreviewPiece,1/scale),geometry);
             var selected=drawing.Pieces.FirstOrDefault(p=>p.Id==highlightId);
             if(selected is { Points.Count: >1 })
             {
                 var selectedGeometry=new StreamGeometry();
                 using(var context=selectedGeometry.Open()) { context.BeginFigure(new Point(selected.Points[0].X,selected.Points[0].Y),false,selected.Closed); context.PolyLineTo(selected.Points.Skip(1).Select(p=>new Point(p.X,p.Y)).ToArray(),true,false); }
-                selectedGeometry.Freeze(); var selectedPen=new Pen(Brushes.Orange,3/scale) { DashStyle=DashStyles.Dash }; dc.DrawGeometry(null,selectedPen,selectedGeometry);
+                selectedGeometry.Freeze(); var selectedPen=new Pen(StudioTheme.PreviewPlot,3/scale) { DashStyle=DashStyles.Dash }; dc.DrawGeometry(null,selectedPen,selectedGeometry);
             }
-            var markerPen=new Pen(Brushes.Yellow,2/scale);
+            var markerPen=new Pen(StudioTheme.PreviewRing,2/scale);
             foreach(var mark in markers)dc.DrawEllipse(null,markerPen,mark,5/scale,5/scale);
             dc.Pop();
         }

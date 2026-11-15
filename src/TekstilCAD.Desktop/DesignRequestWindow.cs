@@ -47,9 +47,9 @@ internal sealed class DesignRequestWindow : Window
         void ModelChoice(string label,string template,string silhouette,string? detail)
         {
             var art=new Canvas { Width=80,Height=80,IsHitTestVisible=false };
-            var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=new SolidColorBrush(Color.FromRgb(0x9e,0xc8,0xc0)),Stroke=new SolidColorBrush(Color.FromRgb(0xd1,0xe8,0xe2)),StrokeThickness=1.5 };
+            var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=StudioTheme.IllustrationFill,Stroke=StudioTheme.IllustrationStroke,StrokeThickness=1.5 };
             art.Children.Add(dress);
-            if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=new SolidColorBrush(Color.FromRgb(0x35,0x62,0x60)),StrokeThickness=1.5,StrokeLineJoin=PenLineJoin.Round });
+            if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=StudioTheme.IllustrationDetail,StrokeThickness=1.5,StrokeLineJoin=PenLineJoin.Round });
             var image=new Viewbox { Width=70,Height=70,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,1,0,3) };
             var content=new StackPanel { Width=112,IsHitTestVisible=false };
             content.Children.Add(image);

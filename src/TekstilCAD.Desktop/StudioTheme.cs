@@ -29,7 +29,7 @@ public static class StudioTheme
         ("Border", "#304254", "#D3DBE3"),
         ("Accent", "#49D8BB", "#0F766E"),
         ("Text", "#EDF4FA", "#16222E"),
-        ("Muted", "#9BADBE", "#4F5F70"),
+        ("Muted", "#9BADBE", "#4D5D6E"),
         ("Warning", "#F5C377", "#85470A"),
         ("Danger", "#FF9999", "#B42318"),
         ("Selection", "#235C59", "#D4EDE9"),
@@ -77,6 +77,22 @@ public static class StudioTheme
         ("GrainOk", "#65CFFF", "#0369A1"),
         ("GrainReview", "#FFC468", "#B45309"),
         ("DrawingPreview", "#FFCB70", "#B45309"),
+        // Drawing surfaces inside tool windows (dark values are the named colours they used before (=)).
+        ("PreviewSource", "#00BFFF", "#0369A1"),
+        ("PreviewPlot", "#FFA500", "#B45309"),
+        ("PreviewMarker", "#FFD700", "#7A3A00"),
+        ("PreviewLabel", "#FFFFFF", "#16222E"),
+        ("PreviewOutline", "#696969", "#4D5D6E"),
+        ("PreviewGuide", "#DAA520", "#8A5A00"),
+        ("PreviewPiece", "#48D1CC", "#0F766E"),
+        ("PreviewRing", "#FFFF00", "#A16207"),
+        ("PreviewFrame", "#708090", "#5B6C7F"),
+        ("PreviewLine", "#DC143C", "#B42318"),
+        ("PreviewStart", "#4169E1", "#1D4ED8"),
+        ("PreviewEnd", "#006400", "#166534"),
+        ("IllustrationFill", "#9EC8C0", "#8FC7BE"),
+        ("IllustrationStroke", "#D1E8E2", "#0F766E"),
+        ("IllustrationDetail", "#356260", "#24424A"),
     ];
 
     private static readonly Dictionary<string, SolidColorBrush> Shared = CreateBrushes();
@@ -133,6 +149,23 @@ public static class StudioTheme
     public static Brush GrainReview { get; } = Shared[nameof(GrainReview)];
     public static Brush DrawingPreview { get; } = Shared[nameof(DrawingPreview)];
 
+    public static Brush PreviewSource { get; } = Shared[nameof(PreviewSource)];
+    public static Brush PreviewPlot { get; } = Shared[nameof(PreviewPlot)];
+    public static Brush PreviewMarker { get; } = Shared[nameof(PreviewMarker)];
+    public static Brush PreviewLabel { get; } = Shared[nameof(PreviewLabel)];
+    public static Brush PreviewOutline { get; } = Shared[nameof(PreviewOutline)];
+    public static Brush PreviewGuide { get; } = Shared[nameof(PreviewGuide)];
+    public static Brush PreviewPiece { get; } = Shared[nameof(PreviewPiece)];
+    public static Brush PreviewRing { get; } = Shared[nameof(PreviewRing)];
+    public static Brush PreviewFrame { get; } = Shared[nameof(PreviewFrame)];
+    public static Brush IllustrationFill { get; } = Shared[nameof(IllustrationFill)];
+    public static Brush IllustrationStroke { get; } = Shared[nameof(IllustrationStroke)];
+    public static Brush IllustrationDetail { get; } = Shared[nameof(IllustrationDetail)];
+
+    public static Brush PreviewLine { get; } = Shared[nameof(PreviewLine)];
+    public static Brush PreviewStart { get; } = Shared[nameof(PreviewStart)];
+    public static Brush PreviewEnd { get; } = Shared[nameof(PreviewEnd)];
+
     /// <summary>The palette currently applied. Dark until <see cref="Use"/> is called.</summary>
     public static ThemeKind Current { get; private set; } = ThemeKind.Dark;
 
@@ -149,6 +182,9 @@ public static class StudioTheme
             if (row.Name == token) return ParseColor(kind == ThemeKind.Dark ? row.Dark : row.Light);
         throw new ArgumentException("Unknown theme token: " + token, nameof(token));
     }
+
+    /// <summary>True when every token brush currently holds the value of a palette.</summary>
+    internal static bool PaletteMatches(ThemeKind kind) => Table.All(row => Shared[row.Name].Color == ParseColor(kind == ThemeKind.Dark ? row.Dark : row.Light));
 
     /// <summary>The shared brush of a token.</summary>
     internal static SolidColorBrush TokenBrush(string token) => Shared[token];
