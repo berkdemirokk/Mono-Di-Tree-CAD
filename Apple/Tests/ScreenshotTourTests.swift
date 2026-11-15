@@ -158,15 +158,16 @@ final class ScreenshotTourTests: XCTestCase {
         snap("19-editor-large-text-scrolled")
     }
 
-    func testTour06DarkAppearance() {
+    /// The app is deliberately light-only: with the phone in dark mode the screens must stay light.
+    func testTour06SystemDarkStaysLight() {
         XCUIDevice.shared.appearance = .dark
         let app = launch(["--ui-test-reset-draft"])
         XCTAssertTrue(app.buttons["Yeni proje oluştur"].waitForExistence(timeout: 15))
-        snap("20-home-dark")
+        snap("20-home-system-dark-app-light")
 
         XCTAssertTrue(openEditorWithRectangle(app))
         XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
-        snap("21-editor-dark")
+        snap("21-editor-system-dark-app-light")
     }
 
     /// The command field: idle, typing, a preview, the result, a refusal, a delete that asks.

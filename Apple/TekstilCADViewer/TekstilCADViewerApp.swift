@@ -6,9 +6,9 @@ import UniformTypeIdentifiers
 struct TekstilCADViewerApp: App {
     var body: some Scene {
         #if os(macOS)
-        Window("Mono Di Tree CAD", id: "workspace") { ContentView() }
+        Window("Mono Di Tree CAD", id: "workspace") { ContentView().preferredColorScheme(.light).tint(AppTheme.accent) }
         #else
-        WindowGroup { ContentView() }
+        WindowGroup { ContentView().preferredColorScheme(.light).tint(AppTheme.accent) }
         #endif
     }
 }
@@ -33,6 +33,38 @@ private struct ContentView: View {
     @State private var recentProjects: [CADProjectLibrary.Entry] = []
     @State private var didStart = false
     @State private var recentRefresh = UUID()
+    @State private var showAllRecent = false
+    @State private var pendingDelete: CADProjectLibrary.Entry?
+    @State private var renameTarget: CADProjectLibrary.Entry?
+    @State private var renameText = ""
+
+    private static let recentLimit = 10
+
+    private var visibleRecentProjects: [CADProjectLibrary.Entry] {
+        showAllRecent ? recentProjects : Array(recentProjects.prefix(Self.recentLimit))
+    }
+
+    private var deleteTitle: String {
+        pendingDelete.map { "\($0.name) silinsin mi?" } ?? "Proje silinsin mi?"
+    }
+
+    private func deleteProject(_ entry: CADProjectLibrary.Entry) {
+        pendingDelete = nil
+        do {
+            try CADProjectLibrary.delete(entry.id)
+            recentProjects.removeAll { $0.id == entry.id }
+        } catch {
+            self.error = "Proje silinemedi. \(error.localizedDescription)"
+        }
+        refreshProjects()
+    }
+
+    private func renameProject(_ entry: CADProjectLibrary.Entry, to name: String) {
+        renameTarget = nil
+        do { try CADProjectLibrary.rename(entry.id, to: name) }
+        catch { self.error = "Ad değiştirilemedi. \(error.localizedDescription)" }
+        refreshProjects()
+    }
 
     private func refreshProjects() {
         do { hasLocalDraft = try CADLocalDraftStore.restore() != nil }
@@ -127,25 +159,25 @@ private struct ContentView: View {
                         Label("Kopyasını düzenle", systemImage: "square.on.square")
                             .frame(maxWidth: .infinity, minHeight: 48)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appPrimary)
                     .accessibilityHint("Bu basit çizimin yeni düzenlenebilir bir kopyasını açar. Kaynak dosyayı değiştirmez.")
                 }
                 if let notice = project.formatNotice {
                     Text(notice)
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color(red: 0.60, green: 0.30, blue: 0.0))
                         .accessibilityAddTraits(.isStaticText)
                 }
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Gösterilen parça").font(.caption).foregroundStyle(.secondary)
+                                Text("Gösterilen parça").font(.caption).foregroundStyle(AppTheme.muted)
                                 Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
                                     .font(.headline).lineLimit(1)
                             }
                             Spacer()
-                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(.secondary)
+                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(AppTheme.muted)
                         }
                         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
                         .contentShape(Rectangle())
@@ -167,19 +199,20 @@ private struct ContentView: View {
                         .background(Color.secondary.opacity(0.08))
                 } else {
                     Text("Bu projede görüntülenebilir kontur yok.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.muted)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.secondary.opacity(0.08))
                 }
                 Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(AppTheme.muted)
             } else {
                 home.disabled(isLoading)
             }
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
+        .background(AppTheme.page.ignoresSafeArea())
         .sheet(item: $editorRoute, onDismiss: refreshProjects) { route in
             EasyCADWorkspace(example: route.example, imported: route.document)
         }
@@ -254,6 +287,40 @@ private struct ContentView: View {
         } message: { _ in
             Text("Cihazdaki otomatik taslak bozuk ya da bu sürümle uyumsuz. Dosya silinmez; ayrı bir klasöre taşınır ve yeni çalışma açılır.")
         }
+        .confirmationDialog(deleteTitle, isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible, presenting: pendingDelete) { entry in
+            Button("Sil", role: .destructive) { deleteProject(entry) }
+            Button("Vazgeç", role: .cancel) { }
+        } message: { _ in
+            Text("Bu geri alınamaz. Bu projenin otomatik kaydedilen son çizimi de silinir.")
+        }
+        .alert("Adı değiştir", isPresented: Binding(
+            get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } }),
+            presenting: renameTarget) { entry in
+            TextField("Yeni ad", text: $renameText)
+            Button("Kaydet") { renameProject(entry, to: renameText) }
+            Button("Vazgeç", role: .cancel) { }
+        } message: { _ in
+            Text("Ad 1 ile 120 karakter arasında olmalı.")
+        }
+    }
+
+    @ViewBuilder
+    private func recentActions(_ entry: CADProjectLibrary.Entry) -> some View {
+        if entry.readable {
+            Button {
+                renameText = entry.name
+                renameTarget = entry
+            } label: {
+                Label("Adı değiştir", systemImage: "pencil")
+            }
+        }
+        Button(role: .destructive) {
+            pendingDelete = entry
+        } label: {
+            Label("Sil", systemImage: "trash")
+        }
     }
 
     private var resumeButton: some View {
@@ -261,64 +328,115 @@ private struct ContentView: View {
             Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
                 .frame(maxWidth: .infinity, minHeight: 48)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.appSecondary)
         .accessibilityHint("Cihazda otomatik kaydedilmiş taslağı açar.")
     }
 
     private var home: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("MONO DI TREE").font(.caption.bold()).tracking(3)
-                    .foregroundStyle(.secondary)
-                Text("Kalıbını kolayca oluştur").font(.title.bold())
-                Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("MONO DI TREE").font(.caption.bold()).tracking(3)
+                        .foregroundStyle(AppTheme.muted)
+                    Text("Kalıbını kolayca oluştur").font(.largeTitle.bold())
+                        .foregroundStyle(AppTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
+                        .font(.body).foregroundStyle(AppTheme.muted)
+                }
 
-                Button { openEditor(EditorRoute()) } label: {
-                    Label("Yeni proje oluştur", systemImage: "plus.square")
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                Button { openEditor(EditorRoute(example: true)) } label: {
-                    Label("Örnekle dene", systemImage: "hand.tap")
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                }
-                .buttonStyle(.bordered)
-                Button { showingImporter = true } label: {
-                    Label("Dosya aç (.tcad)", systemImage: "folder")
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityHint("Dosyalardan bir proje seçerek konturlarını önizleyin.")
-
-                Divider()
-                Text("Son projeler").font(.headline).accessibilityAddTraits(.isHeader)
-                if hasLocalDraft { resumeButton }
-                if recentProjects.isEmpty && !hasLocalDraft {
-                    Text("Kaydettiğin projeler burada görünür.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-                ForEach(recentProjects) { entry in
-                    Button {
-                        do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
-                        catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
-                    } label: {
-                        HStack {
-                            Image(systemName: "doc")
-                            VStack(alignment: .leading) {
-                                Text(entry.name)
-                                Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.forward").font(.caption)
-                        }
-                        .frame(minHeight: 48)
-                        .contentShape(Rectangle())
+                VStack(spacing: 10) {
+                    Button { openEditor(EditorRoute()) } label: {
+                        Label("Yeni proje oluştur", systemImage: "plus.square")
+                            .frame(maxWidth: .infinity, minHeight: 50)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                    .buttonStyle(.appPrimary)
+                    Button { openEditor(EditorRoute(example: true)) } label: {
+                        Label("Örnekle dene", systemImage: "hand.tap")
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                    }
+                    .buttonStyle(.appSecondary)
+                    .accessibilityHint("İki hazır parçayla uygulamayı denersin.")
+                    Button { showingImporter = true } label: {
+                        Label("Dosya aç (.tcad)", systemImage: "folder")
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                    }
+                    .buttonStyle(.appSecondary)
+                    .accessibilityHint("Yalnızca önizleme açar. Düzenlemek için açtıktan sonra kopyasını oluşturun.")
                 }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Nasıl çalışır?").font(.headline).foregroundStyle(AppTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    StepBadge(number: 1, title: "Şekil ekle",
+                              detail: "Dikdörtgen ya da çizgi seç; ekranda hemen görünür.")
+                    StepBadge(number: 2, title: "Ölçüyü yaz",
+                              detail: "En ve boyu milimetre olarak yaz ya da parçayı parmağınla sürükle.")
+                    StepBadge(number: 3, title: "Kaydet ve paylaş",
+                              detail: "Projen bu cihazda saklanır; dilersen dosya olarak gönderebilirsin.")
+                }
+                .appCard()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Son projeler").font(.headline).foregroundStyle(AppTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    if hasLocalDraft { resumeButton }
+                    if recentProjects.isEmpty && !hasLocalDraft {
+                        Text("Kaydettiğin projeler burada görünür.")
+                            .font(.subheadline).foregroundStyle(AppTheme.muted)
+                    }
+                    ForEach(visibleRecentProjects) { entry in
+                        HStack(spacing: 4) {
+                            Button {
+                                do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
+                                catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "doc.text")
+                                        .foregroundStyle(AppTheme.accent)
+                                        .frame(width: 36, height: 36)
+                                        .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(entry.name).foregroundStyle(AppTheme.ink)
+                                        Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
+                                            .font(.caption).foregroundStyle(AppTheme.muted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.forward").font(.caption)
+                                        .foregroundStyle(AppTheme.muted)
+                                }
+                                .frame(minHeight: 48)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                            Menu {
+                                recentActions(entry)
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.title3)
+                                    .foregroundStyle(AppTheme.muted)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("\(entry.name) için işlemler")
+                            .accessibilityIdentifier("project-actions-\(entry.id.uuidString)")
+                        }
+                        .contextMenu { recentActions(entry) }
+                    }
+                    if recentProjects.count > Self.recentLimit {
+                        Button { showAllRecent.toggle() } label: {
+                            Text(showAllRecent ? "Daha az göster" : "Tümünü göster (\(recentProjects.count))")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("show-all-projects")
+                    }
+                }
+                .appCard()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -581,7 +699,7 @@ private struct PiecePicker: View {
                 }
                 if matchingIndices.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Eşleşen parça bulunamadı.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.muted)
                 }
             }
             .searchable(text: $search, prompt: "Parça ara")
@@ -628,7 +746,7 @@ private struct PieceDetails: View {
                 Text(piece.grainStatus)
                 Text("En: \((bounds.maxX - bounds.minX).formatted(.number.precision(.fractionLength(0...2)))) • Boy: \((bounds.maxY - bounds.minY).formatted(.number.precision(.fractionLength(0...2))))")
                 Text("Boyutlar dosyadaki koordinat birimindedir.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.muted)
             }
             .font(.caption)
             .frame(maxWidth: .infinity, alignment: .leading)

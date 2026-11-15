@@ -82,7 +82,9 @@ xcodegen generate --spec project.ci.yml
 
 | Sınıf | Test metotları |
 |-------|---------------|
-| `ViewerUITests` | Başlangıç, örnek çizim, taslak kurtarma, dosya seçici, bozuk alan ve arama testleri |
+| `ViewerUITests` | Başlangıç, örnek çizim, taslak kurtarma, dosya seçici, bozuk alan ve arama, yakınlaştırma düğmeleri ve "şimdi ne yapmalıyım" ipucu testleri |
+| `ScreenshotTourTests` | Ekran görüntüsü turu; `testTour06SystemDarkStaysLight` sistem koyu moddayken uygulamanın açık kaldığını görüntüler (iki ekran) |
+| `DraftContourGeometryTests` (`Apple/UnitTests/`) | Çizim eşlemesi ve `DraftViewport`: yakınlaştırma sınırı (1×–24×), kaydırma sınırı, yakınlaştırılmış eşlemenin tersinirliği, yakınlaştırmada sürükleme mesafesi |
 | `FixtureLoadingTests` | Sürüm zarfı, veri sınırları, parça seçimi, yalın iPhone çizimini kopya açma ve metaverili fabrika dosyası reddi |
 
 Güncel test ve fixture sayıları için `Apple/Tests/` kodunu temel alın; eski sabit sayıların tekrar edilmesi doğru değildir.
@@ -129,12 +131,22 @@ Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; Gi
 2. **Yeni proje oluştur** > **Dikdörtgen ekle**: önizlemede bir parça görünmeli.
 3. Parçanın adını ve en/boyunu (`100`/`150` mm), X/Y konumunu değiştirip uygula; önizleme güncellenmeli.
 4. Parçayı sağa taşı, 90° döndür, kopyala, sil; her işlemde geri al/ileri al doğru sonucu vermeli.
-5. **Dosyayı hazırla** > **Paylaş veya Dosyalara kaydet** ile gerçekten `.tcad` dosyası dışa aktar. Windows masaüstünde açıp kimlik, ölçü ve geometriyi bağımsız doğrula.
+5. **Dosyayı hazırla (.tcad)** > **Paylaş veya Dosyalara kaydet** ile gerçekten `.tcad` dosyası dışa aktar; dosya adı proje adından türetilmeli (örn. "Örnek kalıp.tcad"), rastgele kimlik olmamalı. Windows masaüstünde açıp kimlik, ölçü ve geometriyi bağımsız doğrula.
 6. **Örnekle dene** seçeneği iki örnek parçayla açılmalı; yeni kullanıcı önceki CAD bilgisi olmadan işlemleri bulabilmeli.
 7. Boş projede dışa aktar reddedilmeli; 0/negatif/büyük, bozuk veya sonsuz sayılar kabul edilmemeli.
 8. VoiceOver, Dynamic Type, küçük ekran, iPhone/iPad, Türkçe/İngilizce sistem dili, Dosyalar ve iCloud sağlayıcıları ile gerçek cihaz kabulü yapılmalı.
 
-`ViewerUITests.swift` başlangıç ve ilk düzenleme yolunu otomatik kontrol eder; testlerin varlığı fiziksel cihaz doğrulaması anlamına gelmez.
+9. Dikdörtgen eklendikten sonra çizimin sağ alt köşesinde **Yakınlaştır** ve **Uzaklaştır** düğmeleri görünmeli; **Ekrana sığdır** yalnız yakınlaştırıldıktan sonra görünmeli. Çizim boşken ve klavye açıkken düğmeler görünmemeli.
+10. **Yakınlaştır**'a iki kez dokun: çizimin altındaki satır "2.6× yakınlaştırıldı" demeli. **Uzaklaştır** "1.6×" göstermeli; **Ekrana sığdır** özgün görünüme dönmeli. Yakınlaştırma 24×'te durmalı, 1×'in altına inmemeli.
+11. Parmaklarını sıkıştırarak yakınlaştır; çizim iki parmağın değil ekran alanının merkezine göre büyümeli. Boş kâğıdı sürükleyerek kaydır; çizimin bir kısmı her zaman görünür kalmalı. Yakınlaştırılmışken bir parçayı sürükle: parça parmağın altında kalmalı ve doğru konuma bırakılmalı.
+12. Parçayı seç: çizimin üstünde en ve boy (çizgide uzunluk) etiketleri milimetre olarak görünmeli ve girilen değerlerle tutmalı. Bir ölçüyü değiştirip uygula: etiket güncellenmeli. Klavye açılınca (çizim küçülünce) etiketlerin gizlenmesi, kapanınca geri gelmesi beklenir. Etiketler çizim alanının dışına taşmamalı.
+13. Parçayı seçerken ve sürükleyip bırakırken hafif titreşim hissedilmeli (yalnız gerçek iPhone'da; simülatörde titreşim yoktur).
+14. Ana ekranda "Nasıl çalışır?" altında üç adım görünmeli. Atölyede ipucu sırayla "Başlamak için bir şekil ekle", "Düzenlemek için parçaya dokun" ve "Ölçüleri milimetre olarak yaz" demeli.
+15. Sistemi koyu moda al: uygulama yine açık temada kalmalı; yazılar okunabilir olmalı.
+
+`ViewerUITests.swift` başlangıç, ilk düzenleme yolu, yakınlaştırma düğmeleri ve ipucunu otomatik kontrol eder; testlerin varlığı fiziksel cihaz doğrulaması anlamına gelmez.
+
+**Henüz doğrulanmadı:** Swift kodu yerelde derlenmedi (derleyen tek ortam iPhone CI'dır). İki parmakla sıkıştırma ve boş kâğıdı sürükleyerek kaydırma simülatör testinde yoktur; 11. adım yalnız elle yapılır. Ölçü etiketlerinin görünmesi/gizlenmesi ve titreşim otomatik denetlenmez. Gerçek cihaz ve VoiceOver ile deneme yapılmadı.
 
 ## Dokunmatik ve çevrimdışı taslak kabulü
 
@@ -142,7 +154,7 @@ Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; Gi
 2. Parmağınla seçili parçayı sürükle; çizim hareket esnasında önizlenmeli, bırakınca yeni konum kalıcı olmalı. 5 mm'ye hizala seçeneğinin açık/kapalı sonuçlarını karşılaştır.
 3. Sürüklemeden sonra Geri Al ve İleri Al orijinal ve yeni noktaları aynen geri getirmeli.
 4. Editörü kapat; **Son çizime devam et** ile aynı parçalar geri gelmeli. Uygulamayı kapatıp tekrar açıldığında da yerel taslak geri yüklenmeli.
-5. Kayıtlı taslak varken Yeni Proje/Örnekle Dene eski taslağın değiştirileceğini sormalı. İptal edildiğinde dosya korunmalı.
+5. Kayıtlı taslak varken Yeni Proje/Örnekle Dene eski taslağı **sormadan** kütüphaneye arşivler (kod böyle çalışır; soru yoktur). Arşivlenen taslak Son projeler listesinde görünür. Okunamayan taslak varsa uygulama sorar ve dosyayı silmez, ayırır.
 6. Aşırı büyüklükte koordinat, sıfır uzunluk, bozuk taslak ve disk alanı hatalarında üretim dosyaları etkilenmemeli; kullanıcıya açık hata gösterilmeli.
 7. Büyük parça yoğunluğunda UI takılması, erişilebilirlik ve uygulama yeniden başlatılması test edilmeli; taslak 250 parça, 20.000 nokta ve 2 MB sınırına sahiptir.
 8. Bu özellik ücretli dış servis veya gizli API anahtarı gerektirmemeli.
@@ -212,3 +224,23 @@ Atölyede çizimin hemen altındaki alana komut yazılır (ya da klavyenin mikro
 Testler: `UnitTests/CommandParserTests.swift` (cümle tabloları, FINAL_COMMANDS.md'nin 60 cümlesi dahil), `UnitTests/CommandPlannerTests.swift` (önizleme cümleleri ve sonuç geometrisi), `Tests/CommandFieldUITests.swift` (yaz → önizle → onayla → geri al, silme onayı, ret, geçersiz alan, klavye yerleşimi), `ScreenshotTourTests` içinde `testTour07CommandField` ve `testTour08CommandFieldLargeText` (görüntüler `22-` … `30-`).
 
 Doğrulanmayanlar: gerçek cihaz, VoiceOver, Türkçe klavyedeki sesle yazmanın komutu nasıl yazdığı (rakam mı sözcük mü, `x` mi `çarpı` mı).
+
+## Parmakla şekil çizme ve kayıp koruması
+
+1. Atölyede **Parmakla şekil çiz**'i aç; sabit 300 × 300 mm karenin dışına dokun: kısa bir uyarı görünmeli, nokta eklenmemeli.
+2. Yeterli nokta yokken **Şekli çizime ekle** pasif olmalı ve altında kaç nokta gerektiği yazmalı.
+3. En az bir nokta varken **Vazgeç**'e bas: "Çizdiğin N nokta silinsin mi?" sorulmalı. **Çizmeye devam et** noktaları korumalı; sayfayı aşağı çekmek de kapatmamalı. Hiç nokta yokken **Vazgeç** hemen kapatmalı.
+4. Zoom açıkken parça seçiliyse **Seçili parçayı göster** parçayı çizim alanının ortasına getirmeli (sürükleme gerekmeden).
+
+Bu adımlar yalnız koddan çıkarıldı; simülatör testi yoktur ve gerçek cihazda denenmedi.
+
+## Taşıma, kayıt durumu, nokta düzenleme ve proje yönetimi
+
+1. Bir parça seçiliyken **↑ 10 mm** ve **↓ 10 mm** parçayı yukarı/aşağı taşımalı (Y alanı 10 artıp azalmalı); Geri al ikisini de geri almalı.
+2. **Projeyi kaydet**'in altındaki satır, kaydedilmemiş değişiklikte "Henüz kaydedilmedi", kayıttan sonra "Kaydedildi" demeli.
+3. Bir en/boy alanına geçersiz değer ("100,,") yazıp uygula: uyarı hangi alanın neden reddedildiğini söylemeli.
+4. **Köşe noktalarını düzenle**: bir noktayı değiştirip **Nokta konumunu uygula**'ya bas; sayfa kapanmamalı, sıradaki nokta seçilmeli ve çizim hemen değişmeli. **Bitti** kapatmalı. Yazılıp uygulanmamış değer varken sayfayı aşağı çekmek kapatmamalı.
+5. Ana ekranda bir projenin "…" menüsünden **Adı değiştir** (1–120 karakter) ve **Sil** (onay ister) dene. Sildikten sonra yeni proje açınca silinen projenin geri **gelmediğini** doğrula. Adı değiştirdikten sonra yeni proje açınca "(taslak)" adlı ikinci bir proje **oluşmadığını** doğrula.
+6. 10'dan fazla proje varken **Tümünü göster (N)** görünmeli.
+
+Bu adımlar yalnız koddan çıkarıldı; simülatör testi yalnız 1. ve 3. adımı (taşıma ve hatalı değer) kapsar; gerçek cihazda denenmedi. 5. adımın birim testi yalnız yol-enjekte edilebilir silme/ad değiştirmeyi kapsar, taslakla etkileşimi kapsamaz.

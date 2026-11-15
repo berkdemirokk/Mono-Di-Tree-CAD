@@ -83,6 +83,46 @@ enum DraftContourGeometry {
     }
 }
 
+/// Zoom and pan of the drawing, relative to the fit-to-screen view. Zoom is about the centre of the
+/// drawing area; pan is a screen-space offset in points. Kept as plain values so it can be tested
+/// without a view.
+struct DraftViewport: Equatable {
+    static let minZoom = 1.0
+    static let maxZoom = 24.0
+    static let step = 1.6
+    /// How much of the drawing must stay inside the drawing area, in points.
+    static let keepVisible = 48.0
+
+    var zoom = 1.0
+    var pan = CGSize.zero
+
+    var isFit: Bool { zoom <= Self.minZoom + 1e-9 && pan == .zero }
+    var canZoomIn: Bool { zoom < Self.maxZoom - 1e-9 }
+    var canZoomOut: Bool { zoom > Self.minZoom + 1e-9 }
+
+    /// Multiplies the zoom by `factor`, clamped. The point under the centre stays there, so the
+    /// pan scales with the zoom. Returning to fit also clears the pan.
+    func zoomed(by factor: Double) -> DraftViewport {
+        guard factor.isFinite, factor > 0 else { return self }
+        let next = min(Self.maxZoom, max(Self.minZoom, zoom * factor))
+        if next <= Self.minZoom + 1e-9 { return DraftViewport() }
+        let ratio = next / zoom
+        return DraftViewport(zoom: next,
+                             pan: CGSize(width: Double(pan.width) * ratio, height: Double(pan.height) * ratio))
+    }
+
+    /// Adds `delta` to the pan. `content` is the size of the drawing at fit (zoom 1). The drawing
+    /// can be moved until only `keepVisible` points of it are left in view, never further.
+    func panned(by delta: CGSize, in size: CGSize, content: CGSize) -> DraftViewport {
+        guard delta.width.isFinite, delta.height.isFinite, zoom > Self.minZoom + 1e-9 else { return self }
+        let limitX = max(0, (Double(content.width) * zoom + Double(size.width)) / 2 - Self.keepVisible)
+        let limitY = max(0, (Double(content.height) * zoom + Double(size.height)) / 2 - Self.keepVisible)
+        return DraftViewport(zoom: zoom, pan: CGSize(
+            width: min(limitX, max(-limitX, Double(pan.width + delta.width))),
+            height: min(limitY, max(-limitY, Double(pan.height + delta.height)))))
+    }
+}
+
 /// A centered aspect-fit map shared by drawing and picking. CAD Y increases upwards.
 struct DraftCanvasMap {
     private let scale: Double
@@ -90,6 +130,42 @@ struct DraftCanvasMap {
     private let bottom: Double
     private let minX: Double
     private let minY: Double
+    private let contentWidth: Double
+    private let contentHeight: Double
+
+    private init(scale: Double, left: Double, bottom: Double, minX: Double, minY: Double,
+                 contentWidth: Double, contentHeight: Double) {
+        self.scale = scale
+        self.left = left
+        self.bottom = bottom
+        self.minX = minX
+        self.minY = minY
+        self.contentWidth = contentWidth
+        self.contentHeight = contentHeight
+    }
+
+    /// Size of the drawing on screen at fit, before any zoom.
+    var contentSize: CGSize { CGSize(width: contentWidth, height: contentHeight) }
+
+    /// The pan that brings `point` to the middle of the drawing area at `zoom`. Called on the
+    /// fit map, not on a zoomed one.
+    func panCentering(_ point: DraftPoint, zoom: Double, in size: CGSize) -> CGSize {
+        let at = screen(point)
+        return CGSize(width: -(Double(at.x) - Double(size.width) / 2) * zoom,
+                      height: -(Double(at.y) - Double(size.height) / 2) * zoom)
+    }
+
+    /// The same map seen through a zoom and pan. Distances measured on screen are divided by the
+    /// zoomed scale, so dragging and picking keep working while zoomed in.
+    func viewed(_ viewport: DraftViewport, in size: CGSize) -> DraftCanvasMap {
+        let cx = Double(size.width) / 2, cy = Double(size.height) / 2
+        let z = viewport.zoom
+        return DraftCanvasMap(scale: scale * z,
+                              left: cx + (left - cx) * z + Double(viewport.pan.width),
+                              bottom: cy + (bottom - cy) * z + Double(viewport.pan.height),
+                              minX: minX, minY: minY,
+                              contentWidth: contentWidth, contentHeight: contentHeight)
+    }
 
     init?(size: CGSize, minX: Double, maxX: Double, minY: Double, maxY: Double, inset: Double) {
         let width = Double(size.width), height = Double(size.height)
@@ -100,6 +176,8 @@ struct DraftCanvasMap {
         bottom = (height + spanY * scale) / 2
         self.minX = minX
         self.minY = minY
+        contentWidth = spanX * scale
+        contentHeight = spanY * scale
     }
 
     func screen(_ p: DraftPoint) -> CGPoint {
