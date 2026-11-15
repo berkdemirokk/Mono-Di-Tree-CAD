@@ -213,6 +213,8 @@
     </ControlTemplate.Triggers>
    </ControlTemplate></Setter.Value></Setter>
   </Style>
+  <!-- The framework default paints Expander headers, and content text that inherits from them, in the system control text colour. -->
+  <Style TargetType="Expander"><Setter Property="Foreground" Value="{StaticResource Studio.Text}"/></Style>
   <Style TargetType="ScrollViewer"><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{StaticResource Studio.Text}"/><Setter Property="PanningMode" Value="Both"/></Style>
   <Style x:Key="Studio.ScrollThumb" TargetType="Thumb">
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Thumb"><Border x:Name="Chrome" Background="#526779" CornerRadius="4" Margin="2"/><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#7B98AB"/></Trigger><Trigger Property="IsDragging" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{StaticResource Studio.Accent}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>

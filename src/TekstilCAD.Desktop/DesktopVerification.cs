@@ -5284,6 +5284,7 @@ internal static class DesktopVerification
                 && marginWarning.ActualHeight+marginWarning.Margin.Top+marginWarning.Margin.Bottom>=marginWarning.DesiredSize.Height-.5 && FullyVisible(calculateButton,minimumRoot)
                 && FullyVisible(widthInput,minimumRoot) && FullyVisible(gapInput,minimumRoot) && FullyVisible(marginInput,minimumRoot),
                 "Minimum quantity nesting window shows full margin warning, inputs and calculation action",checks);
+            VerifyExpanderHeaderContrast(minimumRoot,"Minimum quantity nesting",checks);
             Render(window,Path.ChangeExtension(reportPath,".ProductionNestingWindow.compact.png"),1024,640);
             var choices=(ListBox)typeof(ProductionNestingWindow).GetField("choices",PrivateInstance)!.GetValue(window)!;
             var choiceItems=(System.Collections.IList)typeof(ProductionNestingWindow).GetField("choiceItems",PrivateInstance)!.GetValue(window)!;
@@ -6145,6 +6146,40 @@ internal static class DesktopVerification
         var rows=Enumerable.Range(0,3).Select(i=>grid.ItemContainerGenerator.ContainerFromIndex(i) as DataGridRow).ToArray();
         Check(rows.All(row=>row is not null && RowVisible(row,content,gridBounds.Width)),
             "Compact grading first three rows are fully readable inside the clipped content viewport",checks);
+        VerifyExpanderHeaderContrast(content,"Grading workshop",checks);
+        // The help header and the point picker share one row; the header text must not run into the button.
+        var help=Descendants<Expander>(content).Single(e=>Equals(e.Header,"Artışları mm olarak girin · Projeye uygulayıp kaydedin"));
+        var helpText=BoundsInRoot(ExpanderHeaderText(help),content);
+        var picker=BoundsInRoot(Descendants<Button>(content).Single(b=>Equals(b.Content,"Konturdan nokta seç…")),content);
+        Check(!helpText.IntersectsWith(picker) && picker.Left-helpText.Right>=6,
+            $"Grading help header text keeps clear space before the point picker button (gap {picker.Left-helpText.Right:0.#})",checks);
+        // The read-only summary holds the piece name and its identity on two lines; the box must not cut either.
+        var summary=Descendants<TextBox>(content).Single(t=>AutomationProperties.GetName(t)=="Seçili kaynağın tam adı ve kimliği");
+        var textArea=Descendants<ScrollContentPresenter>(summary).First();
+        var visibleText=textArea.TransformToAncestor(summary).TransformBounds(new Rect(textArea.RenderSize));
+        var firstLine=summary.GetRectFromCharacterIndex(0);var lastLine=summary.GetRectFromCharacterIndex(summary.Text.Length);
+        Check(!firstLine.IsEmpty && !lastLine.IsEmpty && lastLine.Top>firstLine.Top && firstLine.Top>=visibleText.Top-.5 && lastLine.Bottom<=visibleText.Bottom+.5,
+            $"Selected source summary shows its name and identity lines unclipped (text {firstLine.Top:0.#} to {lastLine.Bottom:0.#}, box {visibleText.Top:0.#} to {visibleText.Bottom:0.#})",checks);
+    }
+    private static TextBlock ExpanderHeaderText(Expander expander)
+        => Descendants<TextBlock>(Descendants<ToggleButton>(expander).First()).First();
+    // An Expander without a themed foreground falls back to the system control text colour,
+    // which is unreadable on the dark studio background.
+    private static void VerifyExpanderHeaderContrast(FrameworkElement root,string scope,List<string> checks)
+    {
+        var ratios=Descendants<Expander>(root).Where(e=>e.IsEnabled && FullyVisible(e,root)).Select(e=>BackgroundContrast(ExpanderHeaderText(e))).ToArray();
+        Check(ratios.Length>0 && ratios.All(ratio=>ratio>=4.5),
+            $"{scope} expander header text contrasts with the window background (lowest {ratios.DefaultIfEmpty().Min():0.0}:1 of {ratios.Length})",checks);
+    }
+    private static double BackgroundContrast(TextBlock text)
+        => text.Foreground is SolidColorBrush brush ? ContrastRatio(brush.Color,((SolidColorBrush)StudioTheme.Background).Color) : 0;
+    private static double ContrastRatio(Color first,Color second)
+    {
+        // WCAG 2 relative luminance; 4.5:1 is the minimum for normal-size text.
+        static double Channel(byte value) { var c=value/255d;return c<=0.03928 ? c/12.92 : Math.Pow((c+0.055)/1.055,2.4); }
+        static double Luminance(Color c)=>0.2126*Channel(c.R)+0.7152*Channel(c.G)+0.0722*Channel(c.B);
+        var a=Luminance(first);var b=Luminance(second);
+        return (Math.Max(a,b)+0.05)/(Math.Min(a,b)+0.05);
     }
     private static void VerifyOptionalGradingMetadata(MainWindow studio,List<string> checks)
     {
@@ -6186,6 +6221,10 @@ internal static class DesktopVerification
         batchWrite.BringIntoView();root.UpdateLayout();
         Check(FullyVisible(batchWrite,root) && batchWrite.Focusable,
             "Bulk grading action remains fully reachable in the minimum-size scrolling area",checks);
+        // Text inside an expanded section inherits the Expander foreground unless it sets its own.
+        var batchText=Descendants<TextBlock>(batchOptions).Where(t=>t.Text.Length>0).Select(BackgroundContrast).ToArray();
+        Check(batchText.Length>=3 && batchText.All(ratio=>ratio>=4.5),
+            $"Expanded bulk grading options text contrasts with the window background (lowest {batchText.DefaultIfEmpty().Min():0.0}:1 of {batchText.Length})",checks);
         var interpolate=Descendants<Button>(root).Single(b=>Equals(b.Content,"İki seçili satır arasını doldur"));
         interpolate.BringIntoView();root.UpdateLayout();
         Check(FullyVisible(interpolate,root) && interpolate.Focusable,
