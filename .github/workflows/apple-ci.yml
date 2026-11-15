@@ -46,6 +46,9 @@ jobs:
           ')
           echo "device_id=$DEVICE_ID" >> "$GITHUB_OUTPUT"
       - name: Build and test on iPhone Simulator
+        # The TEST_RUNNER_ prefix is stripped: the UI tests see SCREENSHOT_DIR.
+        env:
+          TEST_RUNNER_SCREENSHOT_DIR: ${{ runner.temp }}/iphone-screenshots
         run: >-
           xcodebuild -project TekstilCADViewer.xcodeproj
           -scheme TekstilCADViewerCI
@@ -53,6 +56,25 @@ jobs:
           -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.device_id }}'
           -resultBundlePath "$RUNNER_TEMP/iPhoneTests.xcresult"
           CODE_SIGNING_ALLOWED=NO test
+      - name: Collect screenshots for visual review
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/iphone-screenshots"
+          xcrun simctl list devices available | grep "${{ steps.simulator.outputs.device_id }}" > "$RUNNER_TEMP/iphone-screenshots/device.txt" || true
+          # Fallback when the test runner could not write the PNG files itself.
+          if ! ls "$RUNNER_TEMP/iphone-screenshots"/*.png >/dev/null 2>&1; then
+            xcrun xcresulttool export attachments --path "$RUNNER_TEMP/iPhoneTests.xcresult" --output-path "$RUNNER_TEMP/iphone-screenshots"
+          fi
+          ls -la "$RUNNER_TEMP/iphone-screenshots"
+      - name: Save screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-screenshots
+          path: ${{ runner.temp }}/iphone-screenshots
+          if-no-files-found: warn
+          retention-days: 7
       - name: Save test results
         if: always()
         uses: actions/upload-artifact@v4
