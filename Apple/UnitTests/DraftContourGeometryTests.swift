@@ -97,7 +97,7 @@ final class DraftContourGeometryTests: XCTestCase {
         let far = zoomed.panned(by: CGSize(width: 1e9, height: -1e9), in: size)
         XCTAssertEqual(far.pan.width, 300, accuracy: 1e-9)   // size * zoom / 2
         XCTAssertEqual(far.pan.height, -200, accuracy: 1e-9)
-        XCTAssertEqual(zoomed.panned(by: CGSize(width: .infinity, height: 0), in: size), zoomed)
+        XCTAssertEqual(zoomed.panned(by: CGSize(width: CGFloat.infinity, height: 0), in: size), zoomed)
     }
 
     func testZoomedMapKeepsTheCentreAndStaysInvertible() throws {
