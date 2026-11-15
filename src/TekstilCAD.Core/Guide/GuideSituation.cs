@@ -1,5 +1,16 @@
 namespace TekstilCAD.Core.Guide;
 
+/// <summary>What the waiting command preview asks of the person.</summary>
+public enum GuidePreviewKind
+{
+    /// <summary>An ordinary preview: Enter or Uygula applies it, Esc drops it.</summary>
+    Normal = 0,
+    /// <summary>A dangerous preview (for example deleting): Enter only moves focus, a separate red button applies it.</summary>
+    Danger = 1,
+    /// <summary>A question with answer buttons and no Uygula (for example "milimetre mi, santimetre mi?").</summary>
+    Question = 2,
+}
+
 /// <summary>
 /// Plain facts about what the person is doing right now, collected by the window and handed to
 /// <see cref="GuideRules.NextStep"/>. Every property is a fact the window already knows; nothing here is
@@ -36,8 +47,21 @@ public sealed record GuideSituation
     /// <summary>A drawing has been started on the canvas and is not finished yet.</summary>
     public bool HasPendingDrawing { get; init; }
 
+    /// <summary>
+    /// The selected piece is a plain closed rectangle that the command box can resize (no grain line, corner mark,
+    /// grading rule or curve data). Only then does the guide suggest "genişliği 95 yap"; otherwise that
+    /// command would be refused and the person would be sent in a circle. Ignored without a selection.
+    /// </summary>
+    public bool SelectedCanResize { get; init; }
+
+    /// <summary>What kind of answer the waiting preview needs. Only read while <see cref="HasPendingPreview"/> is true.</summary>
+    public GuidePreviewKind PendingPreviewKind { get; init; }
+
     /// <summary>A written command has been understood and is waiting for Enter, Uygula or Esc.</summary>
     public bool HasPendingPreview { get; init; }
+
+    /// <summary>The one reading of "no pieces": <see cref="IsEmptyProject"/> or a non-positive <see cref="PieceCount"/>.</summary>
+    public bool HasNoPieces => IsEmptyProject || PieceCount <= 0;
 
     /// <summary>The project has no pieces. When true the project is read as having no pieces whatever <see cref="PieceCount"/> says.</summary>
     public bool IsEmptyProject { get; init; }

@@ -17,7 +17,7 @@ public enum FirstStep
 /// <summary>What happened in the program that may tick a checklist item (or hide the list).</summary>
 public enum FirstStepEvent
 {
-    /// <summary>A piece was added to the project (any way).</summary>
+    /// <summary>A piece was added by the person (typed, drawn or imported). Do not send it when the built-in example is loaded.</summary>
     PieceDrawn = 0,
     /// <summary>A piece's width or height was changed on purpose.</summary>
     SizeChanged = 1,
@@ -39,9 +39,12 @@ public enum FirstStepEvent
 /// No clock, no I/O. <see cref="ToJson"/> / <see cref="FromJson"/> give a tiny versioned document the
 /// preferences file can embed as a string:
 /// <code>{"v":1,"done":["draw","size"],"hidden":false}</code>
-/// Item ids are stable: draw, size, move, undo, save, reopen. <see cref="FromJson"/> is tolerant: null, huge,
-/// corrupt, wrongly typed or unknown-version input gives <see cref="Fresh"/>; unknown item ids and unknown
-/// properties are ignored; it never throws.
+/// Item ids are stable: draw, size, move, undo, save, reopen. <see cref="FromJson"/> is tolerant: null, huge
+/// (over <see cref="MaxJsonLength"/>), corrupt, not-an-object, missing or unknown-version (not 1) input and
+/// documents that repeat a property name give <see cref="Fresh"/>. Inside a valid version-1 document a missing or
+/// wrongly typed "done" or "hidden" falls back to its default, and unknown item ids and unknown properties are
+/// ignored. It never throws (out-of-memory excepted). A preferences file that prefers a plain array can use
+/// <see cref="DoneIds"/>, <see cref="IsDismissed"/> and <see cref="FromParts"/> instead of the JSON string.
 /// </summary>
 public sealed class FirstStepsTracker : IEquatable<FirstStepsTracker>
 {
@@ -61,9 +64,9 @@ public sealed class FirstStepsTracker : IEquatable<FirstStepsTracker>
         "Parça çizin",
         "Ölçüsünü değiştirin",
         "Parçayı taşıyın",
-        "Yaptığınızı geri alın",
+        "Son işlemi geri alın",
         "Çalışmayı kaydedin",
-        "Dosyayı yeniden açın",
+        "Kaydettiğiniz dosyayı yeniden açın",
     ];
 
     private readonly int mask;
@@ -125,7 +128,7 @@ public sealed class FirstStepsTracker : IEquatable<FirstStepsTracker>
     public const string DismissLabel = "Gizle";
 
     /// <summary>All item labels in display order.</summary>
-    public static IReadOnlyList<string> AllLabels => Labels;
+    public static IReadOnlyList<string> AllLabels { get; } = Array.AsReadOnly((string[])Labels.Clone());
 
     /// <summary>Returns the state after the event. Unknown events and events that do not apply return the same instance.</summary>
     public FirstStepsTracker Observe(FirstStepEvent observed)
@@ -182,50 +185,105 @@ public sealed class FirstStepsTracker : IEquatable<FirstStepsTracker>
         }
         try
         {
-            var options = new JsonDocumentOptions { MaxDepth = 4, AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow };
+            var options = new JsonDocumentOptions { MaxDepth = 8, AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow };
             using var doc = JsonDocument.Parse(json, options);
             var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("v", out var version)
-                || version.ValueKind != JsonValueKind.Number
-                || !version.TryGetInt32(out var v)
-                || v != JsonVersion)
+            if (root.ValueKind != JsonValueKind.Object)
             {
                 return Fresh;
             }
-            var newMask = 0;
-            if (root.TryGetProperty("done", out var done) && done.ValueKind == JsonValueKind.Array)
+            // One pass over the properties; a repeated name (even spelled with escapes) makes the document ambiguous.
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            var version = 0;
+            var versionSeen = false;
+            List<string>? ids = null;
+            var hidden = false;
+            foreach (var property in root.EnumerateObject())
             {
-                var seen = 0;
-                foreach (var item in done.EnumerateArray())
+                if (!names.Add(property.Name) || names.Count > 64)
                 {
-                    if (++seen > 64)
-                    {
-                        return Fresh;
-                    }
-                    if (item.ValueKind != JsonValueKind.String)
-                    {
-                        continue;
-                    }
-                    var index = Array.IndexOf(Ids, item.GetString());
-                    if (index >= 0)
-                    {
-                        newMask |= 1 << index;
-                    }
+                    return Fresh;
+                }
+                switch (property.Name)
+                {
+                    case "v":
+                        if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetInt32(out version))
+                        {
+                            return Fresh;
+                        }
+                        versionSeen = true;
+                        break;
+                    case "done" when property.Value.ValueKind == JsonValueKind.Array:
+                        ids = new List<string>();
+                        foreach (var item in property.Value.EnumerateArray())
+                        {
+                            if (ids.Count >= 64)
+                            {
+                                return Fresh;
+                            }
+                            // Non-string items are kept as an empty placeholder so they count toward the limit but name no item.
+                            ids.Add(item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : "");
+                        }
+                        break;
+                    case "hidden":
+                        hidden = property.Value.ValueKind == JsonValueKind.True;
+                        break;
                 }
             }
-            // Same rule as Observe: "reopen" means nothing without "save".
-            if ((newMask & Bit(FirstStep.Save)) == 0)
-            {
-                newMask &= ~Bit(FirstStep.ReopenFile);
-            }
-            var hidden = root.TryGetProperty("hidden", out var h) && h.ValueKind == JsonValueKind.True;
-            return newMask == 0 && !hidden ? Fresh : new FirstStepsTracker(newMask, hidden);
+            return !versionSeen || version != JsonVersion ? Fresh : FromParts(ids, hidden);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return Fresh;
         }
+    }
+
+    /// <summary>The stable ids of the ticked items in display order (draw, size, move, undo, save, reopen), for a preferences file that stores them as a plain array.</summary>
+    public IReadOnlyList<string> DoneIds
+    {
+        get
+        {
+            var list = new List<string>(Total);
+            for (var i = 0; i < Total; i++)
+            {
+                if ((mask & (1 << i)) != 0)
+                {
+                    list.Add(Ids[i]);
+                }
+            }
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// Builds a state from stored parts (the shape <see cref="DoneIds"/> and <see cref="IsDismissed"/> give).
+    /// Unknown ids are ignored, duplicates collapse, and "reopen" without "save" is dropped. Never throws.
+    /// </summary>
+    public static FirstStepsTracker FromParts(IEnumerable<string?>? doneIds, bool dismissed)
+    {
+        var newMask = 0;
+        if (doneIds is not null)
+        {
+            var seen = 0;
+            foreach (var id in doneIds)
+            {
+                if (++seen > 64)
+                {
+                    return Fresh;
+                }
+                var index = id is null ? -1 : Array.IndexOf(Ids, id);
+                if (index >= 0)
+                {
+                    newMask |= 1 << index;
+                }
+            }
+        }
+        // Same rule as Observe: "reopen" means nothing without "save".
+        if ((newMask & Bit(FirstStep.Save)) == 0)
+        {
+            newMask &= ~Bit(FirstStep.ReopenFile);
+        }
+        return newMask == 0 && !dismissed ? Fresh : new FirstStepsTracker(newMask, dismissed);
     }
 
     public bool Equals(FirstStepsTracker? other) => other is not null && other.mask == mask && other.dismissed == dismissed;

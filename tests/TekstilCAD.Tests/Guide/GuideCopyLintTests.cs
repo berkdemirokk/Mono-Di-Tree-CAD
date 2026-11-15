@@ -9,9 +9,13 @@ public sealed class GuideCopyLintTests
     // Words that must never appear (FINAL_SPEC b.6 plus the tone rules of FINAL_COMMANDS).
     private static readonly string[] Banned =
     [
-        "kontur", "nokta", "ızgara", "izgara", "snap", "yakalama", "katman", "offset", "poliline", "serileme",
+        "kontur", "nokta", "izgara", "snap", "yakalama", "katman", "offset", "poliline", "serileme",
         "vertex", "bezier", "bézier", "parametrik", "yapay zeka", "yapay zekâ", "asistan", "model", "dxf",
     ];
+
+    // Case-insensitive without Turkish culture rules: İ, I, ı and i are all read as 'i' (so "Izgara", "İzgara" and "ızgara" all match "izgara").
+    private static string Fold(string text) =>
+        new(text.Select(c => c is 'İ' or 'I' or 'ı' ? 'i' : char.ToLowerInvariant(c)).ToArray());
 
     private const int MaxSentenceLength = 100;
     private const int MaxLabelLength = 40;
@@ -59,7 +63,7 @@ public sealed class GuideCopyLintTests
         {
             foreach (var word in Banned)
             {
-                Assert.False(s.Contains(word, StringComparison.OrdinalIgnoreCase), $"'{s}' contains banned word '{word}'.");
+                Assert.False(Fold(s).Contains(Fold(word), StringComparison.Ordinal), $"'{s}' contains banned word '{word}'.");
             }
         }
     }

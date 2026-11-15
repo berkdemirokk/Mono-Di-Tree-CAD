@@ -24,10 +24,10 @@ public static class StartTasks
     internal const string TypeSizeTitle = "Ölçü yazarak başla";
     internal const string TypeSizeDescription = "Kutuya 120 x 80 dikdörtgen yazın";
     internal const string OpenFileTitle = "Dosya aç";
-    internal const string OpenFileDescription = "Kayıtlı bir projeyi seçin";
+    internal const string OpenFileDescription = "Kayıtlı bir çalışmayı seçin";
     internal const string TryExampleTitle = "Örnekle dene";
     internal const string TryExampleDescription = "Hazır bir örnek açılır";
-    internal const string TryExampleDisabledReason = "Örnek yalnız boş ve temiz bir projeye yüklenir.";
+    internal const string TryExampleDisabledReason = "Örnek yalnızca boş, yeni bir çalışmada açılır.";
     internal const string ContinueTitle = "Kaldığım yerden devam et";
     internal const string ContinueNoFileDescription = "Son çalışmanız burada görünür";
     internal const string ContinueDisabledReason = "Henüz kayıtlı bir çalışma yok.";
@@ -40,11 +40,12 @@ public static class StartTasks
     public static IReadOnlyList<StartTask> For(GuideSituation situation, string? recentFileName)
     {
         ArgumentNullException.ThrowIfNull(situation);
-        if (!(situation.IsEmptyProject || situation.PieceCount <= 0))
+        if (!situation.HasNoPieces)
         {
             return [];
         }
         var clean = !situation.HasUnsavedChanges && !situation.FilePathKnown && !situation.HasPendingDrawing
+            && !situation.HasRecoveryNotice && !situation.ImportedWithWarnings
             && !situation.HasPendingPreview;
         var recent = CleanFileName(recentFileName);
         return
@@ -68,7 +69,9 @@ public static class StartTasks
         }
         var cut = name.LastIndexOfAny(['\\', '/']);
         var text = cut >= 0 ? name[(cut + 1)..] : name;
-        var chars = text.Where(c => !char.IsControl(c)).ToArray();
+        // Drop control characters and invisible format characters (for example bidi overrides that could spoof a name).
+        var chars = text.Where(c => !char.IsControl(c)
+            && char.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.Format).ToArray();
         var cleaned = new string(chars).Trim();
         if (cleaned.Length == 0)
         {

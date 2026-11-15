@@ -192,15 +192,17 @@ public sealed class FirstStepsTrackerTests
     [Fact]
     public void Json_round_trips_every_reachable_state()
     {
-        // Every ordered subset of the real events, with and without dismissal.
+        // Every subset of the six events, applied in forward and in reverse order (reopen before save is then exercised), with and without dismissal.
         var seen = new HashSet<string>();
         for (var subset = 0; subset < 1 << Real.Length; subset++)
+        for (var reverse = 0; reverse < 2; reverse++)
         {
             for (var dismiss = 0; dismiss < 2; dismiss++)
             {
                 var t = FirstStepsTracker.Fresh;
-                for (var i = 0; i < Real.Length; i++)
+                for (var k = 0; k < Real.Length; k++)
                 {
+                    var i = reverse == 0 ? k : Real.Length - 1 - k;
                     if ((subset & (1 << i)) != 0)
                     {
                         t = t.Observe(Real[i]);
@@ -219,7 +221,8 @@ public sealed class FirstStepsTrackerTests
                 seen.Add(json);
             }
         }
-        Assert.True(seen.Count >= 64);
+        // 32 masks without "reopen" + 16 with "reopen" and "save", each with and without dismissal.
+        Assert.Equal(96, seen.Count);
     }
 
     public static TheoryData<string?> NotUsable => new()
@@ -247,10 +250,18 @@ public sealed class FirstStepsTrackerTests
         { "{\"v\":1,\"done\":[\"draw\"]} trailing" },
         { "{\"v\":1,\"done\":[\"draw\"]}{\"v\":1}" },
         { "// comment\n{\"v\":1,\"done\":[\"draw\"]}" },
-        { "{\"v\":1,\"done\":\"draw\"}" },
-        { "{\"v\":1,\"done\":{\"draw\":true}}" },
-        { "{\"v\":1,\"done\":[\"draw\"],\"hidden\":false}\0" },
-        { "\uD800{\"v\":1}" },
+        { "{\"v\":2,\"v\":1,\"done\":[\"draw\"]}" },
+        { "{\"v\":1,\"done\":[\"draw\",\"size\"],\"done\":[]}" },
+        { "{\"v\":1,\"done\":[\"save\"],\"hidden\":true,\"hidden\":false}" },
+        { "{\"v\":1,\"\\u0076\":1,\"done\":[\"draw\"]}" },
+        { "{\"v\":1.0,\"done\":[\"draw\"]}" },
+        { "{\"v\":1e0,\"done\":[\"draw\"]}" },
+        { "{\"v\":01,\"done\":[\"draw\"]}" },
+        { "{\"v\":+1,\"done\":[\"draw\"]}" },
+        { "{\"v\":NaN,\"done\":[\"draw\"]}" },
+        { "{\"v\":1,\"done\":[\"draw\"],\"x\":[[[[[[[[1]]]]]]]]}" },
+        { "{\"v\":1,\"done\":[\"draw\"],\"hidden\":false}" + (char)0 },
+        { (char)0xD800 + "{\"v\":1,\"done\":[\"draw\"]}" },
     };
 
     [Theory]
@@ -308,7 +319,8 @@ public sealed class FirstStepsTrackerTests
         var t = FirstStepsTracker.FromJson("{\"v\":1,\"done\":[\"draw\"],\"pad\":\"" + pad + "\"}");
         Assert.True(t.IsDone(FirstStep.DrawPiece));
         // More than 64 array items, even when short enough, is corrupt.
-        var many = "{\"v\":1,\"done\":[" + string.Join(",", Enumerable.Repeat("1", 70)) + "]}";
+        // The real item comes last, so Fresh can only come from the 64-item cap.
+        var many = "{\"v\":1,\"done\":[" + string.Join(",", Enumerable.Repeat("1", 70)) + ",\"draw\"]}";
         Assert.True(many.Length < FirstStepsTracker.MaxJsonLength);
         Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson(many));
     }
@@ -316,11 +328,62 @@ public sealed class FirstStepsTrackerTests
     [Fact]
     public void Deep_nesting_is_rejected()
     {
-        var deep = "{\"v\":1,\"done\":[[[[[[[[[[1]]]]]]]]]]}";
-        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson(deep));
-        var bomb = new string('[', 400);
+        // Each row holds a real "draw", so Fresh can only come from the depth guard, not from an empty document.
+        var tooDeep = "{\"v\":1,\"done\":[\"draw\"],\"x\":[[[[[[[[1]]]]]]]]}";
+        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson(tooDeep));
+        var bomb = "{\"v\":1,\"done\":[\"draw\"],\"x\":" + new string('[', 100) + new string(']', 100) + "}";
         Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson(bomb));
-        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson("{\"v\":1,\"x\":" + new string('[', 100) + new string(']', 100) + "}"));
+        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson(new string('[', 400)));
+        // A moderately nested unknown property from a newer writer is still tolerated.
+        var ok = FirstStepsTracker.FromJson("{\"v\":1,\"done\":[\"draw\"],\"f\":{\"a\":{\"b\":[[1]]}}}");
+        Assert.True(ok.IsDone(FirstStep.DrawPiece));
+    }
+
+    [Fact]
+    public void Valid_documents_with_wrongly_typed_fields_fall_back_to_defaults_not_to_an_error()
+    {
+        // Parsed fine, nothing usable inside: equal to Fresh by value, but "hidden" shows the document was read.
+        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson("{\"v\":1,\"done\":\"draw\"}"));
+        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromJson("{\"v\":1,\"done\":{\"draw\":true}}"));
+        var hiddenOnly = FirstStepsTracker.FromJson("{\"v\":1,\"done\":\"draw\",\"hidden\":true}");
+        Assert.True(hiddenOnly.IsDismissed);
+        Assert.Equal(0, hiddenOnly.DoneCount);
+        Assert.Equal(1, FirstStepsTracker.FromJson("{\"v\":1,\"done\":[\"save\"],\"hidden\":\"yes\"}").DoneCount);
+    }
+
+    [Fact]
+    public void Item_ids_are_case_sensitive_and_unescaped()
+    {
+        Assert.True(FirstStepsTracker.FromJson("{\"v\":1,\"done\":[\"\\u0064raw\"]}").IsDone(FirstStep.DrawPiece));
+        Assert.False(FirstStepsTracker.FromJson("{\"v\":1,\"done\":[\"Draw\",\"DRAW\"]}").IsDone(FirstStep.DrawPiece));
+    }
+
+    [Fact]
+    public void Item_order_in_a_stored_document_does_not_matter()
+    {
+        var a = FirstStepsTracker.FromJson("{\"v\":1,\"done\":[\"reopen\",\"save\"],\"hidden\":false}");
+        Assert.True(a.IsDone(FirstStep.ReopenFile));
+        Assert.Equal(a, FirstStepsTracker.FromJson("{\"v\":1,\"done\":[\"save\",\"reopen\"]}"));
+    }
+
+    [Fact]
+    public void Parts_round_trip_and_are_tolerant()
+    {
+        var t = Apply(FirstStepsTracker.Fresh, FirstStepEvent.PieceDrawn, FirstStepEvent.ProjectSaved, FirstStepEvent.Dismissed);
+        Assert.Equal(["draw", "save"], t.DoneIds.ToArray());
+        Assert.Equal(t, FirstStepsTracker.FromParts(t.DoneIds, t.IsDismissed));
+        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromParts(null, false));
+        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromParts(["bogus", null, "", "Draw"], false));
+        Assert.Equal(1, FirstStepsTracker.FromParts(["draw", "draw", "reopen"], false).DoneCount);
+        Assert.Equal(FirstStepsTracker.Fresh, FirstStepsTracker.FromParts(Enumerable.Repeat("draw", 1000), false));
+    }
+
+    [Fact]
+    public void Label_list_cannot_be_changed_through_a_cast()
+    {
+        Assert.False(FirstStepsTracker.AllLabels is string[]);
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)FirstStepsTracker.AllLabels)[0] = "x");
+        Assert.Equal("Parça çizin", FirstStepsTracker.AllLabels[0]);
     }
 
     [Fact]
