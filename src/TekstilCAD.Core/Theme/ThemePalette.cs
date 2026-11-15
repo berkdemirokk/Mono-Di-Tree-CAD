@@ -35,7 +35,7 @@ public sealed record ThemePalette(string Name, IReadOnlyDictionary<string, strin
         ("SelectionBorder", "#41877F", "#2F8F85"),
         ("TextSelection", "#3E8D83", "#9AD6CE"),
         ("HoverFill", "#2A3D50", "#DDE5EC"),
-        ("PressedFill", "#244D4A", "#CCD7E1"),
+        ("PressedFill", "#244D4A", "#D0DAE4"),
         ("RowAlt", "#192737", "#F8FAFC"),
         ("GridLine", "#253546", "#E1E7ED"),
         ("ScrollThumb", "#526779", "#76879A"),
@@ -61,6 +61,8 @@ public sealed record ThemePalette(string Name, IReadOnlyDictionary<string, strin
         ("Ghost", "#7FB2FF", "#1D4ED8"),
         ("GhostFill", "#16294A", "#E4EEFC"),
         ("OnPrimary", "#EDF4FA", "#FFFFFF"),
+        ("DangerHover", "#FFB3B3", "#9B1C13"),
+        ("DangerPressed", "#E57373", "#7F1710"),
     ];
 
     /// <summary>Every token name, in table order.</summary>

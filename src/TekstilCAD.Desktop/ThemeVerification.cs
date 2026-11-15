@@ -184,6 +184,11 @@ internal static class ThemeVerification
         var failures = ThemeContrastRules.Failures(ThemePalette.Light);
         Check(failures.Count == 0, $"Light palette meets WCAG contrast for all {ThemeContrastRules.All.Count} text and control rules" + (failures.Count == 0 ? "" : ": " + string.Join("; ", failures)), checks);
         Check(ThemePalette.Dark.Hex.Keys.OrderBy(k => k, StringComparer.Ordinal).SequenceEqual(ThemePalette.Light.Hex.Keys.OrderBy(k => k, StringComparer.Ordinal)), "Both palettes define the same tokens", checks);
+        var uncovered = ThemeContrastRules.UncoveredTokens(ThemePalette.Tokens);
+        Check(uncovered.Count == 0, "Every theme token has a contrast rule or a named exemption: " + string.Join(", ", uncovered), checks);
+        Check(ThemeContrastRules.Controls.All(control => ThemeContrastRules.States.All(state => ThemeContrastRules.ControlStates.Any(rule => rule.Control == control && rule.State == state))),
+            "Contrast rules cover normal, hover, pressed, focused and selected for primary, secondary, danger and ghost controls", checks);
+        VerifyControlStateStyles(studio, reportPath, checks);
 
         VerifyFocusRing(checks);
         VerifyPreferences(studio, checks);
@@ -262,6 +267,28 @@ internal static class ThemeVerification
             StopTimer(fresh); fresh.Close();
             Verification("PumpUntil").Invoke(null, [new Func<bool>(() => closed)]);
         }
+    }
+
+    private static void VerifyControlStateStyles(MainWindow studio, string reportPath, List<string> checks)
+    {
+        var root = (string)Verification("RepositoryRoot").Invoke(null, [reportPath])!;
+        var xaml = File.ReadAllText(Path.Combine(root, "src", "TekstilCAD.Desktop", "App.xaml"));
+        var danger = Regex.Match(xaml, "<Style x:Key=\"Studio.DangerButton\".*?</Style>", RegexOptions.Singleline).Value;
+        var generic = Regex.Match(xaml, "<Style TargetType=\"Button\">.*?</Style>", RegexOptions.Singleline).Value;
+        Check(danger.Contains("Studio.DangerHover", StringComparison.Ordinal) && danger.Contains("Studio.DangerPressed", StringComparison.Ordinal) && !danger.Contains("Studio.HoverFill", StringComparison.Ordinal)
+            && !danger.Contains("Studio.PressedFill", StringComparison.Ordinal), "The destructive button uses its own hover and pressed fills, never the generic grey ones", checks);
+        Check(danger.Contains("Opacity\" Value=\"0.45\"", StringComparison.Ordinal) && generic.Contains("Opacity\" Value=\"0.45\"", StringComparison.Ordinal), "Disabled buttons are dimmed to 0.45 opacity (exempt from contrast)", checks);
+        var button = new Button { Content = "Evet, parçayı sil", Style = (Style)Application.Current.Resources["Studio.DangerButton"], Width = 200 };
+        var window = new Window { Content = new StackPanel { Margin = new Thickness(10), Children = { button } }, Width = 260, Height = 120 };
+        StudioTheme.Apply(window);
+        StudioTheme.Use(ThemePalette.Light);
+        try
+        {
+            var pixels = RenderPixels(window, 260, 120);
+            Check(ReferenceEquals(button.Background, StudioTheme.Danger) && ReferenceEquals(button.Foreground, StudioTheme.OnAccent)
+                && PixelAt(pixels, button, 6, 0.5) == StudioTheme.ParseColor(ThemePalette.Light["Danger"]), "The destructive button renders white text on the danger fill in the light palette", checks);
+        }
+        finally { StudioTheme.Use(ThemePalette.Dark); window.Close(); }
     }
 
     private static void VerifyFocusRing(List<string> checks)

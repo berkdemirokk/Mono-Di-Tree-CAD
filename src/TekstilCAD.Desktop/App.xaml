@@ -41,6 +41,23 @@
    <Setter Property="Foreground" Value="{DynamicResource Studio.OnPrimary}"/>
    <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
+  <!-- The destructive button has its own hover and pressed fills; the generic Button template would paint a light-grey hover fill under white text. -->
+  <Style x:Key="Studio.DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+   <Setter Property="Background" Value="{DynamicResource Studio.Danger}"/><Setter Property="BorderBrush" Value="{DynamicResource Studio.Danger}"/>
+   <Setter Property="Foreground" Value="{DynamicResource Studio.OnAccent}"/><Setter Property="FontWeight" Value="SemiBold"/>
+   <Setter Property="Template"><Setter.Value>
+    <ControlTemplate TargetType="Button">
+     <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" SnapsToDevicePixels="True">
+      <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" RecognizesAccessKey="True"/>
+     </Border>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Studio.DangerHover}"/><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Studio.DangerHover}"/></Trigger>
+      <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Studio.DangerPressed}"/><Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Studio.DangerPressed}"/></Trigger>
+      <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate>
+   </Setter.Value></Setter>
+  </Style>
   <Style x:Key="Studio.QuietButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
    <Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/>
   </Style>
