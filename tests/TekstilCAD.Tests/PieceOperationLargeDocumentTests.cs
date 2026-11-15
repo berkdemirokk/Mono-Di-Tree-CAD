@@ -17,7 +17,8 @@ public sealed class PieceOperationLargeDocumentTests
 
     private static void AssertOnlyOnePieceDiffers(ProjectDocument before, ProjectDocument after, int index)
     {
-        Assert.Equal(before.Pieces.Count, after.Pieces.Count);
+        // Pieces after the originals (additions) are not compared; deletions are not used with this helper.
+        Assert.True(after.Pieces.Count >= before.Pieces.Count);
         for (var i = 0; i < before.Pieces.Count; i++)
         {
             if (i == index) continue;

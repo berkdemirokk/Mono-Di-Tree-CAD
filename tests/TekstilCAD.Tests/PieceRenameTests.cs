@@ -82,10 +82,12 @@ public sealed class PieceRenameTests
     }
 
     [Theory]
-    [InlineData("A\ud800")]
-    [InlineData("\udc00B")]
-    public void UnpairedSurrogatesAreRefused(string name)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void UnpairedSurrogatesAreRefused(bool high)
     {
+        // Built in code: a lone surrogate does not survive being passed through test-case data.
+        var name = high ? "A" + (char)0xD800 : (char)0xDC00 + "B";
         var document = OneRect();
         AssertRefused(PieceOperations.Rename(document, document.Pieces[0].Id, name), PieceOperationError.InvalidValue,
             "Ad geçersiz bir Unicode karakteri içeriyor. Başka bir ad yazın.");
