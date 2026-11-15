@@ -119,7 +119,7 @@ struct TouchContourComposer: View {
                             if !points.isEmpty { points.removeLast() }
                         }
                         .disabled(points.isEmpty)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.appSecondary)
                     }
                     if let last = points.last {
                         Text("Son nokta: X \(last.x.formatted()) mm · Y \(last.y.formatted()) mm")
@@ -130,7 +130,7 @@ struct TouchContourComposer: View {
                         Label("Konturu kalıba ekle", systemImage: "checkmark.circle.fill")
                             .frame(maxWidth: .infinity, minHeight: 48)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appPrimary)
                     .disabled(points.count < (closed ? 3 : 2))
                     Text("Yeni şekil taslağıdır. Kendi kendini kesen veya üretime uygun olmayan konturlar ayrıca kontrol edilmelidir.")
                         .font(.caption).foregroundStyle(.secondary)

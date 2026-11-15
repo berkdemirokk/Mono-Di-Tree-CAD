@@ -99,7 +99,7 @@ struct ContourPointEditor: View {
                     Button(action: apply) {
                         Text("Nokta konumunu uygula").frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appPrimary)
                 }
                 .padding()
             }

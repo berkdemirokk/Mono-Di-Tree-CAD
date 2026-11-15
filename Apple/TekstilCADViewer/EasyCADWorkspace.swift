@@ -270,6 +270,22 @@ struct EasyCADWorkspace: View {
         }
     }
 
+    // MARK: Guidance
+    // One sentence that says what to do next, chosen from the state of the drawing.
+    @ViewBuilder
+    private var coachTip: some View {
+        if document.pieces.isEmpty {
+            CoachTip(systemImage: "1.circle.fill", title: "Başlamak için bir şekil ekle",
+                     text: "Aşağıdan Dikdörtgen ya da Çizgi seç. Ölçüleri sonra kendin yazarsın.")
+        } else if selectedIndex == nil {
+            CoachTip(systemImage: "hand.tap.fill", title: "Düzenlemek için parçaya dokun",
+                     text: "Çizimdeki bir parçaya dokun ya da aşağıdaki Parça seç menüsünü kullan.")
+        } else {
+            CoachTip(systemImage: "ruler", title: "Ölçüleri milimetre olarak yaz",
+                     text: "Kutulara yaz ve uygula. Parçayı parmağınla sürükleyebilirsin. Bitince en alttan kaydet.")
+        }
+    }
+
     // MARK: Layout
     // The drawing stays on screen while the tools below it scroll, so a dimension can be
     // typed while looking at the piece it changes.
@@ -317,7 +333,7 @@ struct EasyCADWorkspace: View {
             Label("Dikdörtgen ekle", systemImage: "square")
                 .frame(maxWidth: fill ? .infinity : nil, minHeight: 48)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.appPrimary)
     }
 
     private func addLineButton(fill: Bool) -> some View {
@@ -325,7 +341,7 @@ struct EasyCADWorkspace: View {
             Label("Çizgi ekle", systemImage: "line.diagonal")
                 .frame(maxWidth: fill ? .infinity : nil, minHeight: 48)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.appSecondary)
     }
 
     private var addSection: some View {
@@ -350,7 +366,7 @@ struct EasyCADWorkspace: View {
                 Label("Parmakla yeni kontur çiz", systemImage: "pencil.tip.crop.circle")
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.appSecondary)
         }
     }
 
@@ -401,12 +417,12 @@ struct EasyCADWorkspace: View {
             millimetreField("Uzunluk", label: "Toplam çizgi uzunluğu (mm)", text: $pieceWidth)
         }
         Button("Ölçüleri, konumu ve adı uygula") { _ = saveDetails() }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.appPrimary)
         if document.pieces[index].points.count <= DraftContourGeometry.pointLimit {
             Button("Kontur noktalarını düzenle") {
                 if !hasPendingDetails || saveDetails() { editingPoints = document.pieces[index] }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.appSecondary)
         } else {
             Text("Nokta düzenleme en fazla 250 noktalı konturlarda kullanılabilir.")
                 .font(.caption)
@@ -415,13 +431,13 @@ struct EasyCADWorkspace: View {
             HStack { moveButtons }
             VStack(alignment: .leading) { moveButtons }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.appSecondary)
         .font(.caption)
         ViewThatFits(in: .horizontal) {
             HStack { copyDeleteButtons }
             VStack(alignment: .leading) { copyDeleteButtons }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.appSecondary)
     }
 
     private var editSection: some View {
@@ -452,7 +468,7 @@ struct EasyCADWorkspace: View {
             TextField("Proje adı", text: $projectName)
                 .textFieldStyle(.roundedBorder)
             Button("Proje adını uygula") { _ = saveDetails() }
-                .buttonStyle(.bordered)
+                .buttonStyle(.appSecondary)
             Button {
                 guard saveDetails() else { return }
                 do {
@@ -464,7 +480,7 @@ struct EasyCADWorkspace: View {
                 Label("Projeyi kaydet", systemImage: "tray.and.arrow.down")
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.appPrimary)
             Button {
                 guard saveDetails() else { return }
                 var copy = document
@@ -478,20 +494,20 @@ struct EasyCADWorkspace: View {
                 Label("Farklı kopya kaydet", systemImage: "doc.on.doc")
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.appSecondary)
             // One prominent action per section: saving the project. Preparing a file is secondary
             // until it is ready to share.
             Button { if saveDetails() { prepareExport() } } label: {
                 Label("Dosyayı hazırla (.tcad)", systemImage: "doc.badge.plus")
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.appSecondary)
             if let exportURL, !hasPendingDetails {
                 ShareLink(item: exportURL, preview: SharePreview("Mono Di Tree CAD çizimi")) {
                     Label("Paylaş veya Dosyalara kaydet", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.appPrimary)
             }
             Text("Yalnız yeni çizim parçaları dışa aktarılır. Bu araç, içe alınmış fabrika dosyalarını değiştirmez.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -506,12 +522,13 @@ struct EasyCADWorkspace: View {
                     Divider()
                 }
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        coachTip.appCard()
+                        addSection.appCard()
+                        if !document.pieces.isEmpty { editSection.appCard() }
+                        saveSection.appCard()
                         Text("Ölçüler milimetredir. Çizimler cihazda otomatik saklanır • Üretim/kesim onayı değildir.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        addSection
-                        if !document.pieces.isEmpty { editSection }
-                        saveSection
+                            .font(.caption).foregroundStyle(AppTheme.muted)
                     }
                     .padding()
                     .controlSize(.large)
@@ -519,6 +536,7 @@ struct EasyCADWorkspace: View {
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("workshop-tools")
             }
+            .background(AppTheme.page.ignoresSafeArea())
             .animation(.default, value: keyboardVisible)
             // The drawing can leave the screen while the keyboard changes; a drag that was in
             // progress then never ends, so its state is dropped here.
@@ -601,6 +619,8 @@ struct EasyCADWorkspace: View {
         // The drawing now sits at the top of the sheet, where dragging a piece downwards would also
         // pull the sheet. Closing goes through "Kapat", which applies pending details first.
         .interactiveDismissDisabled(true)
+        .preferredColorScheme(.light)
+        .tint(AppTheme.accent)
         .alert("İşlem tamamlanamadı", isPresented: Binding(
             get: { problem != nil },
             set: { if !$0 { problem = nil } }
@@ -738,7 +758,8 @@ struct EasyCADWorkspace: View {
         .clipped()
         .frame(height: canvasHeight)
         .frame(maxWidth: .infinity)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
         .accessibilityLabel("Dokunarak parça seçebileceğiniz kalıp önizlemesi")
         .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Alternatif: Parça seç menüsü.")
         .overlay {

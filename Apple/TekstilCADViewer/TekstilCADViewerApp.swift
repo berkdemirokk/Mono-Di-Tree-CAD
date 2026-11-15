@@ -6,9 +6,9 @@ import UniformTypeIdentifiers
 struct TekstilCADViewerApp: App {
     var body: some Scene {
         #if os(macOS)
-        Window("Mono Di Tree CAD", id: "workspace") { ContentView() }
+        Window("Mono Di Tree CAD", id: "workspace") { ContentView().preferredColorScheme(.light).tint(AppTheme.accent) }
         #else
-        WindowGroup { ContentView() }
+        WindowGroup { ContentView().preferredColorScheme(.light).tint(AppTheme.accent) }
         #endif
     }
 }
@@ -127,7 +127,7 @@ private struct ContentView: View {
                         Label("Kopyasını düzenle", systemImage: "square.on.square")
                             .frame(maxWidth: .infinity, minHeight: 48)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appPrimary)
                     .accessibilityHint("Bu basit çizimin yeni düzenlenebilir bir kopyasını açar. Kaynak dosyayı değiştirmez.")
                 }
                 if let notice = project.formatNotice {
@@ -180,6 +180,7 @@ private struct ContentView: View {
         }
         .padding()
         .frame(minWidth: 300, minHeight: 300)
+        .background(AppTheme.page.ignoresSafeArea())
         .sheet(item: $editorRoute, onDismiss: refreshProjects) { route in
             EasyCADWorkspace(example: route.example, imported: route.document)
         }
@@ -261,64 +262,89 @@ private struct ContentView: View {
             Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
                 .frame(maxWidth: .infinity, minHeight: 48)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.appSecondary)
         .accessibilityHint("Cihazda otomatik kaydedilmiş taslağı açar.")
     }
 
     private var home: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("MONO DI TREE").font(.caption.bold()).tracking(3)
-                    .foregroundStyle(.secondary)
-                Text("Kalıbını kolayca oluştur").font(.title.bold())
-                Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("MONO DI TREE").font(.caption.bold()).tracking(3)
+                        .foregroundStyle(AppTheme.muted)
+                    Text("Kalıbını kolayca oluştur").font(.largeTitle.bold())
+                        .foregroundStyle(AppTheme.ink)
+                    Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
+                        .font(.body).foregroundStyle(AppTheme.muted)
+                }
 
-                Button { openEditor(EditorRoute()) } label: {
-                    Label("Yeni proje oluştur", systemImage: "plus.square")
-                        .frame(maxWidth: .infinity, minHeight: 50)
-                }
-                .buttonStyle(.borderedProminent)
-                Button { openEditor(EditorRoute(example: true)) } label: {
-                    Label("Örnekle dene", systemImage: "hand.tap")
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                }
-                .buttonStyle(.bordered)
-                Button { showingImporter = true } label: {
-                    Label("Dosya aç (.tcad)", systemImage: "folder")
-                        .frame(maxWidth: .infinity, minHeight: 46)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityHint("Dosyalardan bir proje seçerek konturlarını önizleyin.")
-
-                Divider()
-                Text("Son projeler").font(.headline).accessibilityAddTraits(.isHeader)
-                if hasLocalDraft { resumeButton }
-                if recentProjects.isEmpty && !hasLocalDraft {
-                    Text("Kaydettiğin projeler burada görünür.")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-                ForEach(recentProjects) { entry in
-                    Button {
-                        do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
-                        catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
-                    } label: {
-                        HStack {
-                            Image(systemName: "doc")
-                            VStack(alignment: .leading) {
-                                Text(entry.name)
-                                Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.forward").font(.caption)
-                        }
-                        .frame(minHeight: 48)
-                        .contentShape(Rectangle())
+                VStack(spacing: 10) {
+                    Button { openEditor(EditorRoute()) } label: {
+                        Label("Yeni proje oluştur", systemImage: "plus.square")
+                            .frame(maxWidth: .infinity, minHeight: 50)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                    .buttonStyle(.appPrimary)
+                    Button { openEditor(EditorRoute(example: true)) } label: {
+                        Label("Örnekle dene", systemImage: "hand.tap")
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                    }
+                    .buttonStyle(.appSecondary)
+                    .accessibilityHint("İki hazır parçayla uygulamayı denersin.")
+                    Button { showingImporter = true } label: {
+                        Label("Dosya aç (.tcad)", systemImage: "folder")
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                    }
+                    .buttonStyle(.appSecondary)
+                    .accessibilityHint("Dosyalardan bir proje seçerek konturlarını önizleyin.")
                 }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Nasıl çalışır?").font(.headline).foregroundStyle(AppTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    StepBadge(number: 1, title: "Şekil ekle",
+                              detail: "Dikdörtgen ya da çizgi seç; ekranda hemen görünür.")
+                    StepBadge(number: 2, title: "Ölçüyü yaz",
+                              detail: "En ve boyu milimetre olarak yaz ya da parçayı parmağınla sürükle.")
+                    StepBadge(number: 3, title: "Kaydet ve paylaş",
+                              detail: "Projen bu cihazda saklanır; dilersen dosya olarak gönderebilirsin.")
+                }
+                .appCard()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Son projeler").font(.headline).foregroundStyle(AppTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    if hasLocalDraft { resumeButton }
+                    if recentProjects.isEmpty && !hasLocalDraft {
+                        Text("Kaydettiğin projeler burada görünür.")
+                            .font(.subheadline).foregroundStyle(AppTheme.muted)
+                    }
+                    ForEach(recentProjects) { entry in
+                        Button {
+                            do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
+                            catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "doc.text")
+                                    .foregroundStyle(AppTheme.accent)
+                                    .frame(width: 36, height: 36)
+                                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.name).foregroundStyle(AppTheme.ink)
+                                    Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
+                                        .font(.caption).foregroundStyle(AppTheme.muted)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.forward").font(.caption)
+                                    .foregroundStyle(AppTheme.muted)
+                            }
+                            .frame(minHeight: 48)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                    }
+                }
+                .appCard()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

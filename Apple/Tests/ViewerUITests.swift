@@ -168,6 +168,44 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Geri al"].isHittable)
     }
 
+    func testZoomButtonsChangeTheViewAndFitBringsItBack() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        // Nothing to zoom while the drawing is empty.
+        XCTAssertFalse(app.buttons["Yakınlaştır"].exists)
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+
+        let zoomIn = app.buttons["Yakınlaştır"]
+        XCTAssertTrue(zoomIn.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Ekrana sığdır"].exists, "Fit is only offered once zoomed")
+        zoomIn.tap()
+        zoomIn.tap()
+        XCTAssertTrue(app.buttons["Ekrana sığdır"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • 2.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+
+        app.buttons["Uzaklaştır"].tap()
+        XCTAssertTrue(app.staticTexts["1 parça • 1.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+        app.buttons["Ekrana sığdır"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Ekrana sığdır"].exists)
+    }
+
+    func testWorkshopTellsABeginnerWhatToDoNext() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        let tip = app.descendants(matching: .any)["coach-tip"]
+        XCTAssertTrue(tip.waitForExistence(timeout: 5))
+        XCTAssertTrue(tip.label.contains("Başlamak için bir şekil ekle"), tip.label)
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "Ölçüleri milimetre olarak yaz"), object: tip)
+        XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed)
+    }
+
     func testResumedDraftNewerThanSavedProjectCanBeSavedAgain() {
         let app = launchClean()
         app.buttons["Örnekle dene"].tap()
