@@ -139,14 +139,14 @@ internal sealed class OutputPreview : FrameworkElement
     }
     protected override void OnRender(DrawingContext dc)
     {
-        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Background),new Pen(StudioTheme.Paint(StudioTheme.Border),1),new Rect(RenderSize));
+        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Background,new Pen(StudioTheme.Border,1),new Rect(RenderSize));
         if(IsKeyboardFocused && ActualWidth>8 && ActualHeight>8)
-            dc.DrawRectangle(null,new Pen(StudioTheme.Paint(StudioTheme.Accent),2) { DashStyle=DashStyles.Dash },new Rect(3,3,ActualWidth-6,ActualHeight-6));
+            dc.DrawRectangle(null,new Pen(StudioTheme.Accent,2) { DashStyle=DashStyles.Dash },new Rect(3,3,ActualWidth-6,ActualHeight-6));
         if(drawing is null||ActualWidth<=48||ActualHeight<=48)return;
         var b=drawing.Bounds;var zoom=Math.Min((ActualWidth-48)/Math.Max(b.Width,0.001),(ActualHeight-48)/Math.Max(b.Height,0.001));
         var left=(ActualWidth-b.Width*zoom)/2;var top=(ActualHeight-b.Height*zoom)/2;
         Point Screen(Point2 p)=>new(left+(p.X-b.MinX)*zoom,top+(p.Y-b.MinY)*zoom);
-        var pen=new Pen(StudioTheme.Paint(StudioTheme.Accent),1.4);
+        var pen=new Pen(StudioTheme.Accent,1.4);
         foreach(var path in drawing.Paths)
         {
             var geometry=new StreamGeometry();

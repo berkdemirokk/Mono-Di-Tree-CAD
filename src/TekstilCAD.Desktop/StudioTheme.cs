@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media;
 using TekstilCAD.Core.Theme;
 
@@ -6,18 +7,18 @@ namespace TekstilCAD.Desktop;
 
 /// <summary>
 /// Shared visual tokens for the native desktop shell and tool windows.
-/// Every token is ONE shared, unfrozen <see cref="SolidColorBrush"/>; <see cref="Use"/> changes the colour of those
-/// instances in place, so every control that holds a token repaints at once, in windows that are already open as well as in
+/// Every token is ONE shared <see cref="SolidColorBrush"/> instance; <see cref="Use"/> changes the colour of those instances in
+/// place, so every control and every drawing that holds a token repaints at once, in windows that are already open as well as in
 /// windows opened later, and reference comparisons such as <c>ReferenceEquals(x.Foreground, StudioTheme.Warning)</c> stay valid.
 /// The same instances are published to <c>Application.Resources</c> as <c>Studio.&lt;Token&gt;</c> (<see cref="RegisterResources"/>),
 /// which App.xaml reads with <c>DynamicResource</c>. The default palette is Dark; nothing reads a saved preference here.
-/// The brushes belong to the UI thread; background threads must not touch them.
-/// Never hand a token brush itself to a <c>DrawingContext</c> or to a <c>Setter</c> value: WPF freezes such values
-/// (<c>VisualTreeHelper.GetDrawing</c>, sealing a style), and a frozen token can no longer change colour. Use <see cref="Paint"/> in
-/// <c>OnRender</c> and <c>DynamicResource</c> references in code-built styles.
+/// WPF freezes a Freezable that is added to Application.Resources, and a frozen brush can no longer change colour. Each token brush
+/// therefore takes its colour through a one-way binding to a private shadow brush, which makes it impossible to freeze
+/// (<c>CanFreeze</c> is false); <see cref="Use"/> changes the shadow. The brushes belong to the UI thread.
 /// </summary>
 public static class StudioTheme
 {
+    private static readonly Dictionary<string, SolidColorBrush> Shadows = CreateShadows();
     private static readonly Dictionary<string, SolidColorBrush> Shared = CreateBrushes();
 
     public static Brush Background { get; } = Shared[nameof(Background)];
@@ -87,11 +88,8 @@ public static class StudioTheme
     public static void Use(ThemePalette palette)
     {
         ArgumentNullException.ThrowIfNull(palette);
-        foreach (var token in ThemePalette.Tokens) Shared[token].Color = ParseColor(palette[token]);
+        foreach (var token in ThemePalette.Tokens) Shadows[token].Color = ParseColor(palette[token]);
         Current = palette;
-        // Controls repaint through the shared brushes; custom drawing (OnRender) uses frozen copies and must be redrawn.
-        if (Application.Current is { } application)
-            foreach (Window window in application.Windows) Redraw(window);
         Changed?.Invoke();
     }
 
@@ -106,27 +104,24 @@ public static class StudioTheme
         foreach (var token in ThemePalette.Tokens) resources["Studio." + token] = Shared[token];
     }
 
-    /// <summary>A frozen copy of a token's current colour, for <c>OnRender</c> drawing code (see the class summary).</summary>
-    public static Brush Paint(Brush token)
-    {
-        if (token is not SolidColorBrush solid) return token;
-        var copy = new SolidColorBrush(solid.Color);
-        copy.Freeze();
-        return copy;
-    }
-
     internal static Color ParseColor(string hex) => (Color)ColorConverter.ConvertFromString(hex);
 
-    private static void Redraw(DependencyObject element)
+    private static Dictionary<string, SolidColorBrush> CreateShadows()
     {
-        if (element is UIElement ui) ui.InvalidateVisual();
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++) Redraw(VisualTreeHelper.GetChild(element, i));
+        var shadows = new Dictionary<string, SolidColorBrush>(ThemePalette.Tokens.Count);
+        foreach (var token in ThemePalette.Tokens) shadows[token] = new SolidColorBrush(ParseColor(ThemePalette.Dark[token]));
+        return shadows;
     }
 
     private static Dictionary<string, SolidColorBrush> CreateBrushes()
     {
         var brushes = new Dictionary<string, SolidColorBrush>(ThemePalette.Tokens.Count);
-        foreach (var token in ThemePalette.Tokens) brushes[token] = new SolidColorBrush(ParseColor(ThemePalette.Dark[token]));
+        foreach (var token in ThemePalette.Tokens)
+        {
+            var brush = new SolidColorBrush();
+            BindingOperations.SetBinding(brush, SolidColorBrush.ColorProperty, new Binding(nameof(SolidColorBrush.Color)) { Source = Shadows[token], Mode = BindingMode.OneWay });
+            brushes[token] = brush;
+        }
         return brushes;
     }
 

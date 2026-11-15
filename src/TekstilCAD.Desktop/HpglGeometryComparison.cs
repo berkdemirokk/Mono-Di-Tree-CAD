@@ -39,7 +39,7 @@ internal sealed class HpglGeometryComparison : FrameworkElement
     internal void Clear() { geometry=null;examples=[];normalized=[];focusedIndex=null;ZoomFactorForVerification=1;LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];InvalidateVisual(); }
     protected override void OnRender(DrawingContext dc)
     {
-        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Raised),null,new Rect(RenderSize));
+        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Raised,null,new Rect(RenderSize));
         if(geometry is null || geometry.Points.Count==0 || ActualWidth<24 || ActualHeight<24)return;
         var points=geometry.Points;var units=geometry.UnitsPerMillimeter;
         LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];LastLocalScaleForVerification=0;

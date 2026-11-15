@@ -71,10 +71,10 @@ internal sealed class DxfPiecePreview : FrameworkElement
     }
     protected override void OnRender(DrawingContext dc)
     {
-        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Raised),null,new Rect(RenderSize));
+        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Raised,null,new Rect(RenderSize));
         if(points.Length==0)
         {
-            var text=new FormattedText(emptyMessage,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),11,StudioTheme.Paint(StudioTheme.Muted),VisualTreeHelper.GetDpi(this).PixelsPerDip) { MaxTextWidth=Math.Max(1,ActualWidth-16) };
+            var text=new FormattedText(emptyMessage,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),11,StudioTheme.Muted,VisualTreeHelper.GetDpi(this).PixelsPerDip) { MaxTextWidth=Math.Max(1,ActualWidth-16) };
             dc.DrawText(text,new Point(8,8));return;
         }
         if(ActualWidth<24 || ActualHeight<24)return;

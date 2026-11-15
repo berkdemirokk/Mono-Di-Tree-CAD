@@ -70,9 +70,8 @@ internal static class ThemeVerification
         var wrong = LegacyDark.Where(row => StudioTheme.TokenBrush(row.Token).Color != StudioTheme.ParseColor(row.Hex)).Select(row => row.Token).ToArray();
         Check(wrong.Length == 0 && ReferenceEquals(StudioTheme.Current, ThemePalette.Dark), "Dark palette keeps the original hex value of every existing token: " + string.Join(", ", wrong), checks);
         Check(StudioTheme.Matches(ThemePalette.Dark) && ThemePalette.Tokens.All(token => StudioTheme.TokenBrush(token).Color.A == 255), "The default palette is dark and every token is an opaque colour", checks);
-        var painted = StudioTheme.Paint(StudioTheme.Accent);
-        Check(painted.IsFrozen && !ReferenceEquals(painted, StudioTheme.Accent) && ((SolidColorBrush)painted).Color == StudioTheme.TokenBrush("Accent").Color && !StudioTheme.Accent.IsFrozen,
-            "Drawing code paints with frozen copies and leaves the shared token unfrozen", checks);
+        var freezable = ThemePalette.Tokens.Where(token => StudioTheme.TokenBrush(token).CanFreeze).ToArray();
+        Check(freezable.Length == 0, "Theme brushes cannot be frozen, so no WPF operation can end live switching: " + string.Join(", ", freezable), checks);
     }
 
     private static void VerifyDrawingKeepsTokensUnfrozen(MainWindow studio, List<string> checks)
@@ -95,9 +94,11 @@ internal static class ThemeVerification
         var combo = new ComboBox { Width = 200 }; var tab = new TabControl { Height = 40 };
         var panel = new StackPanel { Margin = new Thickness(10) };
         foreach (var element in new UIElement[] { box, button, list, grid, check, combo, tab }) panel.Children.Add(element);
-        var window = new Window { Content = panel, Width = 300, Height = 520 };
+        var canvas = new CadCanvas(studio) { Width = 120, Height = 60, HorizontalAlignment = HorizontalAlignment.Left };
+        panel.Children.Add(canvas);
+        var window = new Window { Content = panel, Width = 300, Height = 640 };
         StudioTheme.Apply(window);
-        var darkPixels = RenderPixels(window, 300, 520);
+        var darkPixels = RenderPixels(window, 300, 640);
         Check(ColorOf(button.Background) == StudioTheme.TokenBrush("Raised").Color && ColorOf(box.Background) == StudioTheme.TokenBrush("Input").Color
             && ColorOf(list.Background) == StudioTheme.TokenBrush("Surface").Color && ColorOf(grid.Background) == StudioTheme.TokenBrush("Background").Color,
             "Implicit styles resolve their brushes from the shared tokens", checks);
@@ -113,17 +114,20 @@ internal static class ThemeVerification
         Check(ColorOf(button.Background) == probe["Raised"] && ColorOf(box.Background) == probe["Input"] && ColorOf(list.Background) == probe["Surface"]
             && ColorOf(grid.Background) == probe["Background"] && ColorOf(grid.AlternatingRowBackground) == probe["RowAlt"] && ColorOf(window.Background) == probe["Background"],
             "Recolouring after the first window changes Button, TextBox, ListBox and DataGrid style values", checks);
-        var probePixels = RenderPixels(window, 300, 520);
+        var probePixels = RenderPixels(window, 300, 640);
         Check(PixelAt(probePixels, button, 6, 0.5) == probe["Raised"] && PixelAt(probePixels, box, 0.5, 0.5) == probe["Input"] && PixelAt(probePixels, list, 0.5, 0.5) == probe["Surface"]
             && PixelAt(probePixels, check, 0, 0.5) != PixelAt(darkPixels, check, 0, 0.5),
             "Recolouring after the first window repaints Button, TextBox, ListBox and CheckBox templates", checks);
+        var canvasBackgrounds = new[] { (3, 0.5), (0.2, 0.9), (0.9, 0.2), (0.6, 0.55) };
+        Check(canvasBackgrounds.Any(point => PixelAt(probePixels, canvas, point.Item1, point.Item2) == probe["Canvas"]) && canvasBackgrounds.Any(point => PixelAt(darkPixels, canvas, point.Item1, point.Item2) == StudioTheme.ParseColor(ThemePalette.Dark["Canvas"])),
+            "Custom drawing on the canvas follows a palette switch", checks);
         Check(PixelAt(probePixels, button, 6, 0.5) != PixelAt(darkPixels, button, 6, 0.5) && probePixels.Data.SequenceEqual(darkPixels.Data) == false,
             "The rendered window differs after the palette switch", checks);
 
         StudioTheme.Use(ThemePalette.Dark);
         var restored = ThemePalette.Tokens.Where(token => StudioTheme.TokenBrush(token).Color != before[token] || !ReferenceEquals(StudioTheme.TokenBrush(token), instances[token])).ToArray();
         Check(restored.Length == 0 && StudioTheme.Matches(ThemePalette.Dark), "Palette switch keeps brush identity and returns to the dark values exactly: " + string.Join(", ", restored), checks);
-        var backPixels = RenderPixels(window, 300, 520);
+        var backPixels = RenderPixels(window, 300, 640);
         Check(backPixels.Data.SequenceEqual(darkPixels.Data), "The window renders pixel for pixel as before after the switch back to dark", checks);
         window.Close();
     }

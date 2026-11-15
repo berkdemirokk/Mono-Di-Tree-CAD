@@ -803,7 +803,7 @@ internal sealed class ProductionNestingWindow : Window
         }
         protected override void OnRender(DrawingContext dc)
         {
-            base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Background),null,new Rect(RenderSize));
+            base.OnRender(dc);dc.DrawRectangle(StudioTheme.Background,null,new Rect(RenderSize));
             if(drawing is null||drawing.Pieces.Count==0||ActualWidth<=24||ActualHeight<=24)return;
             if(geometry is null)return;
             if(fabricWidth<=0||usedLength<=0)return;
