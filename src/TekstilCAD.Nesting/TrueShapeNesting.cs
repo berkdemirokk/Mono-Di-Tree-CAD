@@ -9,6 +9,9 @@ public sealed record TrueShapePlacement(Guid PieceId, bool Rotated180, double Of
 /// <summary>Detached true-shape layout. It is a heuristic result, not an optimum and not a production approval.</summary>
 public sealed record TrueShapeNestingResult(IReadOnlyList<TrueShapePlacement> Placements, double UsedLength, double UtilizationPercent);
 
+/// <summary>The bounded search gave up; a larger step or a smaller job may succeed.</summary>
+public sealed class TrueShapeSearchLimitException(string message) : ArgumentException(message);
+
 /// <summary>
 /// Experimental bottom-left placement that tests the real contours instead of
 /// their bounding boxes, so concave pieces can interlock. X runs across the
@@ -124,7 +127,7 @@ public static class TrueShapeNesting
         {
             if (!BoxesOverlap(other, shape.InflatedMinX + x, shape.InflatedMinY + y, shape.InflatedMaxX + x, shape.InflatedMaxY + y)) continue;
             if (++tests > MaximumCollisionTests)
-                throw new ArgumentException("Pastal arama sınırı aşıldı; adımı büyütün veya daha küçük iş grupları kullanın.");
+                throw new TrueShapeSearchLimitException("Pastal arama sınırı aşıldı; adımı büyütün veya daha küçük iş grupları kullanın.");
             moved ??= Translate(shape.Inflated, x, y);
             if (Overlaps(moved, other.Contour)) return false;
         }
