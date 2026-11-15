@@ -92,7 +92,8 @@ internal static class ThemeVerification
         var box = new TextBox(); var button = new Button { Content = "Deneme", Width = 200 }; var list = new ListBox { Height = 60 };
         var grid = new DataGrid { Height = 60, AutoGenerateColumns = true }; var check = new CheckBox { Content = "Seçenek" };
         var combo = new ComboBox { Width = 200 }; var tab = new TabControl { Height = 40 };
-        var panel = new StackPanel { Margin = new Thickness(10) };
+        // No margin on the root: RenderTargetBitmap draws a visual together with its layout offset.
+        var panel = new StackPanel();
         foreach (var element in new UIElement[] { box, button, list, grid, check, combo, tab }) panel.Children.Add(element);
         var canvas = new CadCanvas(studio) { Width = 120, Height = 60, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(canvas);
@@ -115,9 +116,11 @@ internal static class ThemeVerification
             && ColorOf(grid.Background) == probe["Background"] && ColorOf(grid.AlternatingRowBackground) == probe["RowAlt"] && ColorOf(window.Background) == probe["Background"],
             "Recolouring after the first window changes Button, TextBox, ListBox and DataGrid style values", checks);
         var probePixels = RenderPixels(window, 300, 640);
-        Check(PixelAt(probePixels, button, 6, 0.5) == probe["Raised"] && PixelAt(probePixels, box, 0.5, 0.5) == probe["Input"] && PixelAt(probePixels, list, 0.5, 0.5) == probe["Surface"]
-            && PixelAt(probePixels, check, 0, 0.5) != PixelAt(darkPixels, check, 0, 0.5),
-            "Recolouring after the first window repaints Button, TextBox, ListBox and CheckBox templates", checks);
+        var buttonPixel = PixelAt(probePixels, button, 6, 0.5); var boxPixel = PixelAt(probePixels, box, 0.5, 0.5); var listPixel = PixelAt(probePixels, list, 0.5, 0.5);
+        Check(buttonPixel == probe["Raised"], $"Recolouring after the first window repaints the Button template (pixel {buttonPixel}, expected {probe["Raised"]})", checks);
+        Check(boxPixel == probe["Input"], $"Recolouring after the first window repaints the TextBox template (pixel {boxPixel}, expected {probe["Input"]})", checks);
+        Check(listPixel == probe["Surface"], $"Recolouring after the first window repaints the ListBox template (pixel {listPixel}, expected {probe["Surface"]})", checks);
+        Check(PixelAt(probePixels, check, 0, 0.5) != PixelAt(darkPixels, check, 0, 0.5), "Recolouring after the first window repaints the CheckBox template", checks);
         var canvasBackgrounds = new[] { (3, 0.5), (0.2, 0.9), (0.9, 0.2), (0.6, 0.55) };
         Check(canvasBackgrounds.Any(point => PixelAt(probePixels, canvas, point.Item1, point.Item2) == probe["Canvas"]) && canvasBackgrounds.Any(point => PixelAt(darkPixels, canvas, point.Item1, point.Item2) == StudioTheme.ParseColor(ThemePalette.Dark["Canvas"])),
             "Custom drawing on the canvas follows a palette switch", checks);
