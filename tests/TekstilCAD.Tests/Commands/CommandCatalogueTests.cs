@@ -133,10 +133,44 @@ public sealed class CommandCatalogueTests
     }
 
     [Fact]
-    public void EveryEntry_HasAtLeastTwoSynonymsWhereABeginnerNeedsThem()
+    public void EveryEntry_OffersAtLeastOneEverydayWord()
     {
-        // Typed (F) entries and buttons are searched by everyday words; every entry should offer some.
-        Assert.All(All, e => Assert.True(e.Synonyms.Length >= 2, $"{e.Id} has {e.Synonyms.Length} synonyms"));
+        // No padding with weak words: a generic verb must not make a destructive entry win a search.
+        Assert.All(All, e => Assert.True(e.Synonyms.Length >= 1, $"{e.Id} has no synonyms"));
+    }
+
+    [Fact]
+    public void Delete_IsTheTypedFlowThatAsksFirst_AndStillNamesTheClassicButton()
+    {
+        var delete = CommandCatalogue.Find("piece.delete")!;
+        Assert.Equal(CommandCatalogueKind.Fill, delete.Kind);
+        Assert.Equal("Parçayı sil", delete.ClassicButtonLabel);
+        Assert.Contains("sil", delete.Examples);
+        // Generic verbs must not rank the delete entry first.
+        Assert.NotEqual("piece.delete", CommandCatalogue.Search("çıkar").First().Id);
+        Assert.NotEqual("piece.delete", CommandCatalogue.Search("at").FirstOrDefault()?.Id);
+        // FINAL_COMMANDS 1.6: vazgeç never means undo.
+        Assert.DoesNotContain(CommandCatalogue.Find("view.undo")!.Synonyms, s => CommandCatalogue.Fold(s) == "vazgec");
+    }
+
+    [Fact]
+    public void Search_FindsTheEntryByTheOldButtonName()
+    {
+        Assert.Contains(CommandCatalogue.Search("parametrik"), e => e.Id == "piece.curve-edit");
+        Assert.Contains(CommandCatalogue.Search("poliline"), e => e.Id == "piece.curve-flatten");
+        Assert.Contains(CommandCatalogue.Search("Farklı kaydet"), e => e.Id == "start.save-as");
+    }
+
+    [Fact]
+    public void Search_NeverThrowsOnOddText()
+    {
+        Assert.Empty(CommandCatalogue.Search("\uD83D"));              // lone high surrogate (half-pasted emoji)
+        Assert.Empty(CommandCatalogue.Search(new string('\uDE00', 5)));
+        Assert.Empty(CommandCatalogue.Search(new string('q', 100000)));
+        Assert.Equal("i", CommandCatalogue.Fold("İ"));
+        Assert.Equal("i", CommandCatalogue.Fold("I"));
+        Assert.Equal("i", CommandCatalogue.Fold("ı"));
+        Assert.Equal("dxf'teki", CommandCatalogue.Fold("DXF’TEKİ"));
     }
 
     [Fact]

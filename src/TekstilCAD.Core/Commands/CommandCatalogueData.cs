@@ -68,7 +68,7 @@ internal static class CommandCatalogueData
             "Çizgi", ["çizgi aracı", "fareyle çizgi"],
             ["düz çizgi", "tıklayarak çizgi"]));
         all.Add(D("draw.tool-polyline", GDraw, "Nokta nokta çiz",
-            "Her tıklamada bir köşe eklersiniz; Enter şekli kapatır, Esc vazgeçirir.",
+            "Her tıklamada bir köşe eklersiniz; Enter şekli kapatır, Esc çizimi bırakır.",
             "Çoklu çizgi", ["nokta nokta çiz", "çoklu çizgi aracı"],
             ["şekil çiz", "çokgen", "serbest şekil"]));
         all.Add(D("draw.tool-rect", GDraw, "Fareyle dikdörtgen çiz",
@@ -153,16 +153,18 @@ internal static class CommandCatalogueData
             "Seçili parçadan aynı yerde bir kopya yapar; neleri kopyalayacağınızı sorar.",
             "Parçayı çoğalt…", ["çoğalt", "kopyala", "bir kopya daha"],
             ["kopya", "kopyala", "bir tane daha", "ikiye katla"]));
-        all.Add(D("piece.delete", GPiece, "Seçili parçayı sil",
-            "Seçili parçayı projeden kaldırır; geri alınabilir.",
-            "Parçayı sil", ["sil", "parçayı sil", "kaldır"],
-            ["sil", "at", "yok et", "çıkar"]));
+        // Kind F on purpose: the classic button only works with the Seç tool and deletes at once; the typed "sil"
+        // flow shows the piece first and asks (FINAL_COMMANDS C19). The entry still names the classic button.
+        all.Add(new("piece.delete", GPiece, "Seçili parçayı sil",
+            "Seçili parçayı projeden kaldırır; önce gösterir ve sorar, geri alınabilir.",
+            CommandCatalogueKind.Fill, ["sil", "parçayı sil", "kaldır"],
+            ["sil", "yok et", "ortadan kaldır"], "Parçayı sil"));
         all.Add(D("piece.group-move", GPiece, "Birkaç parçayı birlikte taşı…",
             "Listeden birden çok parça seçip hepsini aynı miktarda kaydırır; tek adımda geri alınır.",
             "Birden fazla parçayı taşı…", ["birden fazla parçayı taşı", "parçaları taşı"],
             ["toplu taşı", "hepsini taşı", "çoklu taşı"]));
         all.Add(D("piece.metadata", GPiece, "Adet ve kumaş bilgisi gir…",
-            "Parçanın kaç tane kesileceğini ve hangi kumaştan olduğunu yazarsınız; pastal bu bilgiyi kullanır.",
+            "Parçanın kaç tane kesileceğini ve hangi kumaştan olduğunu yazarsınız; adetli pastal bu bilgiyi kullanır, temel pastal her parçayı bir kez yerleştirir.",
             "Parça bilgileri…", ["parça bilgileri", "adet 2 yap", "kumaşı astar yap"],
             ["adet", "kumaş", "malzeme", "kaç tane"]));
         all.Add(D("piece.grainline", GPiece, "İplik yönünü ayarla…",
@@ -222,7 +224,7 @@ internal static class CommandCatalogueData
             "DXF blok tanımından kopya…", None,
             ["blok", "blok tanımı", "tanımdan kopya"]));
         all.Add(D("exchange.selected-dxf", GExchange, "Seçilen parçaları DXF yap…",
-            "Yalnız seçtiğiniz parçaları ayrı bir DXF dosyasına yazar; projeniz değişmez.",
+            "Yalnız seçtiğiniz parçaları ayrı bir DXF dosyasına yazar; yalnız inceleme içindir, üretim onayı değildir.",
             "Seçilen parçaları DXF aktar…", ["seçili parçayı dxf yap", "seçilen parçayı aktar"],
             ["seçileni dxf yap", "parçayı dxf olarak ver"]));
         all.Add(D("exchange.selected-notch-review", GExchange, "Seçilenler için işaretli inceleme DXF…",
@@ -288,7 +290,7 @@ internal static class CommandCatalogueData
         all.Add(D("view.undo", GView, "Son işlemi geri al",
             "Yaptığınız son değişikliği geri alır.",
             "↶", ["geri al", "son işlemi geri al", "3 adım geri"],
-            ["geri al", "geri", "yanlış yaptım", "geri dön", "vazgeç"],
+            ["geri al", "geri", "yanlış yaptım", "geri dön"],
             "Geri al"));
         all.Add(D("view.redo", GView, "Geri alınanı yeniden yap",
             "Az önce geri aldığınız değişikliği yeniden uygular.",

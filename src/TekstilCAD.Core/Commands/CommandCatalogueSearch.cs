@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 
 namespace TekstilCAD.Core.Commands;
@@ -10,17 +9,22 @@ namespace TekstilCAD.Core.Commands;
 /// </summary>
 public static class CommandCatalogueSearch
 {
-    private static readonly CultureInfo Turkish = CultureInfo.GetCultureInfo("tr-TR");
+    /// <summary>Longest query looked at; the command box limit is 200 as well (FINAL_COMMANDS R23).</summary>
+    public const int MaxQueryLength = 200;
 
     /// <summary>Folded, lower-case, single-spaced form used for every comparison. Never null.</summary>
     public static string Fold(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return "";
-        var lower = text.Normalize(NormalizationForm.FormC).ToLower(Turkish);
-        var sb = new StringBuilder(lower.Length);
+        var composed = text;
+        try { composed = text.Normalize(NormalizationForm.FormC); }
+        catch (ArgumentException) { /* a lone surrogate (half-pasted emoji): keep the text as it is */ }
+        var sb = new StringBuilder(composed.Length);
         var space = false;
-        foreach (var ch in lower)
+        foreach (var raw in composed)
         {
+            // Turkish lower case without depending on the culture data: İ→i, I→ı (then ı→i), others invariant.
+            var ch = raw switch { 'İ' => 'i', 'I' => 'ı', _ => char.ToLowerInvariant(raw) };
             var c = ch switch
             {
                 'ç' => 'c', 'ğ' => 'g', 'ı' => 'i', 'ö' => 'o', 'ş' => 's', 'ü' => 'u',
@@ -43,7 +47,7 @@ public static class CommandCatalogueSearch
     /// </summary>
     public static IReadOnlyList<CommandCatalogueEntry> Search(IReadOnlyList<CommandCatalogueEntry> entries, string? query)
     {
-        var folded = Fold(query).Trim('.', '!', '?', ' ');
+        var folded = Fold(query is { Length: > MaxQueryLength } ? query[..MaxQueryLength] : query).TrimEnd('.', '!', '?', ' ');
         if (folded.Length == 0 || !folded.Any(char.IsLetterOrDigit)) return Array.Empty<CommandCatalogueEntry>();
         var words = folded.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var hits = new List<(int Score, int Index, CommandCatalogueEntry Entry)>();
@@ -62,6 +66,9 @@ public static class CommandCatalogueSearch
         var synonyms = entry.Synonyms.Select(Fold).ToArray();
         var examples = entry.Examples.Select(Fold).ToArray();
         var description = Fold(entry.Description);
+        // The old names (button label, accessible name, detailed-view control) find the entry too, but below the new words.
+        var classic = new[] { entry.ClassicButtonLabel, entry.ClassicAccessibleName, entry.DetailedControl }
+            .Where(c => c is not null).Select(Fold).ToArray();
 
         // Whole-phrase matches rank above any word-by-word match.
         var best = 0;
@@ -73,6 +80,7 @@ public static class CommandCatalogueSearch
         else if (synonyms.Any(s => WordStart(s, phrase))) best = 660;
         else if (title.Contains(phrase, StringComparison.Ordinal)) best = 600;
         else if (synonyms.Any(s => s.Contains(phrase, StringComparison.Ordinal))) best = 560;
+        else if (classic.Any(c => c.Contains(phrase, StringComparison.Ordinal))) best = 540;
         if (best > 0) return best;
 
         var total = 0;

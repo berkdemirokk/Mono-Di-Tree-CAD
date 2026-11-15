@@ -5,7 +5,10 @@ namespace TekstilCAD.Core.Commands;
 /// <summary>How a "Tüm araçlar" entry behaves when the user picks it (FINAL_SPEC g.2).</summary>
 public enum CommandCatalogueKind
 {
-    /// <summary>F: fills the command box with an example sentence; nothing runs until the user confirms.</summary>
+    /// <summary>
+    /// F: fills the command box with an example sentence; nothing runs until the user confirms. May still name the
+    /// classic button it replaces (delete: the typed flow shows and asks first, the classic button deletes at once).
+    /// </summary>
     Fill,
     /// <summary>D: opens the existing window or function by raising the click of the real classic button.</summary>
     Open,
@@ -85,9 +88,12 @@ public sealed record CommandCatalogueEntry
     public ImmutableArray<string> Synonyms { get; }
 
     /// <summary>
-    /// Exact text (<c>Button.Content</c> as passed to <c>AddButton</c>) of the classic main-window button this entry
-    /// stands for; the full name where the window shows a shortened label via <c>CompactLabel</c>; the glyph
-    /// for glyph-only buttons. Null when no classic button exists (typed commands, check boxes, list).
+    /// Label of the classic main-window button this entry stands for, as the code passes it to <c>AddButton</c>: the
+    /// full name where the window shows a shortened label via <c>CompactLabel</c>; the glyph for glyph-only buttons;
+    /// the tool name for the six drawing tools. To find the live button, match this text against the button's
+    /// <c>Content</c> string first and otherwise against its <c>AutomationProperties.Name</c> (CompactLabel buttons
+    /// and the tool buttons, whose content is a layout, carry the label only as their automation name).
+    /// Null when no classic button exists (typed commands, check boxes, list).
     /// </summary>
     public string? ClassicButtonLabel { get; }
 
