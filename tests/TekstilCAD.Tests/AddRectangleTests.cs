@@ -6,6 +6,7 @@ namespace TekstilCAD.Tests;
 
 public sealed class AddRectangleTests
 {
+    private const string RangeText = "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen";
     private const string OutOfRange = "Sonuç çalışma alanının dışına taşıyor (her eksende en çok ±100.000.000 mm). Daha küçük bir ölçü veya konum girin.";
 
     [Fact]
@@ -99,17 +100,15 @@ public sealed class AddRectangleTests
     [InlineData(0)]
     [InlineData(-5)]
     [InlineData(0.001)]
-    public void WidthAtOrBelowOneMicrometreIsRefused(double width)
+    public void WidthAtOrBelowOneMicrometreIsRefusedWithTheRangeText(double width)
     {
-        var message = $"Genişlik 0,001 mm değerinden büyük olmalı; girilen: {(width == 0 ? "0" : width < 0 ? "-5" : "0,001")} mm. Daha büyük bir ölçü girin.";
-        AssertRefused(PieceOperations.AddRectangle(new ProjectDocument(), width, 10), PieceOperationError.InvalidValue, message);
+        AssertRefused(PieceOperations.AddRectangle(new ProjectDocument(), width, 10), PieceOperationError.InvalidValue, RangeText);
     }
 
     [Fact]
-    public void HeightAtTheMinimumIsRefusedWithTheHeightLabel()
+    public void HeightAtTheMinimumIsRefusedWithTheRangeText()
     {
-        AssertRefused(PieceOperations.AddRectangle(new ProjectDocument(), 10, 0.001), PieceOperationError.InvalidValue,
-            "Yükseklik 0,001 mm değerinden büyük olmalı; girilen: 0,001 mm. Daha büyük bir ölçü girin.");
+        AssertRefused(PieceOperations.AddRectangle(new ProjectDocument(), 10, 0.001), PieceOperationError.InvalidValue, RangeText);
     }
 
     [Fact]
@@ -138,17 +137,21 @@ public sealed class AddRectangleTests
             "Yükseklik geçerli bir sayı olmalı (örneğin 120); girilen değer kullanılamadı.");
     }
 
-    [Fact]
-    public void WidthBeyondTheWholeWorkingAreaIsRefusedWithItsSize()
+    [Theory]
+    [InlineData(20000.5, 10)]
+    [InlineData(10, 20001)]
+    [InlineData(3e8, 10)]
+    [InlineData(1.5e8, 10)]
+    public void SidesAboveTwentyThousandMillimetresAreRefusedWithTheRangeText(double width, double height)
     {
-        AssertRefused(PieceOperations.AddRectangle(new ProjectDocument(), 3e8, 10), PieceOperationError.OutOfRange,
-            "Genişlik çalışma alanına sığmıyor: 300.000.000 mm. " + OutOfRange);
+        AssertRefused(PieceOperations.AddRectangle(new ProjectDocument(), width, height), PieceOperationError.OutOfRange, RangeText);
     }
 
     [Fact]
-    public void RectangleThatWouldLeaveTheCoordinateLimitIsRefused()
+    public void ASideOfExactlyTwentyThousandMillimetresIsAccepted()
     {
-        AssertRefused(PieceOperations.AddRectangle(new ProjectDocument(), 1.5e8, 10), PieceOperationError.OutOfRange, OutOfRange);
+        var result = Run(new ProjectDocument(), d => PieceOperations.AddRectangle(d, 20000, 20000));
+        Assert.Equal(new Point2(20000, 20000), result.Piece!.Points[2]);
     }
 
     [Fact]

@@ -113,6 +113,33 @@ public static partial class PieceOperations
     }
 
     /// <summary>
+    /// The strict form of <see cref="Resize"/> for the command box: only a closed, four-point, axis-parallel rectangle without
+    /// grainline, notch marks, grading rule or curves is resized (refusals R10 and R11 of the command design); everything else
+    /// is refused with those texts and nothing changes. The rest of the behaviour is that of <see cref="Resize"/>.
+    /// </summary>
+    public static PieceOperationResult ResizeRectangle(ProjectDocument document, Guid pieceId, double? width, double? height)
+    {
+        var refusal = Locate(document, pieceId, requireUnlocked: true, out _, out var piece);
+        if (refusal is not null) return refusal;
+        if (piece.Curves is not null || piece.Grainline is not null || piece.Notches is not null
+            || document.GradingRules.Any(r => r.SourcePieceId == pieceId))
+            return Fail(PieceOperationError.Unsupported, ExtrasText);
+        if (!IsAxisParallelRectangle(piece)) return Fail(PieceOperationError.Unsupported, NotRectangleText);
+        return Resize(document, pieceId, width, height);
+    }
+
+    private static bool IsAxisParallelRectangle(PatternPiece piece)
+    {
+        if (!piece.Closed || piece.Points.Count != 4) return false;
+        for (var i = 0; i < 4; i++)
+        {
+            var a = piece.Points[i]; var b = piece.Points[(i + 1) % 4];
+            if ((a.X == b.X) == (a.Y == b.Y)) return false; // exactly one coordinate must stay equal along an edge
+        }
+        return piece.Points[0].X != piece.Points[2].X && piece.Points[0].Y != piece.Points[2].Y;
+    }
+
+    /// <summary>
     /// Scales the bounding box about its top-left corner to the new size, keeping the top-left corner where it is. Each
     /// coordinate becomes <c>min + (c − min) · factor</c>, and points on the far edge land exactly on <c>min + new size</c>, so a
     /// rectangle gets exactly the requested sides. Pass null to keep a dimension. Point order, closure and precision are kept; notch
@@ -174,7 +201,7 @@ public static partial class PieceOperations
             if (changed && document.GradingRules.Any(r => r.SourcePieceId == piece.Id)) warnings.Add(StaleRuleWarning);
             var summary = changed
                 ? $"{Quote(piece.Name)} yeniden boyutlandırıldı: {Mm(actual.Width)} × {Mm(actual.Height)} (sol üst köşe sabit)."
-                : $"{Quote(piece.Name)} zaten bu ölçüde; değişiklik gerekmedi.";
+                : $"Ölçü zaten {Mm(actual.Width)[..^3]} × {Mm(actual.Height)}. Değişiklik yok.";
             return Replace(document, index, resized, null, summary, warnings);
         });
     }
@@ -211,8 +238,7 @@ public static partial class PieceOperations
         var refusal = Locate(document, pieceId, requireUnlocked: true, out var index, out var piece);
         if (refusal is not null) return refusal;
         if (!double.IsFinite(degrees) || degrees % 90 != 0)
-            return Fail(PieceOperationError.InvalidValue,
-                $"Döndürme yalnızca 90°'nin katları olabilir (örneğin 90, 180, −90); girilen: {(double.IsFinite(degrees) ? degrees.ToString("0.######", Tr) + "°" : "geçersiz değer")}.");
+            return Fail(PieceOperationError.InvalidValue, AngleText);
         if (piece.Curves is not null) return CurvesUnsupported(piece, "döndürme");
         var turn = degrees % 360;
         if (turn < 0) turn += 360;

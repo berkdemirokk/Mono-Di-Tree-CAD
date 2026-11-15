@@ -32,13 +32,12 @@ public sealed class AddLineTests
     }
 
     [Theory]
-    [InlineData(0, "0")]
-    [InlineData(-1, "-1")]
-    [InlineData(0.001, "0,001")]
-    public void LengthAtOrBelowTheMinimumIsRefused(double length, string shown)
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(0.001)]
+    public void LengthAtOrBelowTheMinimumIsRefusedWithTheRangeText(double length)
     {
-        AssertRefused(PieceOperations.AddLine(new ProjectDocument(), length), PieceOperationError.InvalidValue,
-            $"Uzunluk 0,001 mm değerinden büyük olmalı; girilen: {shown} mm. Daha büyük bir ölçü girin.");
+        AssertRefused(PieceOperations.AddLine(new ProjectDocument(), length), PieceOperationError.InvalidValue, "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen");
     }
 
     [Theory]
@@ -50,11 +49,12 @@ public sealed class AddLineTests
             "Uzunluk geçerli bir sayı olmalı (örneğin 120); girilen değer kullanılamadı.");
     }
 
-    [Fact]
-    public void LineBeyondTheCoordinateLimitIsRefused()
+    [Theory]
+    [InlineData(20000.5)]
+    [InlineData(1.5e8)]
+    public void LineLongerThanTwentyThousandMillimetresIsRefused(double length)
     {
-        AssertRefused(PieceOperations.AddLine(new ProjectDocument(), 1.5e8), PieceOperationError.OutOfRange,
-            "Sonuç çalışma alanının dışına taşıyor (her eksende en çok ±100.000.000 mm). Daha küçük bir ölçü veya konum girin.");
+        AssertRefused(PieceOperations.AddLine(new ProjectDocument(), length), PieceOperationError.OutOfRange, "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen");
     }
 
     [Fact]

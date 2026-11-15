@@ -67,7 +67,7 @@ public sealed class PieceRenameTests
     {
         var document = OneRect();
         AssertRefused(PieceOperations.Rename(document, document.Pieces[0].Id, name), PieceOperationError.InvalidValue,
-            "Ad boş olamaz. 1–128 karakterlik bir ad yazın.");
+            "Yeni ad boş olamaz. Örnek: adı ön beden olsun");
     }
 
     [Theory]
@@ -131,7 +131,7 @@ public sealed class PieceRenameTests
         var document = WithLayers(OneRect(), layer);
         document.Pieces[0].LayerId = layer.Id;
         AssertRefused(PieceOperations.Rename(document, document.Pieces[0].Id, "X"), PieceOperationError.LayerLocked,
-            "“Ön beden” kilitli bir katmanda; değiştirilemez. Önce katmanın kilidini açın.");
+            "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın.");
     }
 
     [Fact]
@@ -163,6 +163,6 @@ public sealed class PieceRenameTests
     {
         var document = OneRect();
         var result = PieceOperations.AddRectangle(document, -1e-9, 10);
-        Assert.Equal("Genişlik 0,001 mm değerinden büyük olmalı; girilen: 0 mm. Daha büyük bir ölçü girin.", result.Error);
+        Assert.Equal("Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen", result.Error);
     }
 }

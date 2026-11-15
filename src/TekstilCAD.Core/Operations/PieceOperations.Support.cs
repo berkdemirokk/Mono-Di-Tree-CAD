@@ -18,6 +18,8 @@ public static partial class PieceOperations
     public const double DefaultDuplicateOffsetMm = 20;
     /// <summary>A side of a new rectangle or a new line must be strictly longer than this.</summary>
     public const double MinimumSideMm = 0.001;
+    /// <summary>Longest side (width, height, line length) the command box accepts, in millimetres.</summary>
+    public const double MaximumSideMm = 20_000;
     /// <summary>Longest name accepted by <see cref="Rename"/>, in UTF-16 units after trimming.</summary>
     public const int MaximumNameLength = 128;
 
@@ -29,6 +31,13 @@ public static partial class PieceOperations
     private const int MaximumStoredNameLength = 1024;
 
     private static readonly CultureInfo Tr = CultureInfo.GetCultureInfo("tr-TR");
+
+    // R04 / R13 / R24 / R10 / R11 of the command design, verbatim.
+    internal const string SideRangeText = "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen";
+    internal const string AngleText = "Şimdilik yalnız 90, 180 ve 270 derece döndürülebilir. Örnek: 90 sağa döndür";
+    internal const string EmptyNameText = "Yeni ad boş olamaz. Örnek: adı ön beden olsun";
+    internal const string NotRectangleText = "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni ölçüde dikdörtgen çizmek için yazın: 95 x 80 dikdörtgen";
+    internal const string ExtrasText = "Bu parçada iplik yönü, köşe işareti, serileme kuralı veya eğri bilgisi var; ölçüsü yazıyla değiştirilemez. Tüm araçlar bölümünden düzenleyin.";
 
     internal const string OutOfRangeText = "Sonuç çalışma alanının dışına taşıyor (her eksende en çok ±100.000.000 mm). Daha küçük bir ölçü veya konum girin.";
 
@@ -63,8 +72,9 @@ public static partial class PieceOperations
     private static PieceOperationResult NotFound() => Fail(PieceOperationError.PieceNotFound,
         "Parça bulunamadı; silinmiş olabilir. Parçayı yeniden seçip komutu tekrar verin.");
 
+    // Wording R08 of the command design (FINAL_COMMANDS.md), kept verbatim so the box and the operations say the same thing.
     private static PieceOperationResult Locked(PatternPiece piece) => Fail(PieceOperationError.LayerLocked,
-        $"{Quote(piece.Name)} kilitli bir katmanda; değiştirilemez. Önce katmanın kilidini açın.");
+        "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın.");
 
     private static PieceOperationResult InvalidNumber(string label) => Fail(PieceOperationError.InvalidValue,
         $"{label} geçerli bir sayı olmalı (örneğin 120); girilen değer kullanılamadı.");

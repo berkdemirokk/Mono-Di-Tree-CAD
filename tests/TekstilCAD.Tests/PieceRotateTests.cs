@@ -98,16 +98,16 @@ public sealed class PieceRotateTests
     }
 
     [Theory]
-    [InlineData(45, "45°")]
-    [InlineData(90.5, "90,5°")]
-    [InlineData(1, "1°")]
-    [InlineData(double.NaN, "geçersiz değer")]
-    [InlineData(double.PositiveInfinity, "geçersiz değer")]
-    public void AnglesThatAreNotMultiplesOfNinetyAreRefused(double degrees, string shown)
+    [InlineData(45)]
+    [InlineData(90.5)]
+    [InlineData(1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void AnglesThatAreNotMultiplesOfNinetyAreRefused(double degrees)
     {
         var document = OneRect();
         AssertRefused(PieceOperations.Rotate(document, document.Pieces[0].Id, degrees), PieceOperationError.InvalidValue,
-            $"Döndürme yalnızca 90°'nin katları olabilir (örneğin 90, 180, −90); girilen: {shown}.");
+            "Şimdilik yalnız 90, 180 ve 270 derece döndürülebilir. Örnek: 90 sağa döndür");
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class PieceRotateTests
         var document = WithLayers(OneRect(), layer);
         document.Pieces[0].LayerId = layer.Id;
         AssertRefused(PieceOperations.Rotate(document, document.Pieces[0].Id, 90), PieceOperationError.LayerLocked,
-            "“Ön beden” kilitli bir katmanda; değiştirilemez. Önce katmanın kilidini açın.");
+            "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın.");
     }
 
     [Theory]

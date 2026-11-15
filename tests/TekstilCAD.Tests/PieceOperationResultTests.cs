@@ -166,7 +166,6 @@ public sealed class PieceOperationResultTests
         {
             Assert.False(r.Succeeded);
             Assert.False(string.IsNullOrWhiteSpace(r.Error));
-            Assert.EndsWith(".", r.Error);
             Assert.Matches("[ığüşöçİĞÜŞÖÇ]|\\b(olmalı|girin|yazın|verin|seçin)\\b", r.Error);
         });
     }
@@ -206,5 +205,6 @@ public sealed class PieceOperationResultTests
         Assert.Equal(20, PieceOperations.DefaultDuplicateOffsetMm);
         Assert.Equal(0.001, PieceOperations.MinimumSideMm);
         Assert.Equal(128, PieceOperations.MaximumNameLength);
+        Assert.Equal(20000, PieceOperations.MaximumSideMm);
     }
 }

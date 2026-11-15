@@ -93,7 +93,7 @@ public sealed class PieceOperationLimitsTests
     [Fact]
     public void RectanglesOfTheLargestAcceptedSizeValidate()
     {
-        var result = Run(new ProjectDocument(), d => PieceOperations.AddRectangle(d, 1e8, 1e8, new Point2(0, 0)));
+        var result = Run(new ProjectDocument(), d => PieceOperations.AddRectangle(d, 20000, 20000, new Point2(1e8 - 20000, 1e8 - 20000)));
         Assert.Equal(new Point2(1e8, 1e8), result.Piece!.Points[2]);
     }
 

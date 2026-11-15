@@ -5,6 +5,7 @@ namespace TekstilCAD.Tests;
 
 public sealed class PieceResizeTests
 {
+    private const string RangeText = "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen";
     private const string OutOfRange = "Sonuç çalışma alanının dışına taşıyor (her eksende en çok ±100.000.000 mm). Daha küçük bir ölçü veya konum girin.";
 
     [Fact]
@@ -91,15 +92,15 @@ public sealed class PieceResizeTests
         var document = Doc(Rect("Ön beden", 0, 0, 120, 80));
         var result = Run(document, d => PieceOperations.Resize(d, d.Pieces[0].Id, 120, 80));
         Assert.False(result.ChangesDocument);
-        Assert.Equal("“Ön beden” zaten bu ölçüde; değişiklik gerekmedi.", result.Summary);
+        Assert.Equal("Ölçü zaten 120 × 80 mm. Değişiklik yok.", result.Summary);
     }
 
     [Fact]
     public void AllSidesStayInOrderAfterAnEnlargement()
     {
         var document = Doc(Rect("A", 0, 0, 10, 10));
-        var result = Run(document, d => PieceOperations.Resize(d, d.Pieces[0].Id, 1e6, 2e6));
-        Assert.Equal(Pts((0, 0), (1e6, 0), (1e6, 2e6), (0, 2e6)), result.Piece!.Points);
+        var result = Run(document, d => PieceOperations.Resize(d, d.Pieces[0].Id, 10000, 20000));
+        Assert.Equal(Pts((0, 0), (10000, 0), (10000, 20000), (0, 20000)), result.Piece!.Points);
     }
 
     [Fact]
@@ -119,12 +120,23 @@ public sealed class PieceResizeTests
     }
 
     [Theory]
-    [InlineData(0, 40, "Genişlik 0,001 mm değerinden büyük olmalı; girilen: 0 mm. Daha büyük bir ölçü girin.")]
-    [InlineData(-3, 40, "Genişlik 0,001 mm değerinden büyük olmalı; girilen: -3 mm. Daha büyük bir ölçü girin.")]
-    [InlineData(60, 0.001, "Yükseklik 0,001 mm değerinden büyük olmalı; girilen: 0,001 mm. Daha büyük bir ölçü girin.")]
+    [InlineData(0, 40)]
+    [InlineData(-3, 40)]
+    [InlineData(60, 0.001)]
+    [InlineData(20001, 40)]
+    [InlineData(60, 1e9)]
+    public void DimensionsOutsideTheRangeAreRefusedWithTheRangeText(double width, double height)
+    {
+        var document = OneRect();
+        var result = PieceOperations.Resize(document, document.Pieces[0].Id, width, height);
+        Assert.Contains(result.ErrorCode, new[] { PieceOperationError.InvalidValue, PieceOperationError.OutOfRange });
+        AssertRefused(result, result.ErrorCode, RangeText);
+    }
+
+    [Theory]
     [InlineData(double.NaN, 40, "Genişlik geçerli bir sayı olmalı (örneğin 120); girilen değer kullanılamadı.")]
     [InlineData(60, double.PositiveInfinity, "Yükseklik geçerli bir sayı olmalı (örneğin 120); girilen değer kullanılamadı.")]
-    public void UnusableDimensionsAreRefusedWithTheirLabel(double width, double height, string message)
+    public void NonFiniteDimensionsAreRefusedWithTheirLabel(double width, double height, string message)
     {
         var document = OneRect();
         AssertRefused(PieceOperations.Resize(document, document.Pieces[0].Id, width, height), PieceOperationError.InvalidValue, message);
@@ -133,15 +145,15 @@ public sealed class PieceResizeTests
     [Fact]
     public void ResultBeyondTheCoordinateLimitIsRefused()
     {
-        var document = OneRect();
-        AssertRefused(PieceOperations.Resize(document, document.Pieces[0].Id, 1.5e8, null), PieceOperationError.OutOfRange, OutOfRange);
+        var document = Doc(Rect("A", 1e8 - 100, 0, 50, 50));
+        AssertRefused(PieceOperations.Resize(document, document.Pieces[0].Id, 5000, null), PieceOperationError.OutOfRange, OutOfRange);
     }
 
     [Fact]
     public void ResultEndingExactlyOnTheLimitIsAccepted()
     {
-        var document = Doc(Rect("A", 0, 0, 10, 10));
-        var result = Run(document, d => PieceOperations.Resize(d, d.Pieces[0].Id, 1e8, null));
+        var document = Doc(Rect("A", 1e8 - 20000, 0, 10, 10));
+        var result = Run(document, d => PieceOperations.Resize(d, d.Pieces[0].Id, 20000, null));
         Assert.Equal(1e8, result.Piece!.Points[1].X);
     }
 
@@ -184,7 +196,7 @@ public sealed class PieceResizeTests
         var document = WithLayers(OneRect(), layer);
         document.Pieces[0].LayerId = layer.Id;
         AssertRefused(PieceOperations.Resize(document, document.Pieces[0].Id, 10, 10), PieceOperationError.LayerLocked,
-            "“Ön beden” kilitli bir katmanda; değiştirilemez. Önce katmanın kilidini açın.");
+            "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın.");
     }
 
     [Fact]

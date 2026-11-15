@@ -167,7 +167,7 @@ public sealed class PieceMoveTests
         var document = WithLayers(OneRect(), layer);
         document.Pieces[0].LayerId = layer.Id;
         AssertRefused(PieceOperations.MoveBy(document, document.Pieces[0].Id, 1, 1), PieceOperationError.LayerLocked,
-            "“Ön beden” kilitli bir katmanda; değiştirilemez. Önce katmanın kilidini açın.");
+            "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın.");
     }
 
     [Theory]

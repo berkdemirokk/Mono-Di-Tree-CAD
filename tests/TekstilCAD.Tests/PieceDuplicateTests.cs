@@ -144,7 +144,7 @@ public sealed class PieceDuplicateTests
         var document = WithLayers(OneRect(), layer);
         document.Pieces[0].LayerId = layer.Id;
         AssertRefused(PieceOperations.Duplicate(document, document.Pieces[0].Id), PieceOperationError.LayerLocked,
-            "“Ön beden” kilitli bir katmanda; değiştirilemez. Önce katmanın kilidini açın.");
+            "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın.");
     }
 
     [Fact]

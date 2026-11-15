@@ -28,14 +28,12 @@ public static partial class PieceOperations
         return AddShape(document, length, 0, origin, layerId, closed: false);
     }
 
+    // A side must be finite, longer than MinimumSideMm and at most MaximumSideMm (R04 wording).
     private static PieceOperationResult? CheckSide(double value, string label)
     {
         if (!double.IsFinite(value)) return InvalidNumber(label);
-        if (value <= MinimumSideMm)
-            return Fail(PieceOperationError.InvalidValue,
-                $"{label} {Mm(MinimumSideMm)} değerinden büyük olmalı; girilen: {Mm(value)}. Daha büyük bir ölçü girin.");
-        if (value > 2 * Geometry.MaxCoordinate)
-            return Fail(PieceOperationError.OutOfRange, $"{label} çalışma alanına sığmıyor: {Mm(value)}. {OutOfRangeText}");
+        if (value <= MinimumSideMm) return Fail(PieceOperationError.InvalidValue, SideRangeText);
+        if (value > MaximumSideMm) return Fail(PieceOperationError.OutOfRange, SideRangeText);
         return null;
     }
 
@@ -207,7 +205,7 @@ public static partial class PieceOperations
         if (refusal is not null) return refusal;
         var trimmed = (name ?? "").Trim();
         if (trimmed.Length == 0)
-            return Fail(PieceOperationError.InvalidValue, "Ad boş olamaz. 1–128 karakterlik bir ad yazın.");
+            return Fail(PieceOperationError.InvalidValue, EmptyNameText);
         if (trimmed.Length > MaximumNameLength)
             return Fail(PieceOperationError.InvalidValue,
                 $"Ad en çok {MaximumNameLength} karakter olabilir (girilen: {trimmed.Length}). Daha kısa bir ad yazın.");
