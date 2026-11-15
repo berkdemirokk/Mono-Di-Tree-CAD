@@ -124,7 +124,7 @@ public partial class MainWindow
     /// <summary>
     /// The only door for command edits. Guards run in this order and the first one that refuses ends the call
     /// without touching the project; none of them opens a window or a message box:
-    /// closing window, mutation review, incomplete recovery, DXF import, export, active drag, large validation,
+    /// closing window (closed, or its recovery record is being cleared), mutation review, incomplete recovery, DXF import, export, active drag, large validation,
     /// pending drawing/drafts, selection, layer lock, new-piece layer, stamp; then exactly one
     /// <see cref="CommitObserved"/>. A change that was committed is reported as applied even when the
     /// screen refresh fails afterwards.
@@ -133,7 +133,7 @@ public partial class MainWindow
     {
         ArgumentNullException.ThrowIfNull(edit);
         CommandOutcome Refuse(string guard)=>new(CommandResult.Refused,status.Text,guard);
-        if(windowClosed)
+        if(windowClosed || recoveryClosing)
         { SetStatus($"{edit.ActionName} yapılmadı · Pencere kapanıyor."); return Refuse(CommandGuards.Closed); }
         // EnsureMainMutationReady refreshes once after an earlier refresh failure and then asks for a new command.
         try { if(!EnsureMainMutationReady())return Refuse(CommandGuards.MutationReview); }

@@ -22,9 +22,11 @@ internal static class CommandVerification
 
     internal static void Run(MainWindow studio,List<string> checks)
     {
+        // The table first: a regression there fails a check before any button is clicked (AddButton turns an
+        // exception in a click into a message box, which would hang a headless run instead of failing it).
+        VerifyOperationTable(checks);
         VerifyOrthogonalButtonsKeepTheirDocuments(checks);
         VerifyPositionDraftsKeepTheirDocuments(checks);
-        VerifyOperationTable(checks);
         VerifyExecutor(checks);
         VerifyOpenTextileToolsAt(checks);
     }
@@ -49,6 +51,9 @@ internal static class CommandVerification
         var fresh=new MainWindow();StopTimer(fresh);var closed=false;fresh.Closed+=(_,_)=>closed=true;
         var previous=SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(fresh.Dispatcher));
+        // If a check fails half way, closing must not open a discard prompt that would hang the run.
+        fresh.ConfirmDiscardDocumentForVerification=()=>true;
+        fresh.ConfirmDiscardDrawingForVerification=()=>true;
         try
         {
             _=new WindowInteropHelper(fresh).EnsureHandle();
@@ -59,6 +64,7 @@ internal static class CommandVerification
             StopTimer(fresh);
             // A window with unsaved work would open the discard prompt on Close.
             typeof(MainWindow).GetField("dirty",Private)!.SetValue(fresh,false);
+            ((System.Collections.IDictionary)typeof(MainWindow).GetField("propertyDrafts",Private)!.GetValue(fresh)!).Clear();
             fresh.Close();PumpUntil(()=>closed);
             SynchronizationContext.SetSynchronizationContext(previous);
         }
@@ -243,7 +249,9 @@ internal static class CommandVerification
                 && DocumentSession.ContentEquals(before,window.Document) && session.UndoCount==0,
                 "Command executor refuses a move on a locked layer and leaves the document unchanged",checks);
             var addOutcome=window.ApplyCommand(Spy(()=>ran=true,needsSelection:false,addsPiece:true));
-            Check(addOutcome is { Result:CommandResult.Refused,Guard:CommandGuards.NoLayer } && !ran
+            Check(window.ApplyCommand(Spy(()=>ran=true,needsSelection:true,addsPiece:true)) is { Guard:CommandGuards.Locked },
+                "Command executor answers a locked selection before a missing layer",checks);
+            Check(addOutcome is { Result:CommandResult.Refused,Guard:CommandGuards.NoLayer } && addOutcome.Message.Contains("yapılmadı") && !ran
                 && DocumentSession.ContentEquals(before,window.Document) && session.UndoCount==0,
                 "Command executor refuses a new piece when no visible, unlocked layer can take it",checks);
         });
@@ -253,7 +261,7 @@ internal static class CommandVerification
             var piece=MarkedPiece();window.LoadDocument(new ProjectDocument { Pieces=[piece] });window.Select(null);
             var before=window.Document.Clone();var ran=false;
             var outcome=window.ApplyCommand(Spy(()=>ran=true));
-            Check(outcome is { Result:CommandResult.Refused,Guard:CommandGuards.NoSelection } && !ran && DocumentSession.ContentEquals(before,window.Document),
+            Check(outcome is { Result:CommandResult.Refused,Guard:CommandGuards.NoSelection } && outcome.Message.Contains("yapılmadı") && !ran && DocumentSession.ContentEquals(before,window.Document),
                 "Command executor refuses a piece edit when nothing is selected",checks);
         });
         // 5: pending drawing and unapplied drafts.
@@ -265,7 +273,7 @@ internal static class CommandVerification
             try
             {
                 var outcome=window.ApplyCommand(MoveEdit(1,1));
-                Check(outcome is { Result:CommandResult.Refused,Guard:CommandGuards.PendingWork } && canvas.HasPendingDrawing
+                Check(outcome is { Result:CommandResult.Refused,Guard:CommandGuards.PendingWork } && outcome.Message.Contains("yapılmadı") && canvas.HasPendingDrawing
                     && DocumentSession.ContentEquals(before,window.Document) && session.UndoCount==0,
                     "Command executor refuses a move while a drawing is pending",checks);
             }
@@ -306,7 +314,7 @@ internal static class CommandVerification
             var wrongEpoch=new CommandStamp(window.Document,Guid.NewGuid(),window.SelectedId,window.Document.Clone());
             var before=window.Document.Clone();
             var stale=window.ApplyCommand(Spy(()=>ran=true,stamp:wrongEpoch));
-            Check(stale is { Result:CommandResult.Stale,Guard:CommandGuards.Stamp } && !ran && DocumentSession.ContentEquals(before,window.Document) && session.UndoCount==0,
+            Check(stale is { Result:CommandResult.Stale,Guard:CommandGuards.Stamp } && stale.Message.Contains("yapılmadı") && !ran && DocumentSession.ContentEquals(before,window.Document) && session.UndoCount==0,
                 "Command executor refuses an edit whose stamp no longer matches",checks);
             var handBuilt=new CommandStamp(window.Document,epoch,window.SelectedId,window.Document.Clone());
             Check(window.ApplyCommand(Spy(()=>ran=true,stamp:handBuilt)) is { Result:CommandResult.Applied } && ran && session.UndoCount==1,
@@ -320,6 +328,16 @@ internal static class CommandVerification
             var selectionStamp=window.CaptureCommandStamp();window.Select(b.Id);
             Check(window.ApplyCommand(Spy(()=>ran=true,stamp:selectionStamp)) is { Result:CommandResult.Stale } && !ran,
                 "Command executor refuses an edit after the selection changed since the preview",checks);
+            // Undo brings equal content back in another document object; the stamp must still call it stale.
+            var beforeUndo=window.CaptureCommandStamp();
+            window.Commit("Geçici değişiklik",()=>window.Document.Name="Geçici");
+            Check(session.Undo() && DocumentSession.ContentEquals(beforeUndo.Snapshot,window.Document)
+                && window.ApplyCommand(Spy(()=>ran=true,stamp:beforeUndo)) is { Result:CommandResult.Stale } && !ran,
+                "Command executor refuses an edit after undo even though the content is equal again",checks);
+            // The same document object changed in place: only the content comparison can notice.
+            var inPlace=window.CaptureCommandStamp();window.Document.Name+="?";
+            Check(window.ApplyCommand(Spy(()=>ran=true,stamp:inPlace)) is { Result:CommandResult.Stale } && !ran,
+                "Command executor refuses an edit when the same document changed in place since the preview",checks);
         });
         // Guard order: each block is removed in turn and the next guard in the ladder must answer.
         Scenario(window=>
@@ -334,12 +352,12 @@ internal static class CommandVerification
             // Canvas blocks first (RestorePendingDrawing needs the tool and clears any drag), then the window flags
             // (SetTool refuses while a recovery restore is incomplete).
             var cancellation=new CancellationTokenSource();
-            window.SetTool("Çizgi");canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
-            SetCanvas(canvas,"dragId",piece.Id);SetCanvas(canvas,"largeVertexCancellation",cancellation);
-            Set(window,"mainMutationReviewRequired",true);Set(window,"recoveryRestoreIncomplete",true);
-            Set(window,"<DxfImportRunning>k__BackingField",true);Set(window,"<ExportRunning>k__BackingField",true);
             try
             {
+                window.SetTool("Çizgi");canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
+                SetCanvas(canvas,"dragId",piece.Id);SetCanvas(canvas,"largeVertexCancellation",cancellation);
+                Set(window,"mainMutationReviewRequired",true);Set(window,"recoveryRestoreIncomplete",true);
+                Set(window,"<DxfImportRunning>k__BackingField",true);Set(window,"<ExportRunning>k__BackingField",true);
                 for(var step=0;step<expected.Length;step++)
                 {
                     var outcome=window.ApplyCommand(Spy(()=>ran=true));
@@ -372,14 +390,23 @@ internal static class CommandVerification
         {
             var piece=MarkedPiece();window.LoadDocument(new ProjectDocument { Pieces=[piece] });window.Select(piece.Id);
             var before=window.Document.Clone();var ran=false;
-            Set(window,"windowClosed",true);
+            Set(window,"windowClosed",true);Set(window,"mainMutationReviewRequired",true);
+            try
+            {
+                var closed=window.ApplyCommand(Spy(()=>ran=true));
+                Check(closed is { Result:CommandResult.Refused,Guard:CommandGuards.Closed } && closed.Message.Contains("yapılmadı") && !ran
+                    && DocumentSession.ContentEquals(before,window.Document) && Field<bool>(window,"mainMutationReviewRequired"),
+                    "Command executor refuses an edit while the window is closing, before any refresh",checks);
+            }
+            finally { Set(window,"windowClosed",false);Set(window,"mainMutationReviewRequired",false); }
+            Set(window,"recoveryClosing",true);
             try
             {
                 Check(window.ApplyCommand(Spy(()=>ran=true)) is { Result:CommandResult.Refused,Guard:CommandGuards.Closed } && !ran
                     && DocumentSession.ContentEquals(before,window.Document),
-                    "Command executor refuses an edit while the window is closing",checks);
+                    "Command executor refuses an edit while the recovery record is being cleared on close",checks);
             }
-            finally { Set(window,"windowClosed",false); }
+            finally { Set(window,"recoveryClosing",false); }
         });
         // No change, rollback, planner skeleton.
         Scenario(window=>
@@ -447,15 +474,19 @@ internal static class CommandVerification
             var contour=window.CreateTextileToolsAt(1,"12.5");
             var nesting=window.CreateTextileToolsAt(2,"1650");
             var plain=window.CreateTextileToolsAt(0,null);
-            var invalid=false;
-            try { window.CreateTextileToolsAt(7,null).Close(); } catch(ArgumentOutOfRangeException) { invalid=true; }
+            var ignored=window.CreateTextileToolsAt(0,"999");
+            var invalid=false;var windowsBefore=Application.Current.Windows.Count;
+            try { window.CreateTextileToolsAt(7,null); } catch(ArgumentOutOfRangeException) { invalid=true; }
+            invalid&=Application.Current.Windows.Count==windowsBefore;
             try
             {
                 Check(Tab(contour)==1 && Text(contour,"offsetAllowance")=="12.5" && Tab(nesting)==2 && Text(nesting,"basicWidth")=="1650"
-                    && Tab(plain)==0 && Text(plain,"offsetAllowance")=="10" && Text(plain,"basicWidth")=="1500" && invalid,
+                    && Tab(plain)==0 && Text(plain,"offsetAllowance")=="10" && Text(plain,"basicWidth")=="1500"
+                    && Text(contour,"basicWidth")=="1500" && Text(nesting,"offsetAllowance")=="10"
+                    && Tab(ignored)==0 && Text(ignored,"offsetAllowance")=="10" && Text(ignored,"basicWidth")=="1500" && invalid,
                     "OpenTextileToolsAt selects the tab and fills only that tab's input once",checks);
             }
-            finally { contour.Close();nesting.Close();plain.Close(); }
+            finally { contour.Close();nesting.Close();plain.Close();ignored.Close(); }
         });
     }
 }

@@ -3433,6 +3433,8 @@ public partial class MainWindow : Window
     // Built without showing so the tab and the one-time value can be checked headlessly.
     internal TextileToolsWindow CreateTextileToolsAt(int tab,string? value)
     {
+        // Refuse a bad tab before a window exists, so nothing is left owned by this one.
+        if(tab<0 || tab>2)throw new ArgumentOutOfRangeException(nameof(tab));
         var window=new TextileToolsWindow(this);
         window.ApplyOpeningRequest(tab,value);
         return window;
