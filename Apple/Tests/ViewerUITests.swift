@@ -12,11 +12,31 @@ final class ViewerUITests: XCTestCase {
         app.staticTexts["\(count) parça • Önizleme ölçüye göre ekrana sığdırılır"]
     }
 
+    /// The workshop's tools scroll under a pinned drawing. Scrolling must start inside that tools
+    /// area: the first scroll view in the hierarchy can be the home screen under the sheet.
+    private func toolsScroll(in app: XCUIApplication) -> XCUIElement {
+        let tools = app.scrollViews["workshop-tools"]
+        return tools.exists ? tools : app.scrollViews.firstMatch
+    }
+
+    /// A slow drag over half the viewport. A flick would carry momentum and could skip a control.
+    private func dragTools(in app: XCUIApplication, towardsEnd: Bool) {
+        let scroll = toolsScroll(in: app)
+        let from = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.75 : 0.25))
+        let to = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.25 : 0.75))
+        from.press(forDuration: 0.05, thenDragTo: to)
+    }
+
     private func tapBelow(_ button: XCUIElement, in app: XCUIApplication,
                           file: StaticString = #filePath, line: UInt = #line) {
-        for _ in 0..<8 {
+        for _ in 0..<14 {
             if button.exists && button.isHittable { break }
-            app.scrollViews.firstMatch.swipeUp()
+            dragTools(in: app, towardsEnd: true)
+        }
+        // The control may sit above the current position, for example after an earlier scroll.
+        for _ in 0..<14 {
+            if button.exists && button.isHittable { break }
+            dragTools(in: app, towardsEnd: false)
         }
         XCTAssertTrue(button.isHittable, "Control should be reachable by scrolling", file: file, line: line)
         button.tap()

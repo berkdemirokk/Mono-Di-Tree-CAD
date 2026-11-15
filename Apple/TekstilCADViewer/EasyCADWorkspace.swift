@@ -33,6 +33,7 @@ struct EasyCADWorkspace: View {
     @State private var savedLibrarySnapshot: DraftProject?
     // The pinned drawing gives way to the keyboard so the focused field stays reachable.
     @State private var keyboardVisible = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     #endif
@@ -273,7 +274,8 @@ struct EasyCADWorkspace: View {
         #if os(iOS)
         if verticalSizeClass == .compact { return 130 }
         #endif
-        return 230
+        // Very large text needs the room for the tools more than for the drawing.
+        return dynamicTypeSize.isAccessibilitySize ? 160 : 230
     }
 
     /// With the keyboard up in landscape there is no room left for both the drawing and a field.
@@ -287,12 +289,15 @@ struct EasyCADWorkspace: View {
     private var canvasPanel: some View {
         VStack(alignment: .leading, spacing: 4) {
             preview
+            // This panel does not scroll, so its text is limited: it must not push the tools away.
             if !document.pieces.isEmpty {
                 Text("\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır")
                     .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
             }
             if let success {
                 Text(success).font(.footnote).foregroundStyle(.secondary)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
             }
         }
         .padding(.horizontal)
@@ -300,18 +305,18 @@ struct EasyCADWorkspace: View {
         .padding(.bottom, 6)
     }
 
-    private var addRectangleButton: some View {
+    private func addRectangleButton(fill: Bool) -> some View {
         Button { addRectangle() } label: {
             Label("Dikdörtgen ekle", systemImage: "square")
-                .frame(maxWidth: .infinity, minHeight: 48)
+                .frame(maxWidth: fill ? .infinity : nil, minHeight: 48)
         }
         .buttonStyle(.borderedProminent)
     }
 
-    private var addLineButton: some View {
+    private func addLineButton(fill: Bool) -> some View {
         Button { addLine() } label: {
             Label("Çizgi ekle", systemImage: "line.diagonal")
-                .frame(maxWidth: .infinity, minHeight: 48)
+                .frame(maxWidth: fill ? .infinity : nil, minHeight: 48)
         }
         .buttonStyle(.bordered)
     }
@@ -319,16 +324,17 @@ struct EasyCADWorkspace: View {
     private var addSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("1 · Parça ekle", systemImage: "plus.square.on.square").font(.headline)
-            // Side by side when both labels fit on one line, otherwise stacked (narrow
-            // screens, large text), so a label is never broken inside a word.
+            // Side by side only at their natural one-line widths; otherwise stacked full width
+            // (narrow screens, large text). An equal split would give the longer label half the
+            // row and wrap it even though the pair as a whole fits.
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
-                    addRectangleButton
-                    addLineButton
+                    addRectangleButton(fill: false).fixedSize(horizontal: true, vertical: false)
+                    addLineButton(fill: false).fixedSize(horizontal: true, vertical: false)
                 }
                 VStack(spacing: 10) {
-                    addRectangleButton
-                    addLineButton
+                    addRectangleButton(fill: true)
+                    addLineButton(fill: true)
                 }
             }
             Button {
@@ -504,8 +510,16 @@ struct EasyCADWorkspace: View {
                     .controlSize(.large)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .accessibilityIdentifier("workshop-tools")
             }
             .animation(.default, value: keyboardVisible)
+            // The drawing can leave the screen while the keyboard changes; a drag that was in
+            // progress then never ends, so its state is dropped here.
+            .onChange(of: keyboardVisible) { _ in
+                dragStarted = false
+                draggedPieceID = nil
+                currentDrag = .zero
+            }
             .modifier(KeyboardVisibility(visible: $keyboardVisible))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -574,7 +588,9 @@ struct EasyCADWorkspace: View {
                 }
             }
         }
-        .interactiveDismissDisabled(hasPendingDetails)
+        // The drawing now sits at the top of the sheet, where dragging a piece downwards would also
+        // pull the sheet. Closing goes through "Kapat", which applies pending details first.
+        .interactiveDismissDisabled(true)
         .alert("İşlem tamamlanamadı", isPresented: Binding(
             get: { problem != nil },
             set: { if !$0 { problem = nil } }
@@ -716,8 +732,11 @@ private struct KeyboardVisibility: ViewModifier {
     func body(content: Content) -> some View {
         #if os(iOS)
         content
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-                visible = true
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+                // With a hardware keyboard only a short bar appears; that is not worth shrinking
+                // the drawing for.
+                let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+                visible = (frame?.height ?? 0) > 120
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 visible = false
