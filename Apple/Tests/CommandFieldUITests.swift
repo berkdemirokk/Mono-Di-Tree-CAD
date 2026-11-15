@@ -100,7 +100,7 @@ final class CommandFieldUITests: XCTestCase {
         let app = launchClean()
         openWorkshop(app)
         enter("kare 100", in: app, submit: true)
-        XCTAssertTrue(text(startingWith: "Dikdörtgen çizilecek: 100 × 100 mm (10 × 10 cm).", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(text(startingWith: "Kare çizilecek: 100 × 100 mm (10 × 10 cm).", in: app).waitForExistence(timeout: 5))
         XCTAssertFalse(countLabel(1, in: app).exists, "The first Return must not apply the command")
         XCTAssertTrue(app.buttons["command-apply"].exists)
         app.buttons["command-cancel"].tap()

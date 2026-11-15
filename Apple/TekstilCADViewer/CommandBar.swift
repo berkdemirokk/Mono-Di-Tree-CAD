@@ -24,6 +24,8 @@ struct CommandBar: View {
     @State private var result: ResultState?
     @State private var history: [String] = []
     @FocusState private var focused: Bool
+    /// Keeps the bar (and the card just made) in place while the keyboard finishes closing.
+    @State private var holdOpen = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     struct CardState {
@@ -35,17 +37,29 @@ struct CommandBar: View {
         var kind: Kind
         var source: String
         var banner: String?
+        var unitAssumed = false
     }
 
     struct ResultState {
         var text: String
         var undoable: Bool
+        /// The undo count the workshop has right after this command; the undo chip is only
+        /// offered while it is still the last thing done.
+        var expectedUndoCount = 0
     }
 
     /// While another field has the keyboard, the whole bar steps aside so that field keeps its room.
-    private var isShown: Bool { !keyboardVisible || focused }
+    private var isShown: Bool { !keyboardVisible || focused || holdOpen }
 
     var body: some View {
+        content
+            .onChange(of: keyboardVisible) { visible in
+                if !visible { holdOpen = false }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if isShown {
             VStack(alignment: .leading, spacing: 8) {
                 fieldRow
@@ -135,7 +149,7 @@ struct CommandBar: View {
         case .help(let plan):
             helpCard(plan)
         case .refusal(let refusal, let isQuestion):
-            refusalCard(refusal, isQuestion: isQuestion)
+            refusalCard(refusal, isQuestion: isQuestion, source: state.source)
         }
     }
 
@@ -204,20 +218,21 @@ struct CommandBar: View {
         .accessibilityIdentifier("command-card")
     }
 
-    private func refusalCard(_ refusal: CommandRefusal, isQuestion: Bool) -> some View {
+    private func refusalCard(_ refusal: CommandRefusal, isQuestion: Bool, source: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(refusal.message)
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
-            if !refusal.exactChoices.isEmpty {
-                ForEach(refusal.exactChoices, id: \.label) { choice in
-                    Button(choice.label) { showPreview(for: choice.command, source: text) }
+            if refusal.code == "R15b" {
+                // Several pieces matched: the buttons are their names; one pick shows its preview.
+                ForEach(Array(refusal.buttons.prefix(3).enumerated()), id: \.offset) { _, button in
+                    Button(button.label) { chooseExactPiece(named: button.label, source: source) }
                         .buttonStyle(.bordered)
                         .frame(minHeight: 44)
                 }
             } else {
-                ForEach(Array(refusal.suggestions.prefix(3).enumerated()), id: \.offset) { _, suggestion in
-                    Button(suggestion) { fillAndPrepare(suggestion) }
+                ForEach(Array(refusal.buttons.prefix(3).enumerated()), id: \.offset) { _, button in
+                    Button(button.label) { fillAndPrepare(button.fillText) }
                         .buttonStyle(.bordered)
                         .frame(minHeight: 44)
                 }
@@ -241,7 +256,7 @@ struct CommandBar: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("command-result")
             Spacer(minLength: 0)
-            if state.undoable {
+            if state.undoable && context.undoCount == state.expectedUndoCount {
                 Button("Komutu geri al") {
                     undoLast()
                     result = ResultState(text: "İşlem geri alındı.", undoable: false)
@@ -280,38 +295,59 @@ struct CommandBar: View {
     private func prepare() {
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty else { return }
+        holdOpen = keyboardVisible
         focused = false
         result = nil
         remember(typed)
-        let names = context.document.pieces.map { $0.name }
-        switch CommandParser.parse(typed, pieceNames: names) {
-        case .command(.cancel):
-            card = nil
-            text = ""
-        case .command(let command):
-            showPreview(for: command, source: typed)
-        case .ask(let refusal):
-            show(.refusal(refusal, isQuestion: true), source: typed)
-        case .refuse(let refusal):
-            show(.refusal(refusal, isQuestion: false), source: typed)
+        // Names as the planner will see them (typed field values applied), so "kol seç" matches.
+        let names = (context.base ?? context.document).pieces.map { $0.name }
+        let parsed = CommandParser.parse(typed, context: ParserContext(pieceNames: names))
+        if let command = parsed.command {
+            if command == .cancelPreview {
+                card = nil
+                text = ""
+            } else {
+                showPreview(for: command, source: typed, unitAssumed: parsed.unitAssumed)
+            }
+        } else if let notice = parsed.notice {
+            show(.refusal(notice, isQuestion: parsed.kind == .question), source: typed)
         }
     }
 
-    private func showPreview(for command: ParsedCommand, source: String, banner: String? = nil) {
+    /// One of the pieces named under a "several pieces matched" question: select or delete that
+    /// exact piece (the sentence said which) and show its preview.
+    private func chooseExactPiece(named name: String, source: String) {
+        let pieces = (context.base ?? context.document).pieces
+        guard let index = pieces.firstIndex(where: { $0.name == name }) else {
+            show(.refusal(CommandRefusal(code: "R22", message: "Parçalar değişti; komutu yeniden yazın."), isQuestion: false),
+                 source: source)
+            return
+        }
+        let words = TurkishText.fold(source).split(separator: " ").map(String.init)
+        let deleting = words.contains("sil") || words.contains("silin") || words.contains("kaldir")
+        let command: ParsedCommand = deleting ? .deleteAt(index: index, name: name) : .selectAt(index: index, name: name)
+        showPreview(for: command, source: source)
+    }
+
+    private func showPreview(for command: ParsedCommand, source: String, banner: String? = nil,
+                             unitAssumed: Bool = false) {
         switch CommandPlanner.plan(command, context: context) {
-        case .plan(let plan):
+        case .plan(var plan):
             if case .info = plan.effect {
                 show(.help(plan), source: source)
             } else {
-                show(.preview(command, plan), source: source, banner: banner)
+                if unitAssumed {
+                    plan.note = [plan.note, "Birim yazmadınız; milimetre sayıldı."].compactMap { $0 }.joined(separator: " ")
+                }
+                show(.preview(command, plan), source: source, banner: banner, unitAssumed: unitAssumed)
             }
         case .refusal(let refusal):
             show(.refusal(refusal, isQuestion: false), source: source)
         }
     }
 
-    private func show(_ kind: CardState.Kind, source: String, banner: String? = nil) {
-        card = CardState(kind: kind, source: source, banner: banner)
+    private func show(_ kind: CardState.Kind, source: String, banner: String? = nil, unitAssumed: Bool = false) {
+        card = CardState(kind: kind, source: source, banner: banner, unitAssumed: unitAssumed)
         announce(for: kind)
     }
 
@@ -325,14 +361,16 @@ struct CommandBar: View {
             let unchanged = fresh.base == plan.base && fresh.baseSelection == plan.baseSelection
                 && fresh.sentence == plan.sentence
             guard unchanged else {
-                show(.preview(command, fresh), source: state.source,
-                     banner: "Parça değişti; önizleme yenilendi. Uygula ile onaylayın.")
+                showPreview(for: command, source: state.source,
+                            banner: "Parça değişti; önizleme yenilendi. Uygula ile onaylayın.",
+                            unitAssumed: state.unitAssumed)
                 return
             }
             if let message = apply(plan) {
                 var undoable = false
                 if case .edit = plan.effect { undoable = true }
-                result = ResultState(text: "Yapıldı: " + message, undoable: undoable)
+                result = ResultState(text: "Yapıldı: " + message, undoable: undoable,
+                                     expectedUndoCount: context.undoCount + 1)
                 card = nil
                 text = ""
             } else {

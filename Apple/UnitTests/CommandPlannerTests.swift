@@ -52,7 +52,7 @@ final class CommandPlannerTests: XCTestCase {
 
     func testRectangleIsPlacedLikeTheButtonPlacesIt() throws {
         let doc = sample()
-        let planned = plan(.addRectangle(width: 120, height: 80), context(doc))
+        let planned = plan(.rectangle(width: 120, height: 80, isSquare: false), context(doc))
         XCTAssertEqual(planned?.sentence,
                        "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol alt köşe: 40 mm, 40 mm.")
         let (project, selection) = try XCTUnwrap(edited(planned))
@@ -68,7 +68,7 @@ final class CommandPlannerTests: XCTestCase {
 
     func testFirstRectangleOfAnEmptyDrawing() throws {
         let doc = DraftProject.blank
-        let planned = plan(.addRectangle(width: 120, height: 80), context(doc, selected: nil))
+        let planned = plan(.rectangle(width: 120, height: 80, isSquare: false), context(doc, selected: nil))
         XCTAssertEqual(planned?.sentence, "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol alt köşe: 0 mm, 0 mm.")
         let (project, _) = try XCTUnwrap(edited(planned))
         XCTAssertEqual(project.pieces[0].points[2], p(120, 80))
@@ -76,12 +76,12 @@ final class CommandPlannerTests: XCTestCase {
 
     func testLinesAreHorizontalOrVertical() throws {
         let doc = sample()
-        var (project, _) = try XCTUnwrap(edited(plan(.addLine(length: 150, vertical: false), context(doc))))
+        var (project, _) = try XCTUnwrap(edited(plan(.line(length: 150, orientation: .horizontal), context(doc))))
         XCTAssertEqual(project.pieces[2].points, [p(40, 40), p(190, 40)])
         XCTAssertFalse(project.pieces[2].closed)
-        (project, _) = try XCTUnwrap(edited(plan(.addLine(length: 80, vertical: true), context(doc))))
+        (project, _) = try XCTUnwrap(edited(plan(.line(length: 80, orientation: .vertical), context(doc))))
         XCTAssertEqual(project.pieces[2].points, [p(40, 40), p(40, 120)])
-        XCTAssertEqual(plan(.addLine(length: 150, vertical: false), context(doc))?.sentence,
+        XCTAssertEqual(plan(.line(length: 150, orientation: .horizontal), context(doc))?.sentence,
                        "Çizgi çizilecek: 150 mm (15 cm), yatay. Başlangıç: 40 mm, 40 mm.")
     }
 
@@ -90,15 +90,15 @@ final class CommandPlannerTests: XCTestCase {
         for i in 0..<250 {
             doc.pieces.append(DraftPiece(name: "P\(i)", closed: false, points: [p(0, 0), p(1, 0)]))
         }
-        XCTAssertEqual(refusal(.addRectangle(width: 10, height: 10), context(doc, selected: nil))?.code, "P03")
-        XCTAssertEqual(refusal(.duplicate, context(doc, selected: 0))?.code, "P03")
+        XCTAssertEqual(refusal(.rectangle(width: 10, height: 10, isSquare: false), context(doc, selected: nil))?.code, "P03")
+        XCTAssertEqual(refusal(.handoff(.duplicate, tab: nil, value: nil), context(doc, selected: 0))?.code, "P03")
     }
 
     // MARK: Moving
 
     func testMoveUsesScreenDirectionsOnTheUpwardsAxis() throws {
         let doc = sample()
-        let right = plan(.move(right: 25, down: 0), context(doc))
+        let right = plan(.moveBy(right: 25, down: 0), context(doc))
         XCTAssertEqual(right?.sentence,
                        "‘Ön beden’ 25 mm sağa taşınacak (2,5 cm). Sol alt köşe 0, 0 mm iken 25, 0 mm olacak.")
         var (project, selection) = try XCTUnwrap(edited(right))
@@ -107,12 +107,12 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(project.pieces[1], doc.pieces[1])
 
         // "yukarı" is +Y on the iPhone (the shared vectors say down = -10).
-        let up = plan(.move(right: 0, down: -10), context(doc))
+        let up = plan(.moveBy(right: 0, down: -10), context(doc))
         XCTAssertTrue(up?.sentence.contains("10 mm yukarı taşınacak") == true)
         (project, selection) = try XCTUnwrap(edited(up))
         XCTAssertEqual(project.pieces[0].minY, 10)
 
-        let both = plan(.move(right: -20, down: 5), context(doc))
+        let both = plan(.moveBy(right: -20, down: 5), context(doc))
         XCTAssertTrue(both?.sentence.contains("20 mm sola ve 5 mm aşağı taşınacak.") == true)
         (project, selection) = try XCTUnwrap(edited(both))
         XCTAssertEqual(project.pieces[0].minX, -20)
@@ -133,7 +133,7 @@ final class CommandPlannerTests: XCTestCase {
 
     func testMoveCannotLeaveTheWorkArea() {
         let doc = sample()
-        XCTAssertEqual(refusal(.move(right: 200_000_000, down: 0), context(doc))?.code, "P03")
+        XCTAssertEqual(refusal(.moveBy(right: 200_000_000, down: 0), context(doc))?.code, "P03")
     }
 
     // MARK: Rotating
@@ -141,7 +141,7 @@ final class CommandPlannerTests: XCTestCase {
     func testRotationDirectionsMatchTheButtonAndItsInverse() throws {
         let doc = sample()
         // The button turns counter-clockwise about the bounding-box centre (50, 75).
-        let ccw = plan(.rotate(degrees: 90, clockwise: false), context(doc))
+        let ccw = plan(.rotate(degrees: 90, direction: .counterClockwise), context(doc))
         XCTAssertTrue(ccw?.sentence.hasPrefix("‘Ön beden’ saat yönünün tersine 90° döndürülecek (ortası sabit).") == true)
         XCTAssertTrue(ccw?.sentence.contains("100 × 150 mm iken 150 × 100 mm olacak.") == true)
         XCTAssertTrue(ccw?.note?.contains("düğmesiyle aynı") == true)
@@ -150,7 +150,7 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(project.pieces[0].points, doc.pieces[0].rotatedQuarterTurn())
 
         // Clockwise is the other three quarters: the lower-left corner goes to the upper-left.
-        let cw = plan(.rotate(degrees: 90, clockwise: true), context(doc))
+        let cw = plan(.rotate(degrees: 90, direction: .clockwise), context(doc))
         XCTAssertTrue(cw?.sentence.hasPrefix("‘Ön beden’ saat yönünde 90° döndürülecek") == true)
         XCTAssertTrue(cw?.note?.contains("saat yönünün tersine döndürür") == true)
         (project, _) = try XCTUnwrap(edited(cw))
@@ -159,11 +159,11 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(project.pieces[0].minY, 25)
 
         // 270° clockwise is one counter-clockwise turn.
-        let long = plan(.rotate(degrees: 270, clockwise: true), context(doc))
+        let long = plan(.rotate(degrees: 270, direction: .clockwise), context(doc))
         (project, _) = try XCTUnwrap(edited(long))
         XCTAssertEqual(project.pieces[0].points[0], p(125, 25))
 
-        let half = plan(.rotate(degrees: 180, clockwise: true), context(doc))
+        let half = plan(.rotate(degrees: 180, direction: .clockwise), context(doc))
         XCTAssertTrue(half?.sentence.hasPrefix("‘Ön beden’ 180° döndürülecek (ortası sabit). Boyutları değişmez.") == true)
         (project, _) = try XCTUnwrap(edited(half))
         XCTAssertEqual(project.pieces[0].points[0], p(100, 150))
@@ -172,7 +172,7 @@ final class CommandPlannerTests: XCTestCase {
     func testRotatingASquareDoesNotClaimASizeChange() {
         var doc = sample()
         doc.pieces[0].points = [p(0, 0), p(100, 0), p(100, 100), p(0, 100)]
-        let planned = plan(.rotate(degrees: 90, clockwise: true), context(doc))
+        let planned = plan(.rotate(degrees: 90, direction: .clockwise), context(doc))
         XCTAssertTrue(planned?.sentence.hasSuffix("Boyutları değişmez.") == true)
     }
 
@@ -230,7 +230,7 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(project.pieces[0].points, doc.pieces[0].points)
         XCTAssertEqual(refusal(.rename("Ön beden"), context(doc))?.code, "R25")
 
-        let copy = plan(.duplicate, context(doc))
+        let copy = plan(.handoff(.duplicate, tab: nil, value: nil), context(doc))
         XCTAssertTrue(copy?.sentence.contains("‘Ön beden kopya’ adıyla eklenir") == true)
         let (copied, selection) = try XCTUnwrap(edited(copy))
         XCTAssertEqual(copied.pieces.count, 3)
@@ -246,7 +246,7 @@ final class CommandPlannerTests: XCTestCase {
 
     func testDeleteAlwaysAsksAndSelectsTheFirstRemainingPiece() throws {
         let doc = sample()
-        let planned = plan(.delete(name: nil), context(doc))
+        let planned = plan(.delete(.selected, name: nil), context(doc))
         XCTAssertEqual(planned?.sentence, "‘Ön beden’ silinecek (100 × 150 mm). Geri alabilirsiniz.")
         XCTAssertEqual(planned?.isDestructive, true)
         let (project, selection) = try XCTUnwrap(edited(planned))
@@ -256,14 +256,14 @@ final class CommandPlannerTests: XCTestCase {
 
     func testDeleteByNameKeepsTheSelectionWhenAnotherPieceGoes() throws {
         let doc = sample()
-        let planned = plan(.delete(name: "çizgi"), context(doc))
+        let planned = plan(.delete(.named, name: "çizgi"), context(doc))
         XCTAssertEqual(planned?.sentence, "‘Çizgi’ silinecek (100 mm). Geri alabilirsiniz.")
         XCTAssertEqual(planned?.isDestructive, true)
         let (project, selection) = try XCTUnwrap(edited(planned))
         XCTAssertEqual(project.pieces.map(\.name), ["Ön beden"])
         XCTAssertEqual(selection, .keep)
         // A stale or unknown name never deletes something else.
-        XCTAssertEqual(refusal(.delete(name: "bacak"), context(doc))?.code, "R15a")
+        XCTAssertEqual(refusal(.delete(.named, name: "bacak"), context(doc))?.code, "R15a")
         XCTAssertEqual(refusal(.deleteAt(index: 1, name: "Ön beden"), context(doc))?.code, "R22")
         XCTAssertEqual(refusal(.deleteAt(index: 9, name: "Çizgi"), context(doc))?.code, "R22")
     }
@@ -272,19 +272,19 @@ final class CommandPlannerTests: XCTestCase {
         let doc = sample()
         let blocked = CommandContext(document: doc, base: nil, baseProblem: "x", selectedID: doc.pieces[0].id,
                                      undoCount: 0, redoCount: 0)
-        XCTAssertNotNil(plan(.delete(name: nil), blocked))
+        XCTAssertNotNil(plan(.delete(.selected, name: nil), blocked))
     }
 
     func testSelectByNameAndNeighbour() {
         let doc = sample()
-        XCTAssertEqual(plan(.select(name: "çizgi"), context(doc))?.effect, .select(doc.pieces[1].id))
-        XCTAssertEqual(plan(.select(name: "çizgi"), context(doc))?.sentence, "‘Çizgi’ seçilecek.")
-        XCTAssertEqual(plan(.selectAdjacent(next: true), context(doc, selected: 0))?.effect, .select(doc.pieces[1].id))
-        XCTAssertEqual(plan(.selectAdjacent(next: true), context(doc, selected: 1))?.effect, .select(doc.pieces[0].id))
-        XCTAssertEqual(plan(.selectAdjacent(next: false), context(doc, selected: 0))?.effect, .select(doc.pieces[1].id))
-        XCTAssertEqual(plan(.selectAdjacent(next: true), context(doc, selected: nil))?.effect, .select(doc.pieces[0].id))
-        XCTAssertEqual(plan(.clearSelection, context(doc))?.effect, .select(nil))
-        XCTAssertEqual(refusal(.clearSelection, context(doc, selected: nil))?.code, "R25")
+        XCTAssertEqual(plan(.select(.named, name: "çizgi"), context(doc))?.effect, .select(doc.pieces[1].id))
+        XCTAssertEqual(plan(.select(.named, name: "çizgi"), context(doc))?.sentence, "‘Çizgi’ seçilecek.")
+        XCTAssertEqual(plan(.select(.next, name: nil), context(doc, selected: 0))?.effect, .select(doc.pieces[1].id))
+        XCTAssertEqual(plan(.select(.next, name: nil), context(doc, selected: 1))?.effect, .select(doc.pieces[0].id))
+        XCTAssertEqual(plan(.select(.previous, name: nil), context(doc, selected: 0))?.effect, .select(doc.pieces[1].id))
+        XCTAssertEqual(plan(.select(.next, name: nil), context(doc, selected: nil))?.effect, .select(doc.pieces[0].id))
+        XCTAssertEqual(plan(.select(.none, name: nil), context(doc))?.effect, .select(nil))
+        XCTAssertEqual(refusal(.select(.none, name: nil), context(doc, selected: nil))?.code, "R25")
         XCTAssertEqual(refusal(.selectAt(index: 0, name: "Başka"), context(doc))?.code, "R22")
     }
 
@@ -293,13 +293,13 @@ final class CommandPlannerTests: XCTestCase {
     func testNothingSelectedAsksForASelection() {
         let doc = sample()
         let none = context(doc, selected: nil)
-        for command in [ParsedCommand.move(right: 1, down: 0), .rotate(degrees: 90, clockwise: true),
-                        .resize(width: 1, height: nil), .rename("a"), .duplicate, .moveTo(x: 1, y: 1), .delete(name: nil)] {
+        for command in [ParsedCommand.moveBy(right: 1, down: 0), .rotate(degrees: 90, direction: .clockwise),
+                        .resize(width: 1, height: nil), .rename("a"), .handoff(.duplicate, tab: nil, value: nil), .moveTo(x: 1, y: 1), .delete(.selected, name: nil)] {
             let r = refusal(command, none)
             XCTAssertEqual(r?.code, "R03", "\(command)")
             XCTAssertEqual(r?.suggestions, ["ön beden seç", "çizgi seç"])
         }
-        XCTAssertEqual(refusal(.move(right: 1, down: 0), context(DraftProject.blank, selected: nil))?.code, "R03")
+        XCTAssertEqual(refusal(.moveBy(right: 1, down: 0), context(DraftProject.blank, selected: nil))?.code, "R03")
     }
 
     // MARK: Undo, redo, save, help
@@ -317,12 +317,12 @@ final class CommandPlannerTests: XCTestCase {
 
     func testSaveCommandsDescribeWhatWillBeWritten() {
         let doc = sample()
-        XCTAssertEqual(plan(.save, context(doc))?.sentence,
+        XCTAssertEqual(plan(.file(.save), context(doc))?.sentence,
                        "Proje kaydedilecek: ‘Deneme’. Ana ekrandaki Son projeler listesine eklenir.")
-        XCTAssertEqual(plan(.save, context(doc))?.effect, .saveProject)
-        XCTAssertEqual(plan(.saveCopy, context(doc))?.sentence,
+        XCTAssertEqual(plan(.file(.save), context(doc))?.effect, .saveProject)
+        XCTAssertEqual(plan(.file(.saveCopy), context(doc))?.sentence,
                        "Projenin bağımsız bir kopyası ‘Deneme (kopya)’ adıyla kaydedilecek. Açık çizim değişmez.")
-        XCTAssertEqual(plan(.saveCopy, context(doc))?.effect, .saveCopy)
+        XCTAssertEqual(plan(.file(.saveCopy), context(doc))?.effect, .saveCopy)
     }
 
     func testHelpListsTheCommands() {
@@ -339,10 +339,10 @@ final class CommandPlannerTests: XCTestCase {
         let blocked = CommandContext(document: doc, base: nil,
                                      baseProblem: "Parça adını, konumunu ve milimetre ölçülerini kontrol edin.",
                                      selectedID: doc.pieces[0].id, undoCount: 0, redoCount: 0)
-        let r = refusal(.move(right: 25, down: 0), blocked)
+        let r = refusal(.moveBy(right: 25, down: 0), blocked)
         XCTAssertEqual(r?.code, "P02")
         XCTAssertTrue(r?.message.hasPrefix("Parça adını, konumunu ve milimetre ölçülerini kontrol edin.") == true)
-        for command in [ParsedCommand.addRectangle(width: 10, height: 10), .save, .select(name: "çizgi"), .rename("a")] {
+        for command in [ParsedCommand.rectangle(width: 10, height: 10, isSquare: false), .file(.save), .select(.named, name: "çizgi"), .rename("a")] {
             XCTAssertEqual(refusal(command, blocked)?.code, "P02", "\(command)")
         }
     }
@@ -353,7 +353,7 @@ final class CommandPlannerTests: XCTestCase {
         typed.name = "Yeni ad"
         typed.pieces[0].name = "Gövde"
         let pending = context(doc, base: .some(typed))
-        let planned = plan(.move(right: 10, down: 0), pending)
+        let planned = plan(.moveBy(right: 10, down: 0), pending)
         XCTAssertEqual(planned?.base, typed)
         XCTAssertTrue(planned?.note?.contains("uygulamadığınız değerler de bu işlemle uygulanır") == true)
         XCTAssertTrue(planned?.sentence.hasPrefix("‘Gövde’ 10 mm sağa") == true)
@@ -366,22 +366,22 @@ final class CommandPlannerTests: XCTestCase {
 
     func testPlanRecordsWhatItWasMadeAgainst() {
         let doc = sample()
-        let planned = plan(.move(right: 10, down: 0), context(doc))
+        let planned = plan(.moveBy(right: 10, down: 0), context(doc))
         XCTAssertEqual(planned?.base, doc)
         XCTAssertEqual(planned?.baseSelection, doc.pieces[0].id)
         var other = doc
         other.pieces[0].points = other.pieces[0].points.map { p($0.x + 1, $0.y) }
         // A changed drawing gives another base, which makes the bar refuse to apply the old plan.
-        XCTAssertNotEqual(plan(.move(right: 10, down: 0), context(other))?.base, planned?.base)
+        XCTAssertNotEqual(plan(.moveBy(right: 10, down: 0), context(other))?.base, planned?.base)
     }
 
     func testEveryPlanResultIsStorable() throws {
         let doc = sample()
         let commands: [ParsedCommand] = [
-            .addRectangle(width: 1, height: 1), .addRectangle(width: 20_000, height: 20_000),
-            .addLine(length: 1, vertical: true), .move(right: 20_000, down: -20_000),
-            .rotate(degrees: 270, clockwise: false), .resize(width: 1, height: 1), .resize(width: 20_000, height: 20_000),
-            .rename(String(repeating: "k", count: 128)), .duplicate
+            .rectangle(width: 1, height: 1, isSquare: false), .rectangle(width: 20_000, height: 20_000, isSquare: false),
+            .line(length: 1, orientation: .vertical), .moveBy(right: 20_000, down: -20_000),
+            .rotate(degrees: 270, direction: .counterClockwise), .resize(width: 1, height: 1), .resize(width: 20_000, height: 20_000),
+            .rename(String(repeating: "k", count: 128)), .handoff(.duplicate, tab: nil, value: nil)
         ]
         for command in commands {
             switch CommandPlanner.plan(command, context: context(doc)) {
@@ -393,6 +393,28 @@ final class CommandPlannerTests: XCTestCase {
                 break
             }
         }
+    }
+}
+
+extension CommandPlannerTests {
+    func testThingsTheIPhoneDoesNotDoAreRefusedInPlainWords() {
+        let c = context(sample())
+        XCTAssertEqual(refusal(.mirror(.vertical), c)?.code, "W01")
+        XCTAssertEqual(refusal(.handoff(.importDxf, tab: nil, value: nil), c)?.code, "W01")
+        XCTAssertEqual(refusal(.handoff(.textileTools, tab: 2, value: 10), c)?.message.hasPrefix("Dikiş payı yalnız Windows"), true)
+        XCTAssertEqual(refusal(.view(.zoomIn), c)?.code, "P01")
+        XCTAssertEqual(refusal(.view(.themeDark), c)?.code, "W01")
+        XCTAssertEqual(refusal(.tool(.line), c)?.code, "P01")
+        XCTAssertEqual(refusal(.finishDrawing(.close), c)?.code, "P01")
+        XCTAssertEqual(refusal(.file(.open), c)?.code, "P01")
+        XCTAssertEqual(refusal(.handoff(.export, tab: nil, value: nil), c)?.code, "P01")
+        // Copying a piece is something the iPhone does itself.
+        XCTAssertNotNil(plan(.handoff(.duplicate, tab: nil, value: nil), c))
+    }
+
+    func testSquaresAreNamedAsSquares() {
+        let planned = plan(.rectangle(width: 100, height: 100, isSquare: true), context(sample()))
+        XCTAssertEqual(planned?.sentence, "Kare çizilecek: 100 × 100 mm (10 × 10 cm). Sol alt köşe: 40 mm, 40 mm.")
     }
 }
 

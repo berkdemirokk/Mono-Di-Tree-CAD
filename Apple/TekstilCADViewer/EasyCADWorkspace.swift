@@ -269,7 +269,7 @@ struct EasyCADWorkspace: View {
             return plan.notice
         case .undo(let steps):
             var done = 0
-            for _ in 0..<steps {
+            for _ in 0..<max(steps, 1) {
                 let before = undoStack.count
                 undo()
                 if undoStack.count == before { break }

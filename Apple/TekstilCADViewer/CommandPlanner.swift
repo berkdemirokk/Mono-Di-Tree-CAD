@@ -69,25 +69,28 @@ enum CommandPlanner {
         "Ölçüler milimetredir; santim için 12 cm yazın."
     ]
 
-    private static func n(_ value: Double) -> String { CommandText.number(value) }
+    private static func n(_ value: Double) -> String { CommandFormat.number(value) }
     private static func quoted(_ name: String) -> String { "‘\(name)’" }
 
     // MARK: Entry
 
     static func plan(_ command: ParsedCommand, context: CommandContext) -> PlanResult {
+        // Things the iPhone does elsewhere or not at all are refused first, in plain words.
+        if let refusal = unsupported(command) { return .refusal(refusal) }
+
         switch command {
         case .help:
             return .plan(CommandPlan(
                 sentence: "Örnek komutlar", note: nil, effect: .info, isDestructive: false,
                 notice: "", base: context.document, baseSelection: context.selectedID, lines: helpLines))
-        case .cancel:
-            return .refusal(CommandParser.unclear(""))
+        case .cancelPreview:
+            return .refusal(CommandRefusal(code: "R01", message: "Bir komut yazın. Örnek: 120 x 80 dikdörtgen"))
         case .undo(let steps):
             return planUndo(steps, context)
         case .redo:
             return planRedo(context)
-        case .delete(let name):
-            return planDelete(name: name, index: nil, context)
+        case .delete(let target, let name):
+            return planDelete(name: target == .named ? name : nil, index: nil, context)
         case .deleteAt(let index, let name):
             return planDelete(name: name, index: index, context)
         default:
@@ -100,25 +103,31 @@ enum CommandPlanner {
             note = "Alanlara yazdığınız ama uygulamadığınız değerler de bu işlemle uygulanır."
         }
         switch command {
-        case .addRectangle(let width, let height):
-            return planRectangle(width, height, base: base, context: context, note: note)
-        case .addLine(let length, let vertical):
-            return planLine(length, vertical: vertical, base: base, context: context, note: note)
-        case .select(let name):
-            return planSelect(name: name, index: nil, base: base, context: context, note: note)
+        case .rectangle(let width, let height, let isSquare):
+            return planRectangle(width, height, isSquare: isSquare, base: base, context: context, note: note)
+        case .line(let length, let orientation):
+            return planLine(length, vertical: orientation == .vertical, base: base, context: context, note: note)
+        case .select(let target, let name):
+            switch target {
+            case .named:
+                return planSelect(name: name ?? "", index: nil, base: base, context: context, note: note)
+            case .next, .previous:
+                return planAdjacent(next: target == .next, base: base, context: context, note: note)
+            case .none:
+                guard context.selectedID != nil else {
+                    return .refusal(CommandRefusal(code: "R25", message: "Seçili parça yok. Değişiklik yok."))
+                }
+                return .plan(make("Seçim bırakılacak. Parçalar değişmez.", note, .select(nil), "Seçim bırakıldı.", base, context))
+            case .selected:
+                return .refusal(CommandRefusal(code: "R25", message: "Parça zaten seçili. Değişiklik yok."))
+            }
         case .selectAt(let index, let name):
             return planSelect(name: name, index: index, base: base, context: context, note: note)
-        case .selectAdjacent(let next):
-            return planAdjacent(next: next, base: base, context: context, note: note)
-        case .clearSelection:
-            guard context.selectedID != nil else {
-                return .refusal(CommandRefusal(code: "R25", message: "Seçili parça yok. Değişiklik yok."))
+        case .file(let action):
+            if action == .save {
+                let sentence = "Proje kaydedilecek: \(quoted(base.name)). Ana ekrandaki Son projeler listesine eklenir."
+                return .plan(make(sentence, note, .saveProject, "", base, context))
             }
-            return .plan(make("Seçim bırakılacak. Parçalar değişmez.", note, .select(nil), "Seçim bırakıldı.", base, context))
-        case .save:
-            let sentence = "Proje kaydedilecek: \(quoted(base.name)). Ana ekrandaki Son projeler listesine eklenir."
-            return .plan(make(sentence, note, .saveProject, "", base, context))
-        case .saveCopy:
             let copyName = String(base.name.prefix(120)) + " (kopya)"
             let sentence = "Projenin bağımsız bir kopyası \(quoted(copyName)) adıyla kaydedilecek. Açık çizim değişmez."
             return .plan(make(sentence, note, .saveCopy, "", base, context))
@@ -132,20 +141,93 @@ enum CommandPlanner {
         }
         let piece = base.pieces[index]
         switch command {
-        case .move(let right, let down):
+        case .moveBy(let right, let down):
             return planMove(right: right, up: -down, index: index, piece: piece, base: base, context: context, note: note)
         case .moveTo(let x, let y):
             return planMoveTo(x: x, y: y, index: index, piece: piece, base: base, context: context, note: note)
-        case .rotate(let degrees, let clockwise):
-            return planRotate(degrees, clockwise: clockwise, index: index, piece: piece, base: base, context: context, note: note)
+        case .rotate(let degrees, let direction):
+            return planRotate(degrees, clockwise: direction == .clockwise, index: index, piece: piece,
+                              base: base, context: context, note: note)
         case .resize(let width, let height):
             return planResize(width: width, height: height, index: index, piece: piece, base: base, context: context, note: note)
         case .rename(let name):
             return planRename(name, index: index, piece: piece, base: base, context: context, note: note)
-        case .duplicate:
+        case .handoff:
+            // The only hand-off the iPhone does itself is copying the piece (see `unsupported`).
             return planDuplicate(index: index, piece: piece, base: base, context: context, note: note)
         default:
-            return .refusal(CommandParser.unclear(""))
+            return .refusal(CommandRefusal(code: "R01", message: "Bu komut anlaşılmadı. Örnek: 25 sağa taşı"))
+        }
+    }
+
+    // MARK: Not on the iPhone
+
+    private static func windowsOnly(_ feature: String) -> CommandRefusal {
+        CommandRefusal(
+            code: "W01",
+            message: "\(feature) yalnız Windows programında var; iPhone'da bu işlem yok. Örnek: 25 sağa taşı",
+            suggestions: ["25 sağa taşı"])
+    }
+
+    private static func elsewhere(_ message: String) -> CommandRefusal {
+        CommandRefusal(code: "P01", message: message, suggestions: ["25 sağa taşı"])
+    }
+
+    private static let noMouseTools = "Fare araçları yalnız Windows programında var. iPhone'da parçaya dokunun; yeni kontur için “Parmakla şekil çiz” düğmesini kullanın."
+
+    /// The refusal for a command the iPhone cannot do or does through a button, nil when it can.
+    private static func unsupported(_ command: ParsedCommand) -> CommandRefusal? {
+        switch command {
+        case .mirror:
+            return windowsOnly("Aynalama")
+        case .view(let action):
+            switch action {
+            case .detailedView, .textLarger, .textSmaller, .themeDark, .themeLight:
+                return windowsOnly("Bu ayar")
+            default:
+                return elsewhere("Görünüm komutla değişmez; çizim ekrana sığdırılır. Parçaları taşımak için: 25 sağa taşı")
+            }
+        case .tool, .finishDrawing:
+            return elsewhere(noMouseTools)
+        case .file(let action):
+            if action == .open || action == .new {
+                return elsewhere("Proje açma ve yeni proje ana ekrandan yapılır. Önce “Kapat” düğmesine dokunun.")
+            }
+            return nil
+        case .handoff(let target, let tab, _):
+            switch target {
+            case .duplicate:
+                return nil
+            case .export:
+                return elsewhere("Dosya vermek için aşağıdaki “Dosyayı hazırla (.tcad)” düğmesini, sonra Paylaş düğmesini kullanın.")
+            case .importDxf:
+                return windowsOnly("DXF")
+            case .exportSelectedDxf, .exportSelectedA4:
+                return windowsOnly("PDF ve DXF çıktısı")
+            case .textileTools:
+                if tab == 2 { return windowsOnly("Dikiş payı") }
+                if tab == 1 { return windowsOnly("Beden serileme") }
+                if tab == 3 { return windowsOnly("Pastal yerleştirme") }
+                return windowsOnly("Bu araç")
+            case .machineCenter:
+                return windowsOnly("Makine dosyası")
+            case .grainline:
+                return windowsOnly("İplik yönü")
+            case .pieceMetadata:
+                return windowsOnly("Parça bilgileri")
+            case .mirrorCopy:
+                return windowsOnly("Karşı parça")
+            case .groupMove:
+                return windowsOnly("Birden fazla parçayı taşıma")
+            case .layers:
+                return windowsOnly("Katmanlar")
+            case .coordinateDrawing:
+                return elsewhere(noMouseTools)
+            case .about, .designRequest, .recoveryScan:
+                return windowsOnly("Bu ayar")
+            }
+        default:
+            return nil
         }
     }
 
@@ -165,8 +247,8 @@ enum CommandPlanner {
     }
 
     private static func nothingSelected(_ project: DraftProject) -> CommandRefusal {
-        if project.pieces.isEmpty { return CommandParser.noPieces() }
-        let names = project.pieces.prefix(3).map { "\(CommandText.lower($0.name)) seç" }
+        if project.pieces.isEmpty { return noPieces() }
+        let names = project.pieces.prefix(3).map { "\(TurkishText.toLower($0.name)) seç" }
         return CommandRefusal(
             code: "R03",
             message: "Önce bir parça seçin. Parçaya dokunun ya da \(names.first ?? "ön beden seç") yazın.",
@@ -201,10 +283,10 @@ enum CommandPlanner {
 
     /// Indices of the pieces whose name contains the query, ignoring case and Turkish letters.
     static func matches(_ query: String, in project: DraftProject) -> [Int] {
-        let needle = CommandText.fold(query)
+        let needle = TurkishText.fold(query)
         guard !needle.isEmpty else { return [] }
         return project.pieces.enumerated()
-            .filter { CommandText.fold($0.element.name).contains(needle) }
+            .filter { TurkishText.fold($0.element.name).contains(needle) }
             .map { $0.offset }
     }
 
@@ -239,7 +321,7 @@ enum CommandPlanner {
     }
 
     private static func planAdjacent(next: Bool, base: DraftProject, context: CommandContext, note: String?) -> PlanResult {
-        guard !base.pieces.isEmpty else { return .refusal(CommandParser.noPieces()) }
+        guard !base.pieces.isEmpty else { return .refusal(noPieces()) }
         let current = base.pieces.firstIndex(where: { $0.id == context.selectedID })
         let count = base.pieces.count
         let target: Int
@@ -258,7 +340,7 @@ enum CommandPlanner {
 
     // MARK: New pieces
 
-    private static func planRectangle(_ width: Double, _ height: Double, base: DraftProject,
+    private static func planRectangle(_ width: Double, _ height: Double, isSquare: Bool, base: DraftProject,
                                       context: CommandContext, note: String?) -> PlanResult {
         guard base.pieces.count < 250 else {
             return .refusal(CommandRefusal(code: "P03", message: "Parça sınırına ulaşıldı (en çok 250 parça)."))
@@ -273,9 +355,10 @@ enum CommandPlanner {
         var updated = base
         updated.pieces.append(piece)
         guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
-        let size = CommandText.size(width, height)
-        let sentence = "Dikdörtgen çizilecek: \(size). Sol alt köşe: \(n(start)) mm, \(n(start)) mm."
-        return .plan(make(sentence, note, .edit(updated, .piece(piece.id)), "Dikdörtgen eklendi: \(size).", base, context))
+        let size = CommandFormat.size(width, height)
+        let word = isSquare ? "Kare" : "Dikdörtgen"
+        let sentence = "\(word) çizilecek: \(size). Sol alt köşe: \(n(start)) mm, \(n(start)) mm."
+        return .plan(make(sentence, note, .edit(updated, .piece(piece.id)), "\(word) eklendi: \(size).", base, context))
     }
 
     private static func planLine(_ length: Double, vertical: Bool, base: DraftProject,
@@ -292,9 +375,9 @@ enum CommandPlanner {
         updated.pieces.append(piece)
         guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
         let direction = vertical ? "dikey" : "yatay"
-        let sentence = "Çizgi çizilecek: \(CommandText.length(length)), \(direction). Başlangıç: \(n(start)) mm, \(n(start)) mm."
+        let sentence = "Çizgi çizilecek: \(CommandFormat.length(length)), \(direction). Başlangıç: \(n(start)) mm, \(n(start)) mm."
         return .plan(make(sentence, note, .edit(updated, .piece(piece.id)),
-                          "Çizgi eklendi: \(CommandText.length(length)).", base, context))
+                          "Çizgi eklendi: \(CommandFormat.length(length)).", base, context))
     }
 
     // MARK: Moving
@@ -524,5 +607,13 @@ enum CommandPlanner {
                                  note: pending ? "Alanlara yazılıp uygulanmamış değerler silinir." : nil,
                                  effect: .redo, isDestructive: false, notice: "İşlem yeniden uygulandı.",
                                  base: context.document, baseSelection: context.selectedID))
+    }
+}
+
+extension CommandPlanner {
+    /// The refusal for a drawing without any piece.
+    fileprivate static func noPieces() -> CommandRefusal {
+        CommandRefusal(code: "R03", message: "Henüz parça yok. Önce çizin. Örnek: 120 x 80 dikdörtgen",
+                       suggestions: ["120 x 80 dikdörtgen"])
     }
 }

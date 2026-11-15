@@ -5,6 +5,8 @@
       - path: UnitTests
       - path: Tests/Fixtures/mobile-simple.tcad
         buildPhase: resources
+      - path: Tests/Fixtures/command-vectors.json
+        buildPhase: resources
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:
