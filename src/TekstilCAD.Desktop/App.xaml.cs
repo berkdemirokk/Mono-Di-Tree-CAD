@@ -6,6 +6,9 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Every mode (interactive, --verify, recovery probes) needs the Studio.* brushes for App.xaml's DynamicResource styles.
+        // The palette stays Dark here; only the interactive path below applies a saved preference.
+        StudioTheme.RegisterResources(Resources);
         if (e.Args.Length == 2 && (e.Args[0] == "--verify-recovery-child" || e.Args[0] == "--verify-recovery-inspect"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -21,6 +24,7 @@ public partial class App : Application
             return;
         }
         // Interactive runs only: verification modes keep their own failure reporting and data directory.
+        StudioTheme.Use(ThemeSettings.Load());
         CrashReporter.Attach();
         CrashReporter.ShowPendingNotice();
         new MainWindow().Show();

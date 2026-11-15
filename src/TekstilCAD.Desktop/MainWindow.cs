@@ -284,13 +284,13 @@ public class MainWindow : Window
         var commandArea = new WrapPanel { Margin = new Thickness(12, 0, 12, 6) };
         var start = CommandGroup(commandArea, "BAŞLANGIÇ");
         var design = AddButton(start, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "İstek hazırlar; kalıp oluşturmaz.");
-        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.Background;
+        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.OnAccent;
         var files = CommandGroup(commandArea, "PROJE");
         AddButton(files, "Yeni", NewDocument, "Yeni proje · Ctrl+N");
         AddButton(files, "Aç…", Open, "Proje aç · Ctrl+O");
         projectOpenCancel=AddButton(files,"Açmayı iptal et",CancelProjectOpen,"Okuma sonucunu kullanma; mevcut çalışma korunur.");
         projectOpenCancel.Visibility=Visibility.Collapsed;
-        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
+        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.OnAccent;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
         CompactLabel(AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true), "Güvenli kopya…");
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
@@ -1058,8 +1058,8 @@ public class MainWindow : Window
         foreach(var button in toolButtons)
         {
             button.Value.Background = button.Key == tool ? StudioTheme.Accent : StudioTheme.Surface;
-            button.Value.Foreground = button.Key == tool ? StudioTheme.Background : StudioTheme.Text;
-            button.Value.BorderBrush = button.Key == tool ? StudioTheme.Accent : StudioTheme.Border;
+            button.Value.Foreground = button.Key == tool ? StudioTheme.OnAccent : StudioTheme.Text;
+            button.Value.BorderBrush = button.Key == tool ? StudioTheme.Accent : StudioTheme.BorderStrong;
         }
         canvasTool.Text = "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
         SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool));
@@ -2084,7 +2084,7 @@ public class MainWindow : Window
         var cancel = AddButton(buttons, "Vazgeç", () => prompt.DialogResult = false); cancel.IsCancel = true;
         AddButton(buttons, "Kaydetmeden devam et", () => prompt.DialogResult = true);
         var save = AddButton(buttons, "Kaydet", () => { Save(); if (!HasUnsavedDocumentWork) { onSaved();prompt.DialogResult = true; } }, projectSaveAction:true);
-        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.Background; save.IsDefault = true;
+        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.OnAccent; save.IsDefault = true;
         return prompt;
     }
     private void Open()
