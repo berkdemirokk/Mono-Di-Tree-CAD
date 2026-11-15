@@ -237,6 +237,11 @@ public class MainWindow : Window
         titleRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         titleRow.Children.Add(projectTitle);
         saveState.FontSize = 11; saveState.Margin = new Thickness(14, 0, 0, 1); saveState.VerticalAlignment = VerticalAlignment.Bottom;
+        // "✓ Kaydedildi · <file name>" has no length limit. The state may take at most 60% of the row and is
+        // trimmed beyond that (the tooltip and the window title keep the full path), so a long file name
+        // cannot squeeze the project title away. The unsaved-work texts are far shorter than that share.
+        saveState.TextTrimming = TextTrimming.CharacterEllipsis; saveState.TextWrapping = TextWrapping.NoWrap;
+        project.SizeChanged += (_, e) => saveState.MaxWidth = Math.Max(160, e.NewSize.Width * .6);
         Grid.SetColumn(saveState, 1); titleRow.Children.Add(saveState);
         project.Children.Add(titleRow);
         // This format does not retain import provenance. Keep the limitation visible
@@ -717,8 +722,10 @@ public class MainWindow : Window
         var commands=new StackPanel { Margin=new Thickness(4),MaxWidth=300 };
         var scroll=new ScrollViewer { Content=commands,MaxHeight=210,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(scroll,title+" işlemleri");
-        // Bottom alignment puts the collapsed header on the same line as the command buttons beside it.
-        var expander=new Expander { Header=title,Content=scroll,Margin=new Thickness(3,3,3,8),Foreground=StudioTheme.Text,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Bottom };
+        // The top margin puts the collapsed header on the line of the command buttons beside it (group caption
+        // plus button margin). Top alignment keeps it there when the other group opens and the row grows;
+        // bottom alignment would drop the still-collapsed header to the bottom of that taller row.
+        var expander=new Expander { Header=title,Content=scroll,Margin=new Thickness(3,22,3,8),Foreground=StudioTheme.Text,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top };
         AutomationProperties.SetName(expander,title);
         AutomationProperties.SetHelpText(expander,"İşlemleri göstermek veya gizlemek için açın.");
         parent.Children.Add(expander);
