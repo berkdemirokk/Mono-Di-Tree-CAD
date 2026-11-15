@@ -52,7 +52,7 @@ public sealed class PieceResizeTests
 
         var offset = new PatternPiece { Name = "Kaymış", Points = [new(10, 10), new(110, 10), new(60, 60)] };
         var second = Run(Doc(offset), d => PieceOperations.Resize(d, offset.Id, 50, 25));
-        Assert.Equal(Pts((10, 10), (60, 10), (35, 22.5)), second.Piece!.Points);
+        Assert.Equal(Pts((10, 10), (60, 10), (35, 35)), second.Piece!.Points);
     }
 
     [Fact]
