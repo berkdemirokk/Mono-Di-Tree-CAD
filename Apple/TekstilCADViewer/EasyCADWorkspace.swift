@@ -86,6 +86,7 @@ struct EasyCADWorkspace: View {
         if id == selectedID { return true }
         if hasPendingDetails && !saveDetails() { return false }
         select(document.pieces.first { $0.id == id })
+        if id != nil { Haptics.selection() }
         return true
     }
 
@@ -697,7 +698,44 @@ struct EasyCADWorkspace: View {
             problem = "Sürükleme çalışma alanını aşıyor."
             return
         }
-        if dx != 0 || dy != 0 { move(dx: dx, dy: dy) }
+        if dx != 0 || dy != 0 {
+            move(dx: dx, dy: dy)
+            Haptics.drop()
+        }
+    }
+
+    /// A small white tag with the measurement, kept fully inside the drawing area.
+    private func drawLabel(_ text: String, center: CGPoint, in context: inout GraphicsContext, size: CGSize) {
+        let resolved = context.resolve(Text(text).font(.caption2.weight(.semibold)).foregroundColor(AppTheme.accent))
+        let box = resolved.measure(in: CGSize(width: 160, height: 40))
+        let w = box.width + 10, h = box.height + 4
+        guard size.width > w + 4, size.height > h + 4 else { return }
+        let cx = min(max(center.x, w / 2 + 2), size.width - w / 2 - 2)
+        let cy = min(max(center.y, h / 2 + 2), size.height - h / 2 - 2)
+        let tag = Path(roundedRect: CGRect(x: cx - w / 2, y: cy - h / 2, width: w, height: h), cornerRadius: 6)
+        context.fill(tag, with: .color(AppTheme.card.opacity(0.92)))
+        context.stroke(tag, with: .color(AppTheme.accent.opacity(0.35)), lineWidth: 1)
+        context.draw(resolved, at: CGPoint(x: cx, y: cy), anchor: .center)
+    }
+
+    /// Width and height (or length) of the selected piece, written next to it in millimetres.
+    private func drawMeasurements(of piece: DraftPiece, mapper: DraftCanvasMap,
+                                  in context: inout GraphicsContext, size: CGSize) {
+        guard size.height >= 150, piece.points.count >= 2 else { return }
+        let delta = piece.id == draggedPieceID ? currentDrag : .zero
+        let a = mapper.screen(DraftPoint(x: piece.minX, y: piece.minY))
+        let b = mapper.screen(DraftPoint(x: piece.maxX, y: piece.maxY))
+        let left = min(a.x, b.x) + delta.width, right = max(a.x, b.x) + delta.width
+        let top = min(a.y, b.y) + delta.height, bottom = max(a.y, b.y) + delta.height
+        if piece.closed {
+            drawLabel("\(DraftPiece.display(piece.maxX - piece.minX)) mm",
+                      center: CGPoint(x: (left + right) / 2, y: bottom + 12), in: &context, size: size)
+            drawLabel("\(DraftPiece.display(piece.maxY - piece.minY)) mm",
+                      center: CGPoint(x: right + 28, y: (top + bottom) / 2), in: &context, size: size)
+        } else {
+            drawLabel("\(DraftPiece.display(piece.lineLength)) mm",
+                      center: CGPoint(x: (left + right) / 2, y: bottom + 12), in: &context, size: size)
+        }
     }
 
     private var preview: some View {
@@ -718,6 +756,9 @@ struct EasyCADWorkspace: View {
                     context.stroke(path,
                         with: .color(piece.id == selectedID ? .accentColor : .secondary),
                         lineWidth: piece.id == selectedID ? 3 : 1.8)
+                }
+                if let selected = document.pieces.first(where: { $0.id == selectedID }) {
+                    drawMeasurements(of: selected, mapper: mapper, in: &context, size: size)
                 }
             }
             .contentShape(Rectangle())

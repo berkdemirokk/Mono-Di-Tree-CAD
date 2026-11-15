@@ -1,4 +1,22 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Light touch feedback so a finger knows a piece was picked up or put down. No-op off iOS.
+enum Haptics {
+    static func selection() {
+        #if canImport(UIKit) && !os(macOS)
+        UISelectionFeedbackGenerator().selectionChanged()
+        #endif
+    }
+
+    static func drop() {
+        #if canImport(UIKit) && !os(macOS)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+    }
+}
 
 /// One light, calm look for the whole app: a pale page, white cards, a single blue accent and
 /// large rounded buttons. The colours are fixed (not system-dependent) so the contrast that was
