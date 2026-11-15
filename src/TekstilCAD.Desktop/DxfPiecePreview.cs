@@ -71,10 +71,10 @@ internal sealed class DxfPiecePreview : FrameworkElement
     }
     protected override void OnRender(DrawingContext dc)
     {
-        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Raised,null,new Rect(RenderSize));
+        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Raised),null,new Rect(RenderSize));
         if(points.Length==0)
         {
-            var text=new FormattedText(emptyMessage,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),11,StudioTheme.Muted,VisualTreeHelper.GetDpi(this).PixelsPerDip) { MaxTextWidth=Math.Max(1,ActualWidth-16) };
+            var text=new FormattedText(emptyMessage,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),11,StudioTheme.Paint(StudioTheme.Muted),VisualTreeHelper.GetDpi(this).PixelsPerDip) { MaxTextWidth=Math.Max(1,ActualWidth-16) };
             dc.DrawText(text,new Point(8,8));return;
         }
         if(ActualWidth<24 || ActualHeight<24)return;
@@ -89,14 +89,14 @@ internal sealed class DxfPiecePreview : FrameworkElement
             for(var i=1;i<points.Length;i++)context.LineTo(Map(points[i]),true,false);
         }
         path.Freeze();
-        var pen=new Pen(StudioTheme.PreviewSource,1.8) { DashStyle=closed?DashStyles.Solid:DashStyles.Dash };
+        var pen=new Pen(StudioTheme.Paint(StudioTheme.PreviewSource),1.8) { DashStyle=closed?DashStyles.Solid:DashStyles.Dash };
         dc.DrawGeometry(null,pen,path);
-        if(selectedVertex is int selected && selected<points.Length)dc.DrawEllipse(null,new Pen(StudioTheme.PreviewMarker,2),Map(points[selected]),6,6);
+        if(selectedVertex is int selected && selected<points.Length)dc.DrawEllipse(null,new Pen(StudioTheme.Paint(StudioTheme.PreviewMarker),2),Map(points[selected]),6,6);
         if(!closed)
         {
             var start=Map(points[0]);var end=Map(points[^1]);
             var triangle=new StreamGeometry();using(var context=triangle.Open()) { context.BeginFigure(new Point(start.X,start.Y-5),true,true);context.LineTo(new Point(start.X-5,start.Y+4),true,false);context.LineTo(new Point(start.X+5,start.Y+4),true,false); }
-            triangle.Freeze();dc.DrawGeometry(StudioTheme.PreviewSource,null,triangle);dc.DrawEllipse(null,new Pen(StudioTheme.PreviewSource,1.5),end,5,5);
+            triangle.Freeze();dc.DrawGeometry(StudioTheme.Paint(StudioTheme.PreviewSource),null,triangle);dc.DrawEllipse(null,new Pen(StudioTheme.Paint(StudioTheme.PreviewSource),1.5),end,5,5);
         }
     }
 }

@@ -163,7 +163,7 @@ internal sealed class GrainlineEditorWindow : Window
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);var width=ActualWidth;var height=ActualHeight;if(width<=0 || height<=0)return;
-            dc.DrawRectangle(StudioTheme.Raised,null,new Rect(0,0,width,height));
+            dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Raised),null,new Rect(0,0,width,height));
             var all=line is null ? points : points.Concat([line.Start,line.End]).ToArray();
             if(all.Length==0 || all.Any(p=>!p.IsFinite))return;
             var minX=all.Min(p=>p.X);var maxX=all.Max(p=>p.X);var minY=all.Min(p=>p.Y);var maxY=all.Max(p=>p.Y);
@@ -175,12 +175,12 @@ internal sealed class GrainlineEditorWindow : Window
             {
                 var shape=new StreamGeometry();using(var ctx=shape.Open())
                 { ctx.BeginFigure(Screen(points[0]),false,closed);for(var i=1;i<points.Length;i++)ctx.LineTo(Screen(points[i]),true,false); }
-                shape.Freeze();dc.DrawGeometry(null,new Pen(StudioTheme.Muted,1.5),shape);
+                shape.Freeze();dc.DrawGeometry(null,new Pen(StudioTheme.Paint(StudioTheme.Muted),1.5),shape);
             }
             if(line is not null)
             {
-                var a=Screen(line.Start);var b=Screen(line.End);dc.DrawLine(new Pen(StudioTheme.Accent,2.5),a,b);
-                dc.DrawEllipse(StudioTheme.Accent,null,a,3,3);dc.DrawEllipse(StudioTheme.Warning,null,b,3,3);
+                var a=Screen(line.Start);var b=Screen(line.End);dc.DrawLine(new Pen(StudioTheme.Paint(StudioTheme.Accent),2.5),a,b);
+                dc.DrawEllipse(StudioTheme.Paint(StudioTheme.Accent),null,a,3,3);dc.DrawEllipse(StudioTheme.Paint(StudioTheme.Warning),null,b,3,3);
             }
         }
     }

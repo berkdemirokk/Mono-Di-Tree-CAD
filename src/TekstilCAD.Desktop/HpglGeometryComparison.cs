@@ -39,7 +39,7 @@ internal sealed class HpglGeometryComparison : FrameworkElement
     internal void Clear() { geometry=null;examples=[];normalized=[];focusedIndex=null;ZoomFactorForVerification=1;LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];InvalidateVisual(); }
     protected override void OnRender(DrawingContext dc)
     {
-        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Raised,null,new Rect(RenderSize));
+        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Raised),null,new Rect(RenderSize));
         if(geometry is null || geometry.Points.Count==0 || ActualWidth<24 || ActualHeight<24)return;
         var points=geometry.Points;var units=geometry.UnitsPerMillimeter;
         LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];LastLocalScaleForVerification=0;
@@ -76,7 +76,7 @@ internal sealed class HpglGeometryComparison : FrameworkElement
             LastLocalSourceForVerification=displayIndices.Select(i=>Map(points[i].SourceX,points[i].SourceY)).ToArray();
             LastLocalPlotForVerification=displayIndices.Select(i=>Map(points[i].PlotX/units,points[i].PlotY/units)).ToArray();
         }
-        var sourcePen=new Pen(StudioTheme.PreviewSource,1.7) { DashStyle=DashStyles.Dash };var plotPen=new Pen(StudioTheme.PreviewPlot,1.7);
+        var sourcePen=new Pen(StudioTheme.Paint(StudioTheme.PreviewSource),1.7) { DashStyle=DashStyles.Dash };var plotPen=new Pen(StudioTheme.Paint(StudioTheme.PreviewPlot),1.7);
         void DrawPath(bool source,Pen pen)
         {
             var path=new StreamGeometry();using(var context=path.Open())
@@ -91,8 +91,8 @@ internal sealed class HpglGeometryComparison : FrameworkElement
         {
             var p=points[i];var a=Map(p.SourceX,p.SourceY);var b=Map(p.PlotX/units,p.PlotY/units);
             var triangle=new StreamGeometry();using(var ctx=triangle.Open()) { ctx.BeginFigure(new Point(a.X,a.Y-5),true,true);ctx.LineTo(new Point(a.X-5,a.Y+4),true,false);ctx.LineTo(new Point(a.X+5,a.Y+4),true,false); }
-            triangle.Freeze();dc.DrawGeometry(StudioTheme.PreviewSource,null,triangle);dc.DrawEllipse(null,new Pen(StudioTheme.PreviewPlot,1.5),b,5,5);
-            var label=new FormattedText((i+1).ToString(CultureInfo.InvariantCulture),CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),9,StudioTheme.PreviewLabel,VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            triangle.Freeze();dc.DrawGeometry(StudioTheme.Paint(StudioTheme.PreviewSource),null,triangle);dc.DrawEllipse(null,new Pen(StudioTheme.Paint(StudioTheme.PreviewPlot),1.5),b,5,5);
+            var label=new FormattedText((i+1).ToString(CultureInfo.InvariantCulture),CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),9,StudioTheme.Paint(StudioTheme.PreviewLabel),VisualTreeHelper.GetDpi(this).PixelsPerDip);
             dc.DrawText(label,new Point(b.X+5,b.Y-9));
         }
     }

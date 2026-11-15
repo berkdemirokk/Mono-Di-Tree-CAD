@@ -32,7 +32,7 @@ internal static class ThemeVerification
         Text("Text", "Background", "Surface", "Raised", "HoverFill", "PressedFill", "AccentSoft", "Selection", "TextSelection", "SuccessSoft", "WarningSoft", "DangerSoft", "RowAlt", "Input");
         Text("Muted", "Background", "Surface", "Raised", "Input", "AccentSoft", "Canvas", "Selection", "HoverFill", "PressedFill", "RowAlt");
         Text("Placeholder", "Input", "Surface");
-        Text("Accent", "Background", "Surface", "Raised", "AccentSoft", "Input", "Canvas");
+        Text("Accent", "Background", "Surface", "Raised", "AccentSoft", "Input", "Canvas", "HoverFill", "PressedFill", "Selection");
         Text("OnAccent", "Accent", "AccentHover", "AccentPressed", "Danger");
         Text("OnPrimary", "PrimaryFill");
         Text("Success", "Surface", "Background", "SuccessSoft");

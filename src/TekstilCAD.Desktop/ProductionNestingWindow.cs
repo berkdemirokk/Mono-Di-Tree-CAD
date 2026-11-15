@@ -176,7 +176,7 @@ internal sealed class ProductionNestingWindow : Window
         choiceBorder.SetValue(Border.BorderBrushProperty,Brushes.Transparent);choiceBorder.SetValue(Border.BorderThicknessProperty,new Thickness(2));choiceBorder.SetValue(Border.CornerRadiusProperty,new CornerRadius(4));choiceBorder.AppendChild(itemPanel);
         var choiceTemplate=new DataTemplate { VisualTree=choiceBorder };
         var navigatedTrigger=new DataTrigger { Binding=new Binding(nameof(ChoiceItem.IsNavigationTarget)),Value=true };
-        navigatedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty,StudioTheme.Accent,"ErrorNavigationBorder"));choiceTemplate.Triggers.Add(navigatedTrigger);
+        navigatedTrigger.Setters.Add(new Setter { Property=Border.BorderBrushProperty,Value=new DynamicResourceExtension("Studio.Accent"),TargetName="ErrorNavigationBorder" });choiceTemplate.Triggers.Add(navigatedTrigger);
         choices.ItemTemplate=choiceTemplate;
         choices.ItemsSource=choiceItems;
         var choicePanel=new DockPanel();panel.Children.Add(choicePanel);
@@ -280,10 +280,10 @@ internal sealed class ProductionNestingWindow : Window
         chrome.AppendChild(presenter);
         var itemTemplate=new ControlTemplate(typeof(ListBoxItem)) { VisualTree=chrome };
         var focused=new Trigger { Property=UIElement.IsKeyboardFocusedProperty,Value=true };
-        focused.Setters.Add(new Setter(Border.BorderBrushProperty,StudioTheme.Accent,"Chrome"));
+        focused.Setters.Add(new Setter { Property=Border.BorderBrushProperty,Value=new DynamicResourceExtension("Studio.Accent"),TargetName="Chrome" });
         itemTemplate.Triggers.Add(focused);
         var hover=new Trigger { Property=UIElement.IsMouseOverProperty,Value=true };
-        hover.Setters.Add(new Setter(Border.BackgroundProperty,StudioTheme.Raised,"Chrome"));
+        hover.Setters.Add(new Setter { Property=Border.BackgroundProperty,Value=new DynamicResourceExtension("Studio.Raised"),TargetName="Chrome" });
         itemTemplate.Triggers.Add(hover);
         var baseStyle=TryFindResource(typeof(ListBoxItem)) as Style;
         var itemStyle=new Style(typeof(ListBoxItem),baseStyle);
@@ -803,29 +803,29 @@ internal sealed class ProductionNestingWindow : Window
         }
         protected override void OnRender(DrawingContext dc)
         {
-            base.OnRender(dc);dc.DrawRectangle(StudioTheme.Background,null,new Rect(RenderSize));
+            base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Background),null,new Rect(RenderSize));
             if(drawing is null||drawing.Pieces.Count==0||ActualWidth<=24||ActualHeight<=24)return;
             if(geometry is null)return;
             if(fabricWidth<=0||usedLength<=0)return;
             var scale=Math.Min((ActualWidth-24)/fabricWidth,(ActualHeight-24)/usedLength);
-            dc.DrawRectangle(Brushes.Transparent,new Pen(StudioTheme.PreviewFrame,1),new Rect(12,12,fabricWidth*scale,usedLength*scale));
+            dc.DrawRectangle(Brushes.Transparent,new Pen(StudioTheme.Paint(StudioTheme.PreviewFrame),1),new Rect(12,12,fabricWidth*scale,usedLength*scale));
             // Cache model-space contours once per result; only the scale changes on resize.
             // Compensate the stroke width for the transform so it remains one screen unit.
             dc.PushTransform(new MatrixTransform(new Matrix(scale,0,0,scale,12,12)));
             if(edgeMargin>0 && fabricWidth>2*edgeMargin && usedLength>2*edgeMargin)
             {
-                var guidePen=new Pen(StudioTheme.PreviewGuide,1/scale) { DashStyle=DashStyles.Dash };
+                var guidePen=new Pen(StudioTheme.Paint(StudioTheme.PreviewGuide),1/scale) { DashStyle=DashStyles.Dash };
                 dc.DrawRectangle(null,guidePen,new Rect(edgeMargin,edgeMargin,fabricWidth-2*edgeMargin,usedLength-2*edgeMargin));
             }
-            dc.DrawGeometry(null,new Pen(StudioTheme.PreviewPiece,1/scale),geometry);
+            dc.DrawGeometry(null,new Pen(StudioTheme.Paint(StudioTheme.PreviewPiece),1/scale),geometry);
             var selected=drawing.Pieces.FirstOrDefault(p=>p.Id==highlightId);
             if(selected is { Points.Count: >1 })
             {
                 var selectedGeometry=new StreamGeometry();
                 using(var context=selectedGeometry.Open()) { context.BeginFigure(new Point(selected.Points[0].X,selected.Points[0].Y),false,selected.Closed); context.PolyLineTo(selected.Points.Skip(1).Select(p=>new Point(p.X,p.Y)).ToArray(),true,false); }
-                selectedGeometry.Freeze(); var selectedPen=new Pen(StudioTheme.PreviewPlot,3/scale) { DashStyle=DashStyles.Dash }; dc.DrawGeometry(null,selectedPen,selectedGeometry);
+                selectedGeometry.Freeze(); var selectedPen=new Pen(StudioTheme.Paint(StudioTheme.PreviewPlot),3/scale) { DashStyle=DashStyles.Dash }; dc.DrawGeometry(null,selectedPen,selectedGeometry);
             }
-            var markerPen=new Pen(StudioTheme.PreviewRing,2/scale);
+            var markerPen=new Pen(StudioTheme.Paint(StudioTheme.PreviewRing),2/scale);
             foreach(var mark in markers)dc.DrawEllipse(null,markerPen,mark,5/scale,5/scale);
             dc.Pop();
         }

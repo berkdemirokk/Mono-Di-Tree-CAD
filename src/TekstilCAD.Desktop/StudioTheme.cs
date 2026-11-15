@@ -27,7 +27,7 @@ public static class StudioTheme
         ("Surface", "#16222F", "#FFFFFF"),
         ("Raised", "#1D2C3C", "#E9EEF3"),
         ("Border", "#304254", "#D3DBE3"),
-        ("Accent", "#49D8BB", "#0F766E"),
+        ("Accent", "#49D8BB", "#0B645C"),
         ("Text", "#EDF4FA", "#16222E"),
         ("Muted", "#9BADBE", "#4D5D6E"),
         ("Warning", "#F5C377", "#85470A"),
@@ -60,7 +60,7 @@ public static class StudioTheme
         ("SuccessSoft", "#15332A", "#E1F5E7"),
         ("WarningSoft", "#3A3022", "#FFF1CF"),
         ("DangerSoft", "#3C2327", "#FDE7E4"),
-        ("Focus", "#49D8BB", "#0F766E"),
+        ("Focus", "#49D8BB", "#0B645C"),
         // Drawing canvas (dark values are the literals CadCanvas used to contain (=)).
         ("Canvas", "#0D1827", "#FAFBFC"),
         ("CanvasGrid", "#203047", "#E3E8EE"),
@@ -183,6 +183,19 @@ public static class StudioTheme
         throw new ArgumentException("Unknown theme token: " + token, nameof(token));
     }
 
+    /// <summary>
+    /// A frozen copy of a token's current colour for drawing code (<c>OnRender</c>). Retained drawings are frozen by
+    /// <c>VisualTreeHelper.GetDrawing</c>, which would freeze a shared token brush and end live switching, so drawing code
+    /// never hands the token itself to a <c>DrawingContext</c>; <see cref="Use"/> repaints every open window instead.
+    /// </summary>
+    public static Brush Paint(Brush token)
+    {
+        if (token is not SolidColorBrush solid) return token;
+        var copy = new SolidColorBrush(solid.Color);
+        copy.Freeze();
+        return copy;
+    }
+
     /// <summary>True when every token brush currently holds the value of a palette.</summary>
     internal static bool PaletteMatches(ThemeKind kind) => Table.All(row => Shared[row.Name].Color == ParseColor(kind == ThemeKind.Dark ? row.Dark : row.Light));
 
@@ -194,6 +207,9 @@ public static class StudioTheme
     {
         foreach (var row in Table) Shared[row.Name].Color = ParseColor(kind == ThemeKind.Dark ? row.Dark : row.Light);
         Current = kind;
+        // Windows repaint their controls through the shared brushes; custom drawing (OnRender) uses frozen copies and must be redrawn.
+        if (Application.Current is { } application)
+            foreach (Window window in application.Windows) Redraw(window);
         Changed?.Invoke();
     }
 
@@ -202,6 +218,12 @@ public static class StudioTheme
     {
         ArgumentNullException.ThrowIfNull(resources);
         foreach (var row in Table) resources["Studio." + row.Name] = Shared[row.Name];
+    }
+
+    private static void Redraw(DependencyObject element)
+    {
+        if (element is UIElement ui) ui.InvalidateVisual();
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++) Redraw(VisualTreeHelper.GetChild(element, i));
     }
 
     private static Dictionary<string, SolidColorBrush> CreateBrushes()

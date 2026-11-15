@@ -48,21 +48,21 @@ internal sealed class DxfGrainlineOverlayPreview : FrameworkElement
     }
     protected override void OnRender(DrawingContext dc)
     {
-        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Raised,null,new Rect(RenderSize));
+        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Paint(StudioTheme.Raised),null,new Rect(RenderSize));
         if(contour.Length==0 || marker.Length==0)
         {
             if(ActualWidth<20 || ActualHeight<20)return;
-            var text=new FormattedText(message,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),11,StudioTheme.Muted,VisualTreeHelper.GetDpi(this).PixelsPerDip) { MaxTextWidth=Math.Max(1,ActualWidth-16) };
+            var text=new FormattedText(message,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),11,StudioTheme.Paint(StudioTheme.Muted),VisualTreeHelper.GetDpi(this).PixelsPerDip) { MaxTextWidth=Math.Max(1,ActualWidth-16) };
             dc.DrawText(text,new Point(8,8));return;
         }
         if(ActualWidth<20 || ActualHeight<20)return;
         var all=contour.Concat(marker);double minX=all.Min(p=>p.X),maxX=all.Max(p=>p.X),minY=all.Min(p=>p.Y),maxY=all.Max(p=>p.Y);
         double scale=Math.Min((ActualWidth-20)/Math.Max(maxX-minX,1e-12),(ActualHeight-20)/Math.Max(maxY-minY,1e-12));
         Point Map(Point2 p)=>new(10+(p.X-minX)*scale,10+(p.Y-minY)*scale);
-        var outline=new Pen(StudioTheme.PreviewOutline,1.5);var line=new Pen(StudioTheme.PreviewLine,3);
+        var outline=new Pen(StudioTheme.Paint(StudioTheme.PreviewOutline),1.5);var line=new Pen(StudioTheme.Paint(StudioTheme.PreviewLine),3);
         for(int i=0;i<contour.Length-1;i++)dc.DrawLine(outline,Map(contour[i]),Map(contour[i+1]));
         if(contour[^1]!=contour[0])dc.DrawLine(outline,Map(contour[^1]),Map(contour[0]));
         dc.DrawLine(line,Map(marker[0]),Map(marker[1]));
-        dc.DrawEllipse(StudioTheme.PreviewStart,null,Map(marker[0]),4,4);dc.DrawEllipse(StudioTheme.PreviewEnd,null,Map(marker[1]),4,4);
+        dc.DrawEllipse(StudioTheme.Paint(StudioTheme.PreviewStart),null,Map(marker[0]),4,4);dc.DrawEllipse(StudioTheme.Paint(StudioTheme.PreviewEnd),null,Map(marker[1]),4,4);
     }
 }
