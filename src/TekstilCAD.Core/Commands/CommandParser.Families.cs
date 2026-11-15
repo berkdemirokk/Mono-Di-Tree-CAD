@@ -113,6 +113,8 @@ public static partial class CommandParser
             if (m.Unit is not null) { shared = m.Unit; anyExplicit = true; }
         }
 
+        if (!anyExplicit && list.Any(m => !m.Compound)) s.UnitAssumed = true;
+
         if (!rules.AllowZero && list.Any(m => !m.Compound && m.Value == 0))
             return (null, ParseResult.Refused(Refusals.OutOfRangeMeasure()));
 

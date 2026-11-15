@@ -9,7 +9,7 @@ public static partial class CommandParser
     private static readonly HashSet<string> FillerWords = Set("lutfen", "sunu", "bunu", "su", "bu", "hemen", "bana");
 
     /// <summary>Optional verbs that may end a command and carry no meaning on their own.</summary>
-    private static readonly HashSet<string> TrailingVerbs = Set("ciz", "cek", "yap", "et", "ver", "olsun");
+    private static readonly HashSet<string> TrailingVerbs = Set("ciz", "cek", "yap", "et", "ver", "olsun", "getir");
 
     // ---- Directions ------------------------------------------------------------------------------------------------
 
@@ -23,13 +23,13 @@ public static partial class CommandParser
 
     // ---- Family vocabulary -----------------------------------------------------------------------------------------
 
-    private static readonly HashSet<string> RectWords = Set("dikdortgen", "kutu");
-    private static readonly HashSet<string> SquareWords = Set("kare");
-    private static readonly HashSet<string> LineWords = Set("cizgi");
+    private static readonly HashSet<string> RectWords = Set("dikdortgen", "dikdortgeni", "kutu", "kutuyu");
+    private static readonly HashSet<string> SquareWords = Set("kare", "kareyi");
+    private static readonly HashSet<string> LineWords = Set("cizgi", "cizgiyi");
     private static readonly HashSet<string> OrientationWords = Set("yatay", "dikey");
 
-    private static readonly HashSet<string> WidthLabels = Set("en", "eni", "genislik", "genisligi");
-    private static readonly HashSet<string> HeightLabels = Set("boy", "boyu", "yukseklik", "yuksekligi");
+    private static readonly HashSet<string> WidthLabels = Set("en", "eni", "enini", "genislik", "genisligi", "genisligini");
+    private static readonly HashSet<string> HeightLabels = Set("boy", "boyu", "boyunu", "yukseklik", "yuksekligi", "yuksekligini");
     private static readonly HashSet<string> BothLabels = Set("olcu", "olcusu", "olcusunu", "olcuyu", "boyut", "boyutu", "boyutunu");
 
     private static readonly HashSet<string> MoveVerbs = Set("tasi", "kaydir");
@@ -58,7 +58,7 @@ public static partial class CommandParser
 
     // ---- Words every family accepts as glue -------------------------------------------------------------------------
 
-    private static readonly HashSet<string> GlueWords = Set("ve", "carpi", "x", "ciz", "cek", "yap", "et", "ver", "olsun", "ayarla", "degistir");
+    private static readonly HashSet<string> GlueWords = Set("ve", "carpi", "x", "ciz", "cek", "yap", "et", "ver", "olsun", "ayarla", "degistir", "getir");
 
     // ---- Words per family: anything else left over is refused, never ignored ----------------------------------------------
 
@@ -180,6 +180,7 @@ public static partial class CommandParser
             Add(new ViewCommand(ViewAction.PanUp), $"{noun} yukari kaydir", $"{noun} yukariya kaydir");
             Add(new ViewCommand(ViewAction.PanDown), $"{noun} asagi kaydir", $"{noun} asagiya kaydir");
         }
+        Add(new ViewCommand(ViewAction.AllTools), "tum araclar", "araclar", "tum aletler");
         Add(new ViewCommand(ViewAction.DetailedView), "ayrintili gorunum", "uzman gorunumu", "tum dugmeler", "ayrintili gorunume gec", "uzman gorunum");
         Add(new ViewCommand(ViewAction.TextLarger), "yaziyi buyut");
         Add(new ViewCommand(ViewAction.TextSmaller), "yaziyi kucult");

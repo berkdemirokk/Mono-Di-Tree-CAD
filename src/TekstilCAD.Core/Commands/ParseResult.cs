@@ -36,12 +36,34 @@ public sealed record Refusal(string Code, string Message, IReadOnlyList<RefusalB
 /// <summary>Result of <see cref="CommandParser.Parse"/>. Exactly one of <see cref="Command"/> and <see cref="Notice"/> is set.</summary>
 public sealed class ParseResult
 {
-    private ParseResult(ParseKind kind, Command? command, Refusal? notice)
+    private ParseResult(ParseKind kind, Command? command, Refusal? notice, bool unitAssumed = false, bool incomplete = false)
     {
         Kind = kind;
         Command = command;
         Notice = notice;
+        UnitAssumed = unitAssumed;
+        IsIncomplete = incomplete;
     }
+
+    /// <summary>
+    /// True when the command carries a length and the text wrote no unit anywhere, so millimetres were assumed
+    /// (a tailor may have meant centimetres). The planner shows "Birim yazmadınız; milimetre sayıldı." and offers a cm chip.
+    /// </summary>
+    public bool UnitAssumed { get; }
+
+    /// <summary>The unit that was assumed: <see cref="LengthUnit.Millimeter"/> when <see cref="UnitAssumed"/>, otherwise null.</summary>
+    public LengthUnit? AssumedUnit => UnitAssumed ? LengthUnit.Millimeter : null;
+
+    /// <summary>
+    /// True for a refusal whose text could still grow into a valid command (for example "120 x", "dikdört", "dikdörtgen 120").
+    /// The kind and code stay those of the refusal that applies if the user presses Enter now; a command box stays quiet
+    /// while this is true and shows <see cref="Notice"/> only on Enter. Always false for commands and questions.
+    /// </summary>
+    public bool IsIncomplete { get; }
+
+    internal ParseResult WithUnitAssumed() => IsCommand && !UnitAssumed ? new(Kind, Command, Notice, true, IsIncomplete) : this;
+
+    internal ParseResult AsIncomplete() => Kind == ParseKind.Refusal && !IsIncomplete ? new(Kind, Command, Notice, UnitAssumed, true) : this;
 
     public ParseKind Kind { get; }
 

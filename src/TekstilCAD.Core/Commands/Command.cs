@@ -61,7 +61,7 @@ public enum ViewAction
 {
     FitAll, FitSelected, ZoomIn, ZoomOut,
     PanLeft, PanRight, PanUp, PanDown,
-    DetailedView, TextLarger, TextSmaller, ThemeDark, ThemeLight,
+    DetailedView, AllTools, TextLarger, TextSmaller, ThemeDark, ThemeLight,
 }
 
 /// <summary>"tümünü göster", "yakınlaştır", "görünümü sola kaydır", "ayrıntılı görünüm", "koyu tema" (C27-C31, C63, C66). Never changes the project.</summary>

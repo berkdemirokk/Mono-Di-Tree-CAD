@@ -29,7 +29,9 @@ public static partial class CommandParser
     {
         try
         {
-            return ParseCore(text ?? string.Empty, context ?? ParserContext.Empty);
+            var ctx = context ?? ParserContext.Empty;
+            var result = ParseCore(text ?? string.Empty, ctx);
+            return CouldGrowIntoCommand(result, text ?? string.Empty, ctx) ? result.AsIncomplete() : result;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -47,6 +49,7 @@ public static partial class CommandParser
         public required IReadOnlyList<string> Names;
         public List<Tok> Raw = new();
         public List<Tok> Items = new();
+        public bool UnitAssumed;
     }
 
     private static ParseResult ParseCore(string text, ParserContext context)
@@ -78,7 +81,9 @@ public static partial class CommandParser
 
         // 5. Everything else is built from numbers, units, directions and keywords.
         state.Items = BuildItems(state.Raw);
-        return Classify(state);
+        if (TryMultiPhrase(state)) return ParseResult.Refused(Refusals.TwoJobsRefusal());
+        var classified = Classify(state);
+        return state.UnitAssumed ? classified.WithUnitAssumed() : classified;
     }
 
     // ================================================================================================================
@@ -368,7 +373,7 @@ public static partial class CommandParser
         if (strong.Count == 0 && hasOrientation && numbers >= 1) strong.Add(Fam.Draw);
 
         if (strong.Count == 0 && numbers == 2
-            && words.Any(w => w == "yap" || w == "olsun" || w == "ayarla" || w == "degistir")
+            && words.Any(w => w == "yap" || w == "olsun" || w == "ayarla" || w == "degistir" || w == "getir")
             && !s.Items.Any(t => t.Kind == TokKind.Junk))
             strong.Add(Fam.Resize);
 
