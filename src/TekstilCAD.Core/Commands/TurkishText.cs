@@ -85,9 +85,20 @@ public static class TurkishText
         var composed = Compose(text);
         var sb = new StringBuilder(composed.Length);
         var pendingSpace = false;
-        foreach (var raw in composed)
+        for (var index = 0; index < composed.Length; index++)
         {
-            var c = raw;
+            var c = composed[index];
+            if (char.IsSurrogate(c))
+            {
+                if (char.IsHighSurrogate(c) && index + 1 < composed.Length && char.IsLowSurrogate(composed[index + 1]))
+                {
+                    if (pendingSpace) { sb.Append(' '); pendingSpace = false; }
+                    sb.Append(c).Append(composed[index + 1]);
+                    index++;
+                }
+                else pendingSpace = sb.Length > 0; // an unpaired surrogate cannot be written out by any encoder: treat as a space
+                continue;
+            }
             if (c is '’' or '‘' or '´' or '`' or 'ʼ' or '′') c = '\'';
             if (char.IsWhiteSpace(c) || char.IsControl(c) || c == '​' || c == '﻿' || c == '­')
             {

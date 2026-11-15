@@ -342,7 +342,7 @@ public sealed class CommandParserTests
         var words = Run("on iki çarpı sekiz dikdörtgen");
         Assert.Equal("on iki çarpı sekiz mm dikdörtgen", words.Notice!.Buttons[0].Label);
         var suffix = Run("10'luk kare");
-        Assert.Equal("10 cm'luk kare", suffix.Notice!.Buttons[1].Label);
+        Assert.Equal("10 cm kare", suffix.Notice!.Buttons[1].Label);
     }
 
     [Fact]
@@ -354,9 +354,11 @@ public sealed class CommandParserTests
         var mixed = Cmd<RectangleCommand>("10 cm x 80 mm dikdörtgen");
         Assert.Equal(100, mixed.WidthMm);
         Assert.Equal(80, mixed.HeightMm);
-        var move = Cmd<MoveByCommand>("20 sağa 10 santim yukarı", B1);
-        Assert.Equal(200, move.RightMm);
-        Assert.Equal(-100, move.DownMm);
+        // Two move distances with a unit on only one of them could mean either unit for the other: refused.
+        Assert.False(Run("20 sağa 10 santim yukarı", B1).IsCommand);
+        var both = Cmd<MoveByCommand>("20 mm sağa 10 santim yukarı", B1);
+        Assert.Equal(20, both.RightMm);
+        Assert.Equal(-100, both.DownMm);
     }
 
     [Theory]

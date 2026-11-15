@@ -43,6 +43,15 @@ public static partial class CommandParser
             return ParseResult.Refused(Refusals.AmbiguousNumberText(t.Text, t.HazardDecimal, t.HazardWhole, s.Norm, digitsStart, t.Text.Length));
         }
         if (s.Items.Any(t => t.IsNumber && t.Negative)) return ParseResult.Refused(Refusals.NegativeNumberRefusal());
+
+        // Two numbers side by side are a pair only when both are written in digits ("dikdörtgen 120 80") or form a compound
+        // ("1 santim 2 milim"). Words ("yüz yirmi seksen") could be split in more than one way: refuse instead of guessing.
+        for (var i = 0; i + 1 < s.Items.Count; i++)
+        {
+            var a = s.Items[i];
+            var b = s.Items[i + 1];
+            if (a.IsNumber && b.IsNumber && (a.FromWords || b.FromWords) && a.Unit is null) return Unrecognized(s);
+        }
         return null;
     }
 
@@ -121,7 +130,16 @@ public static partial class CommandParser
         if (rules.AskUnit && !anyExplicit && list.All(m => (double)m.Value < UnitQuestionBelow))
         {
             var end = list.Max(m => m.NumberEnd);
-            string With(string unit) => s.Norm.Substring(0, end) + " " + unit + s.Norm.Substring(end);
+            // The unit goes right after the last number; an ending glued to it ("10'luk", "beşlik") is dropped so the fill text parses.
+            string With(string unit)
+            {
+                var number = s.Items.FirstOrDefault(t => t.IsNumber && t.NumberEnd == end);
+                if (number is { HasWordSuffix: true })
+                    return s.Norm.Substring(0, number.Start) + TurkishText.FormatNumber(number.Value) + " " + unit + s.Norm.Substring(number.End);
+                var joiner = s.Raw.FirstOrDefault(t => t.Kind == TokKind.Joiner && t.Start == end);
+                var rest = joiner is null ? end : joiner.End;
+                return s.Norm.Substring(0, end) + " " + unit + s.Norm.Substring(rest);
+            }
             return (null, ParseResult.Refused(Refusals.UnitQuestionFor(s.Norm, With("mm"), With("cm"))));
         }
 
@@ -291,6 +309,8 @@ public static partial class CommandParser
             if (meas is null) return Unrecognized(s);
             measures.Add(meas);
         }
+        // Two distances with a unit on only one of them ("25 sağa 1 cm yukarı") could mean either unit for the other: refuse.
+        if (measures.Count == 2 && measures.Count(m => m.Unit is not null) == 1) return Unrecognized(s);
         var (values, bad) = ResolveMeasures(s, measures, new MeasureRules());
         if (bad is not null) return bad;
 

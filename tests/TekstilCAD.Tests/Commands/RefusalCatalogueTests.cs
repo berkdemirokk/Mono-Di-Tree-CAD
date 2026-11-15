@@ -74,7 +74,7 @@ public sealed class RefusalCatalogueTests
             var hasExample = entry.Text.Contains("Örnek:", StringComparison.Ordinal)
                 || entry.Text.Contains("Şöyle yazabilirsiniz:", StringComparison.Ordinal)
                 // These end in a button the specification lists ("Düğmeler" column) instead of a written example.
-                || entry.Code is "R03" or "R05" or "R10" or "R06" or "R07" or "R08" or "R11" or "R12" or "R14" or "R15b" or "R17" or "R20" or "R28b";
+                || entry.Code is "R03" or "R05" or "R10" or "R27" or "R06" or "R07" or "R08" or "R11" or "R12" or "R14" or "R15b" or "R17" or "R20" or "R28b";
             Assert.True(hasExample, entry.Key);
         }
     }

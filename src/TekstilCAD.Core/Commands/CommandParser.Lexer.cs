@@ -26,6 +26,7 @@ public static partial class CommandParser
         public string HazardWhole = string.Empty;
         public LengthUnit? Unit;
         public int NumberEnd;     // end of the numeric part itself, before any unit word or suffix
+        public bool HasWordSuffix; // a number written in words whose last word carries an ending ("beşlik")
 
         public bool IsWord(string text) => Kind == TokKind.Word && Text == text;
         public bool IsNumber => Kind == TokKind.Number;
@@ -34,10 +35,17 @@ public static partial class CommandParser
     private const int MaxIntegerDigits = 9;
     private const int MaxFractionDigits = 6;
 
-    // Glued endings that may follow a number without an apostrophe ("100e 150").
+    // Glued endings that may follow a number without an apostrophe ("100e 150", "2yi").
     private static readonly HashSet<string> GluedNumberSuffixes = new(StringComparer.Ordinal)
     {
-        "e", "a", "ye", "ya", "lik", "luk",
+        "e", "a", "ye", "ya", "lik", "luk", "i", "u", "yi", "yu",
+    };
+
+    // Case and derivation endings accepted after an apostrophe; any other letters after an apostrophe are an ordinary word.
+    private static readonly HashSet<string> ApostropheSuffixes = new(StringComparer.Ordinal)
+    {
+        "e", "a", "ye", "ya", "i", "u", "yi", "yu", "in", "un", "nin", "nun", "ni", "nu", "de", "da", "den", "dan", "te", "ta",
+        "ten", "tan", "le", "la", "yle", "yla", "ile", "lik", "luk", "si", "su", "ler", "lar",
     };
 
     /// <summary>Splits the folded text into words, numbers and separators. Never throws.</summary>
@@ -67,7 +75,14 @@ public static partial class CommandParser
                     i++;
                     break;
                 case ',':
-                    tokens.Add(new Tok { Kind = TokKind.Sep, Text = ",", Start = i, End = i + 1 });
+                    // ",5" (a separator right before a digit and not after one) is neither a pair separator nor a number.
+                    tokens.Add(i + 1 < n && TurkishText.IsDigit(folded[i + 1]) && (i == 0 || !TurkishText.IsDigit(folded[i - 1]))
+                        ? new Tok { Kind = TokKind.Junk, Text = ",", Start = i, End = i + 1 }
+                        : new Tok { Kind = TokKind.Sep, Text = ",", Start = i, End = i + 1 });
+                    i++;
+                    break;
+                case '.' when i + 1 < n && TurkishText.IsDigit(folded[i + 1]) && (i == 0 || !TurkishText.IsDigit(folded[i - 1])):
+                    tokens.Add(new Tok { Kind = TokKind.Junk, Text = ".", Start = i, End = i + 1 });
                     i++;
                     break;
                 case '-':
@@ -120,7 +135,11 @@ public static partial class CommandParser
             if (prev == ' ' || !char.IsLetter(prev))
                 return LexNumber(norm, folded, i + 1, tokens, negative: true, signStart: i);
         }
-        return i + 1; // a hyphen inside a word or before a letter is just white space
+        // A hyphen between two letters ("sol-kol") is white space. Anywhere else it may be a lost minus sign: refuse.
+        if (char.IsLetter(prev) && char.IsLetter(next)) return i + 1;
+        if (next is '-' or '−' or '–') return i + 1; // the last dash of a run decides
+        tokens.Add(new Tok { Kind = TokKind.Junk, Text = "-", Start = i, End = i + 1 });
+        return i + 1;
     }
 
     private static int LexWord(string norm, string folded, int i, List<Tok> tokens)
@@ -149,9 +168,12 @@ public static partial class CommandParser
             var j = i + 1;
             while (j < n && char.IsLetter(folded[j])) j++;
             var suffix = folded.Substring(i + 1, j - i - 1);
-            if (previousIsNumber || UnitParser.TryParseUnitWord(text, out _, out _))
-                tokens.Add(new Tok { Kind = TokKind.Joiner, Text = suffix, Start = i, End = j });
-            i = j;
+            if (ApostropheSuffixes.Contains(suffix))
+            {
+                if (previousIsNumber || UnitParser.TryParseUnitWord(text, out _, out _))
+                    tokens.Add(new Tok { Kind = TokKind.Joiner, Text = suffix, Start = i, End = j });
+                i = j;
+            }
         }
         return i;
     }
@@ -237,8 +259,12 @@ public static partial class CommandParser
         {
             var j = i + 1;
             while (j < n && char.IsLetter(folded[j])) j++;
-            tokens.Add(new Tok { Kind = TokKind.Joiner, Text = folded.Substring(i + 1, j - i - 1), Start = i, End = j });
-            return j;
+            var suffix = folded.Substring(i + 1, j - i - 1);
+            if (ApostropheSuffixes.Contains(suffix))
+            {
+                tokens.Add(new Tok { Kind = TokKind.Joiner, Text = suffix, Start = i, End = j });
+                return j;
+            }
         }
 
         // Letters glued to the number: "120x80", "12cm", "100e".
