@@ -308,13 +308,14 @@ enum CommandPlanner {
         var parts: [String] = []
         if right != 0 { parts.append("\(n(abs(right))) mm \(right > 0 ? "sağa" : "sola")") }
         if up != 0 { parts.append("\(n(abs(up))) mm \(up > 0 ? "yukarı" : "aşağı")") }
-        var what = parts.joined(separator: " ve ")
+        let what = parts.joined(separator: " ve ")
+        var centimetres = ""
         if parts.count == 1 {
             let distance = abs(right != 0 ? right : up)
-            what += " (\(n(distance / 10)) cm)"
+            centimetres = " (\(n(distance / 10)) cm)"
         }
         let moved = updated.pieces[index]
-        let sentence = "\(quoted(piece.name)) \(what) taşınacak. Sol alt köşe \(corner(piece)) iken \(corner(moved)) olacak."
+        let sentence = "\(quoted(piece.name)) \(what) taşınacak\(centimetres). Sol alt köşe \(corner(piece)) iken \(corner(moved)) olacak."
         return .plan(make(sentence, note, .edit(updated, .piece(piece.id)),
                           "\(quoted(piece.name)) taşındı: \(what).", base, context))
     }

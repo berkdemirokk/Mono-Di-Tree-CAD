@@ -227,7 +227,8 @@ enum CommandParser {
         // Word lists, all folded.
         static let fillers: Set<String> = ["lutfen", "sunu", "bunu", "su", "bu", "hemen", "bana", "rica", "ederim"]
         static let softVerbs: Set<String> = ["ciz", "cek", "yap", "et", "ver", "olsun", "edin", "al"]
-        static let connectors: Set<String> = ["ve", "ile"]
+        // "eksi" is allowed through so that "eksi 20 sağa" is refused as a negative size (R26).
+        static let connectors: Set<String> = ["ve", "ile", "eksi"]
         static let pieceWords: Set<String> = ["parca", "parcayi", "parcanin", "parcasini", "secili", "seciliyi", "seciligi"]
         static let directions: Set<String> = ["saga", "sag", "sola", "sol", "yukari", "yukariya", "asagi", "asagiya"]
         static let widthWords: Set<String> = ["eni", "en", "genisligi", "genislik"]

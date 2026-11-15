@@ -168,4 +168,69 @@ final class ScreenshotTourTests: XCTestCase {
         XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
         snap("21-editor-dark")
     }
+
+    /// The command field: idle, typing, a preview, the result, a refusal, a delete that asks.
+    func testTour07CommandField() {
+        let app = launch(["--ui-test-reset-draft"])
+        XCTAssertTrue(openEditorWithRectangle(app))
+        let field = app.textFields["command-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        snap("22-command-idle")
+
+        field.tap()
+        field.typeText("120 x 80 dikdortgen")
+        sleep(3)
+        snap("23-command-typing")
+
+        let prepare = app.buttons["command-prepare"]
+        XCTAssertTrue(prepare.waitForExistence(timeout: 5))
+        prepare.tap()
+        sleep(3)
+        snap("24-command-preview")
+
+        let apply = app.buttons["command-apply"]
+        XCTAssertTrue(apply.waitForExistence(timeout: 5))
+        apply.tap()
+        sleep(2)
+        snap("25-command-result")
+
+        field.tap()
+        field.typeText("zzz")
+        XCTAssertTrue(prepare.waitForExistence(timeout: 5))
+        prepare.tap()
+        sleep(3)
+        snap("26-command-refusal")
+
+        // A delete asks for its own confirmation, in a red card.
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "sil\n")
+        sleep(3)
+        snap("27-command-delete-asks")
+        let cancel = app.buttons["command-cancel"]
+        if cancel.exists { cancel.tap() }
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        sleep(2)
+        if prepare.waitForExistence(timeout: 5) { prepare.tap() }
+        sleep(3)
+        snap("28-command-landscape")
+    }
+
+    func testTour08CommandFieldLargeText() {
+        let app = launch(["--ui-test-reset-draft",
+                          "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"])
+        XCTAssertTrue(openEditorWithRectangle(app))
+        XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
+        let field = app.textFields["command-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        snap("29-command-large-text-idle")
+
+        field.tap()
+        field.typeText("25 saga tasi")
+        sleep(3)
+        let prepare = app.buttons["command-prepare"]
+        if prepare.waitForExistence(timeout: 5) { prepare.tap() }
+        sleep(3)
+        snap("30-command-large-text-preview")
+    }
 }
