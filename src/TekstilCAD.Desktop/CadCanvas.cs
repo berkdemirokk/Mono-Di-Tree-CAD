@@ -477,6 +477,10 @@ public sealed class CadCanvas : FrameworkElement
         InvalidateVisual();
         owner.SetStatus("Görünüm kaydırıldı · Parça geometrisi değişmedi");
     }
+    // Grid spacing in millimetres that keeps the drawn lines between 18 and 120 DIP apart.
+    private double GridStep() { var step=10.0;while(step*scale<18)step*=5;while(step*scale>120)step/=2;return step; }
+    /// <summary>Unit, grid spacing and zoom of the current view, as shown beside the canvas title.</summary>
+    internal string ViewInfo => $"mm  /  Izgara {GridStep():0.##}  /  {scale*100:0}%";
     private Point Screen(Point2 p)=>new(p.X*scale+offset.X,p.Y*scale+offset.Y);
     private Point2 World(Point p,bool snap=true) { var w=new Point2((p.X-offset.X)/scale,(p.Y-offset.Y)/scale); return snap && owner.Snap ? new(Math.Round(w.X),Math.Round(w.Y)) : w; }
     private void Down(object sender,MouseButtonEventArgs e)
@@ -1035,7 +1039,7 @@ public sealed class CadCanvas : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);dc.DrawRectangle(B("#0D1827"),null,new Rect(RenderSize));
-        var step=10.0;while(step*scale<18)step*=5;while(step*scale>120)step/=2;
+        var step=GridStep();
         var gridPen=new Pen(B("#203047"),.5);var origin=World(new Point(0,0),false);var end=World(new Point(ActualWidth,ActualHeight),false);
         for(var gx=Math.Floor(origin.X/step)*step;gx<=end.X;gx+=step) {var sx=Screen(new(gx,0)).X;dc.DrawLine(gridPen,new(sx,0),new(sx,ActualHeight));}
         for(var gy=Math.Floor(origin.Y/step)*step;gy<=end.Y;gy+=step) {var sy=Screen(new(0,gy)).Y;dc.DrawLine(gridPen,new(0,sy),new(ActualWidth,sy));}
@@ -1079,7 +1083,7 @@ public sealed class CadCanvas : FrameworkElement
                 dc.DrawEllipse(grainBrush,null,a,3,3);dc.DrawEllipse(grainBrush,null,b,3,3);
                 if(selected)Text(dc,grain.NeedsReview ? "İplik yönü · incele" : "İplik yönü",new Point(a.X+5,a.Y+5),grainBrush,11);
             }
-            var bounds=Geometry.Bounds(visible);var label=Screen(new(bounds.MinX,bounds.MinY)); Text(dc,CanvasPieceLabel(p.Name),new Point(label.X+7,label.Y-23),selected ? (selectedBrush ??= B("#FFCB70")) : (normalLabel ??= B("#B3D2D5")),12);
+            Text(dc,CanvasPieceLabel(p.Name),PieceLabelOrigin(visible),selected ? (selectedBrush ??= B("#FFCB70")) : (normalLabel ??= B("#B3D2D5")),12);
             if(selected)
             {
                 var handleBrush=selectedBrush ??= B("#FFCB70");
@@ -1093,7 +1097,7 @@ public sealed class CadCanvas : FrameworkElement
             if(owner.ActiveTool=="Yay" && drawing.Count==2)DrawContour(dc,Arc(drawing[0],drawing[1],cursor),false,null,new Pen(B("#4DE1C1"),2));
         }
         catch(ArgumentException) { /* Incomplete preview is allowed; final input is validated. */ }
-        dc.DrawRectangle(B("#172234"),null,new Rect(12,12,185,31));Text(dc,$"mm  /  Izgara {step:0.##}  /  {scale*100:0}%",new(22,19),B("#A4B9CC"),11);
+        dc.DrawRectangle(B("#172234"),null,new Rect(12,12,185,31));Text(dc,ViewInfo,new(22,19),B("#A4B9CC"),11);
         if(IsKeyboardFocused && ActualWidth>4 && ActualHeight>4)
             dc.DrawRectangle(null,new Pen(B("#4DE1C1"),2),new Rect(2,2,ActualWidth-4,ActualHeight-4));
     }
@@ -1105,6 +1109,24 @@ public sealed class CadCanvas : FrameworkElement
         const double margin=256;
         return point.X>=-margin && point.X<=viewport.Width+margin &&
                point.Y>=-margin && point.Y<=viewport.Height+margin;
+    }
+    // A piece name sits just above the top-left corner of its contour bounds.
+    private Point PieceLabelOrigin(IReadOnlyList<Point2> points)
+    {
+        var bounds=Geometry.Bounds(points);var corner=Screen(new(bounds.MinX,bounds.MinY));
+        return new(corner.X+7,corner.Y-23);
+    }
+    /// <summary>Rectangles, in canvas coordinates, that the committed piece name labels occupy in the current view.</summary>
+    internal IReadOnlyList<Rect> PieceLabelBounds()
+    {
+        var labels=new List<Rect>();
+        foreach(var p in owner.Document.Pieces)
+        {
+            if(p.Points.Count==0 || !LayerTools.IsPieceVisible(owner.Document,p))continue;
+            var text=Format(CanvasPieceLabel(p.Name),Brushes.Transparent,12);
+            labels.Add(new Rect(PieceLabelOrigin(p.Points),new Size(text.Width,text.Height)));
+        }
+        return labels;
     }
     // Display only: preserve the project name while keeping canvas labels bounded
     // and preventing invisible direction controls or line breaks from misleading.
@@ -1130,5 +1152,6 @@ public sealed class CadCanvas : FrameworkElement
     }
     private void DrawContour(DrawingContext dc,IReadOnlyList<Point2> points,bool closed,Brush? fill,Pen pen)
     { if(points.Count==0)return;var geometry=new StreamGeometry();using(var ctx=geometry.Open()) {ctx.BeginFigure(Screen(points[0]),fill is not null,closed);ctx.PolyLineTo(points.Skip(1).Select(Screen).ToList(),true,false);}geometry.Freeze();dc.DrawGeometry(fill,pen,geometry); }
-    private void Text(DrawingContext dc,string value,Point pos,Brush brush,int size) => dc.DrawText(new FormattedText(value,CultureInfo.CurrentCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),size,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip),pos);
+    private FormattedText Format(string value,Brush brush,int size) => new(value,CultureInfo.CurrentCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),size,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip);
+    private void Text(DrawingContext dc,string value,Point pos,Brush brush,int size) => dc.DrawText(Format(value,brush,size),pos);
 }
