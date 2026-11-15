@@ -9462,15 +9462,18 @@ internal static class DesktopVerification
             Verify(fresh,"clean",1440,900,671);
 
             // Opening one command group makes the row taller; the other, still collapsed, header must stay
-            // on the line of the command buttons instead of dropping to the bottom of that row.
-            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-groups-collapsed-1024x640.png"),1024,640);
+            // on the line of the command buttons instead of dropping to the bottom of that row. Measured
+            // at 1440 px, where both groups stay on the button row. At 1024 px an open group is too wide
+            // for that row and the two groups wrap to the next line together, which is expected.
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-groups-collapsed-1440x900.png"),1440,900);
             var restingTop=BoundsInRoot(groups[1],root).Top;
             groups[0].IsExpanded=true;
-            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-group-open-1024x640.png"),1024,640);
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-group-open-1440x900.png"),1440,900);
             var openedHeight=BoundsInRoot(groups[0],root).Height;var movedTop=BoundsInRoot(groups[1],root).Top;
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-group-open-1024x640.png"),1024,640);
             groups[0].IsExpanded=false;
             Check(openedHeight>60 && Math.Abs(movedTop-restingTop)<=.5,
-                $"A collapsed command group keeps its place while the other group is open (moved {movedTop-restingTop:0.#} px)",checks);
+                $"A collapsed command group keeps its place while the other group is open at 1440x900 (moved {movedTop-restingTop:0.#} px)",checks);
 
             // A long file name in the save state must leave the project title readable.
             var title=(TextBlock)Field(fresh,"projectTitle");var saved=(TextBlock)Field(fresh,"saveState");
