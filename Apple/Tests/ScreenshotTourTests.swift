@@ -79,7 +79,9 @@ final class ScreenshotTourTests: XCTestCase {
 
         // The drawing should stay on screen while a dimension is being typed.
         if reachAndTap(app.textFields["En"], in: app) {
-            sleep(1)
+            // Wait for the keyboard and the shrinking drawing to settle: one second caught the
+            // layout half way through its animation on the CI simulator.
+            sleep(4)
             snap("03b-editor-typing-dimension")
             let done = app.keyboards.buttons["Done"]
             if done.exists { done.tap() }
