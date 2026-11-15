@@ -987,7 +987,10 @@ struct EasyCADWorkspace: View {
                         with: .color(piece.id == selectedID ? .accentColor : .secondary),
                         lineWidth: piece.id == selectedID ? 3 : 1.8)
                 }
-                if let selected = document.pieces.first(where: { $0.id == selectedID }) {
+                // At accessibility text sizes the tags grow until they cover the small drawing; the
+                // same numbers stay in the fields below and in the spoken value.
+                if !dynamicTypeSize.isAccessibilitySize,
+                   let selected = document.pieces.first(where: { $0.id == selectedID }) {
                     drawMeasurements(of: selected, mapper: mapper, in: &context, size: size)
                 }
             }
