@@ -25,18 +25,7 @@ public sealed class LargeContourPerformanceComparisonTests(ITestOutputHelper out
             var angle = Math.Tau * i / count;
             return new Point2(1000 * Math.Cos(angle), 1000 * Math.Sin(angle));
         }).ToArray();
-        static Point2[] Comb(int teeth)
-        {
-            var width = 4 * teeth;
-            var points = new List<Point2> { new(0, 0), new(width, 0), new(width, 100) };
-            for (var x = width - 2; x >= 2; x -= 4)
-            {
-                points.Add(new(x, 100)); points.Add(new(x, 10));
-                points.Add(new(x - 2, 10)); points.Add(new(x - 2, 100));
-            }
-            return points.ToArray();
-        }
-        foreach (var (name, points) in new[] { ("ring-4097", Ring(4097)), ("ring-10000", Ring(10000)), ("comb-9999", Comb(2499)) })
+        foreach (var (name, points) in new[] { ("ring-4097", Ring(4097)), ("ring-10000", Ring(10000)), ("comb-10000", Comb(2499)) })
         {
             Previous(points); LargeContourValidator.Validate(points);
             var oldTimes = new List<double>(10); var newTimes = new List<double>(10);
@@ -57,6 +46,30 @@ public sealed class LargeContourPerformanceComparisonTests(ITestOutputHelper out
             output.WriteLine($"{name} ({points.Length} points); previous pair scan median {(oldTimes[4] + oldTimes[5]) / 2:F2} ms; current full validation median {(newTimes[4] + newTimes[5]) / 2:F2} ms; previous range {oldTimes[0]:F2}–{oldTimes[^1]:F2}; current range {newTimes[0]:F2}–{newTimes[^1]:F2}");
             output.WriteLine($"Managed thread allocations (not peak memory): previous scan {oldBytes.Min()}–{oldBytes.Max()} bytes; current full validation {newBytes.Min()}–{newBytes.Max()} bytes.");
         }
+    }
+
+    [Fact]
+    public void CombFixtureIsAValidOrthogonalContour()
+    {
+        var points = Comb(2);
+        Assert.Equal(12, points.Length);
+        Previous(points);
+        LargeContourValidator.Validate(points);
+    }
+
+    private static Point2[] Comb(int teeth)
+    {
+        var width = 4 * teeth + 2;
+        var points = new List<Point2> { new(0, 0), new(width, 0), new(width, 100) };
+        for (var x = width - 2; x >= 4; x -= 4)
+        {
+            points.Add(new(x, 100));
+            points.Add(new(x, 10));
+            points.Add(new(x - 2, 10));
+            points.Add(new(x - 2, 100));
+        }
+        points.Add(new(0, 100));
+        return points.ToArray();
     }
 
     // Reconstructed previous hot loop, not the original compiled implementation.
