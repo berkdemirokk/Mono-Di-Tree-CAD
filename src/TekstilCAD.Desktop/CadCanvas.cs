@@ -398,7 +398,7 @@ public sealed class CadCanvas : FrameworkElement
         var newOffset=new Vector(width/2-centerX*newScale,height/2-centerY*newScale);
         if(!double.IsFinite(newScale) || !double.IsFinite(newOffset.X) || !double.IsFinite(newOffset.Y))
         { owner.SetStatus("Proje görünümü hesaplanamadı; görünüm değiştirilmedi.");return; }
-        scale=newScale;offset=newOffset;InvalidateVisual();
+        scale=newScale;offset=newOffset;InvalidateVisual();owner.CanvasViewChanged();
         owner.SetStatus(extentX*newScale>availableWidth || extentY*newScale>availableHeight
             ? "Proje ortalandı; en düşük yakınlık sınırı nedeniyle tamamı görünmeyebilir."
             : drawing.Count>0 ? "Parçalar ve tamamlanmamış çizim çalışma alanında gösteriliyor · Proje geometrisi değişmedi."
@@ -451,7 +451,7 @@ public sealed class CadCanvas : FrameworkElement
         var newOffset=new Vector(width/2-centerX*newScale,height/2-centerY*newScale);
         if(!double.IsFinite(newScale) || !double.IsFinite(newOffset.X) || !double.IsFinite(newOffset.Y))
         { owner.SetStatus("Seçili parçanın görünümü hesaplanamadı; görünüm değiştirilmedi.");return; }
-        scale=newScale;offset=newOffset;InvalidateVisual();
+        scale=newScale;offset=newOffset;InvalidateVisual();owner.CanvasViewChanged();
         owner.SetStatus(extentX*newScale>availableWidth || extentY*newScale>availableHeight
             ? "Seçili parça ortalandı; en düşük yakınlık sınırı nedeniyle tamamı görünmeyebilir."
             : "Seçili parça çalışma alanında gösteriliyor · Proje geometrisi değişmedi.");
@@ -466,7 +466,7 @@ public sealed class CadCanvas : FrameworkElement
         var world=World(center,false);
         scale=Math.Clamp(scale*(zoomIn ? 1.15 : 1/1.15),.02,30);
         offset=new(center.X-world.X*scale,center.Y-world.Y*scale);
-        InvalidateVisual();
+        InvalidateVisual();owner.CanvasViewChanged();
         owner.SetStatus($"Görünüm yakınlığı: {scale*100:0}% · Parça geometrisi değişmedi");
     }
     internal void PanView(double dx,double dy)
@@ -1015,7 +1015,7 @@ public sealed class CadCanvas : FrameworkElement
     {
         if(dragId is not null || panStart is not null)
         { owner.SetStatus("Önce sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
-        var w=World(p,false);scale=Math.Clamp(scale*Math.Pow(1.15,delta/120.0),.02,30);offset=new(p.X-w.X*scale,p.Y-w.Y*scale);InvalidateVisual();
+        var w=World(p,false);scale=Math.Clamp(scale*Math.Pow(1.15,delta/120.0),.02,30);offset=new(p.X-w.X*scale,p.Y-w.Y*scale);InvalidateVisual();owner.CanvasViewChanged();
     }
     // Later pieces are drawn unselected, with opaque closed fills and 1.5-DIP
     // strokes. Use that footprint (plus half a DIP for antialiasing) only when
@@ -1097,7 +1097,6 @@ public sealed class CadCanvas : FrameworkElement
             if(owner.ActiveTool=="Yay" && drawing.Count==2)DrawContour(dc,Arc(drawing[0],drawing[1],cursor),false,null,new Pen(B("#4DE1C1"),2));
         }
         catch(ArgumentException) { /* Incomplete preview is allowed; final input is validated. */ }
-        dc.DrawRectangle(B("#172234"),null,new Rect(12,12,185,31));Text(dc,ViewInfo,new(22,19),B("#A4B9CC"),11);
         if(IsKeyboardFocused && ActualWidth>4 && ActualHeight>4)
             dc.DrawRectangle(null,new Pen(B("#4DE1C1"),2),new Rect(2,2,ActualWidth-4,ActualHeight-4));
     }

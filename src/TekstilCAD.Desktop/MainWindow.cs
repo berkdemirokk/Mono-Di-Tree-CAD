@@ -60,7 +60,8 @@ public class MainWindow : Window
     private readonly TextBox selectedPieceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=64, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(3,5,3,0) };
     private SimulationQueue? machineQueue;
     private Button? machineQueueCommand;
-    private readonly TextBox machineQueueMessage = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MaxHeight=64,Width=220,Margin=new Thickness(3,2,3,3),Visibility=Visibility.Collapsed };
+    // Shares the header notice area: full width and at most two lines high, so it never becomes a tall block.
+    private readonly TextBox machineQueueMessage = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,FontSize=11,Padding=new Thickness(6,2,6,2),MinHeight=0,MaxHeight=40,Margin=new Thickness(0,4,0,0),Visibility=Visibility.Collapsed };
     internal Func<SimulationQueue> MachineQueueFactory { get; set; } = () => new SimulationQueue(AppPaths.MachineSpoolDirectory);
     internal bool MachineQueueLoading { get; private set; }
     private readonly TextBlock status = new(), metrics = new(), projectTitle = new();
@@ -71,21 +72,21 @@ public class MainWindow : Window
     private readonly ScrollViewer canvasErrorViewer = new() { MaxHeight=54, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled, Focusable=true };
     private readonly DockPanel canvasErrorPanel = new() { Visibility=Visibility.Collapsed, Margin=new Thickness(18,2,18,2) };
     private readonly ScrollViewer statusViewer = new() { MaxHeight=44, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled, Focusable=true, VerticalAlignment=VerticalAlignment.Center };
-    private readonly TextBlock saveState = new(), canvasTool = new(), pieceCount = new();
+    private readonly TextBlock saveState = new(), canvasTool = new(), canvasView = new(), pieceCount = new();
     private readonly TextBlock exportNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
     private readonly TextBlock nestingHistoryNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
-    private readonly Button nestingHistoryDetails = new() { Content="Pastal geçmişini incele…", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button nestingHistoryDetails = new() { Content="Pastal geçmişini incele…", Visibility=Visibility.Collapsed };
     private ProjectDocument? nestingHistoryDocument;
     private long nestingHistoryGeneration;
-    private readonly Button exportCancel = new() { Content="HPGL aktarımını iptal et", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button exportCancel = new() { Content="HPGL aktarımını iptal et", Visibility=Visibility.Collapsed };
     private readonly TextBlock pieceLimits = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4,4,4,10), Focusable=true };
     private readonly TextBlock gradingGeometryNotice = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4,4,4,10), Focusable=true };
     private readonly TextBox propertyDraftConflict = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MaxHeight=100,Margin=new Thickness(3,4,3,8),Visibility=Visibility.Collapsed };
     private readonly TextBlock recoveryNotice = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0) };
-    private readonly Button recoveryDetails = new() { Content="Kurtarma uyarısı ayrıntıları", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button recoveryDetails = new() { Content="Kurtarma uyarısı ayrıntıları", Visibility=Visibility.Collapsed };
     private readonly TextBlock recoveryScanNotice = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0) };
-    private readonly Button recoveryScanDetails = new() { Content="Tarama hatası ayrıntıları", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
-    private readonly Button recoveryOpen = new() { Content="Kurtarma kayıtlarını incele", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button recoveryScanDetails = new() { Content="Tarama hatası ayrıntıları", Visibility=Visibility.Collapsed };
+    private readonly Button recoveryOpen = new() { Content="Kurtarma kayıtlarını incele", Visibility=Visibility.Collapsed };
     private RecoveryScanResult? recoveryScan;
     private RecoveryScanCursor? recoveryCursor;
     private bool recoveryHasMore;
@@ -166,11 +167,11 @@ public class MainWindow : Window
     private DxfPreparationStamp? dxfPreparationStamp;
     private DxfImportResult? preparedDxf;
     private bool preparedDxfReflectY;
-    private readonly Button dxfReview = new() { Content="DXF önizlemesini aç", Visibility=Visibility.Collapsed, Margin=new Thickness(0,4,0,0) };
-    private readonly Button dxfCancel = new() { Content="DXF okumayı iptal et", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button dxfReview = new() { Content="DXF önizlemesini aç", Visibility=Visibility.Collapsed };
+    private readonly Button dxfCancel = new() { Content="DXF okumayı iptal et", Visibility=Visibility.Collapsed };
     private readonly TextBlock dxfNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
     private readonly TextBlock sourceHistoryNotice = new() { TextWrapping=TextWrapping.Wrap, FontSize=11, Margin=new Thickness(0,4,0,0), Focusable=true };
-    private readonly Button sourceHistoryDetails = new() { Content="DXF kaynak ve aktarım notları", Margin=new Thickness(0,4,0,0), HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly Button sourceHistoryDetails = new() { Content="DXF kaynak ve aktarım notları" };
     private double preparedDxfFactor;
     private string preparedDxfSource="";
     private DxfTextEncoding? preparedDxfEncoding;
@@ -207,69 +208,70 @@ public class MainWindow : Window
         var root = new DockPanel { LastChildFill = true }; Content = root;
 
         // Project identity and save state remain visible independently of the inspector.
-        var header = new Grid { Margin = new Thickness(22, 16, 22, 16) };
+        // The header is kept short so that the drawing canvas gets the height.
+        var header = new Grid { Margin = new Thickness(16, 8, 16, 6) };
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var brand = new StackPanel { Margin = new Thickness(0, 0, 28, 0) };
-        brand.Children.Add(new TextBlock { Text = "Mono Di Tree CAD", Foreground = StudioTheme.Accent, FontWeight = FontWeights.Bold, FontSize = 22 });
-        brand.Children.Add(new TextBlock { Text = "STUDIO  /  KALIP TASARIMI", Foreground = Muted, FontSize = 9, Margin = new Thickness(1, 3, 0, 0) });
-        // Sits in the otherwise empty space under the brand, so the header grows neither wider nor taller.
-        var about = AddButton(brand, "Hakkında", OpenAbout, "Sürüm, veri klasörü ve açık kaynak bildirimleri · F1");
-        about.HorizontalAlignment = HorizontalAlignment.Left; about.Margin = new Thickness(0, 10, 0, 0);
+        var brand = new StackPanel { Margin = new Thickness(0, 0, 22, 0) };
+        brand.Children.Add(new TextBlock { Text = "Mono Di Tree CAD", Foreground = StudioTheme.Accent, FontWeight = FontWeights.Bold, FontSize = 18 });
+        // The About entry shares the line under the brand with the tagline, so the header grows neither wider nor taller.
+        var brandLine = new DockPanel { Margin = new Thickness(0, 2, 0, 0) }; brand.Children.Add(brandLine);
+        var about = AddButton(brandLine, "Hakkında", OpenAbout, "Sürüm, veri klasörü ve açık kaynak bildirimleri · F1");
+        DockPanel.SetDock(about, Dock.Right); about.Margin = new Thickness(10, 0, 0, 0);
         about.Padding = new Thickness(9, 3, 9, 3); about.MinHeight = 26; about.FontSize = 11;
+        brandLine.Children.Add(new TextBlock { Text = "STUDIO  /  KALIP TASARIMI", Foreground = Muted, FontSize = 9, Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         header.Children.Add(brand);
         var project = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         projectTitle.FontSize = 15; projectTitle.FontWeight = FontWeights.SemiBold; projectTitle.TextTrimming = TextTrimming.CharacterEllipsis;
         projectTitle.TextWrapping = TextWrapping.NoWrap; projectTitle.MaxHeight = 24;
-        project.Children.Add(projectTitle);
-        saveState.FontSize = 11; saveState.Margin = new Thickness(0, 5, 0, 0); project.Children.Add(saveState);
+        // Title and save state share one row. The row is only as wide as its content, so the
+        // state follows the title directly and a long title is trimmed before the state is.
+        var titleRow = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
+        titleRow.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        titleRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        titleRow.Children.Add(projectTitle);
+        saveState.FontSize = 11; saveState.Margin = new Thickness(14, 0, 0, 2); saveState.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetColumn(saveState, 1); titleRow.Children.Add(saveState);
+        project.Children.Add(titleRow);
         // This format does not retain import provenance. Keep the limitation visible
         // after opening, editing, or saving a project without claiming that its geometry is unsafe.
         sourceHistoryNotice.Text=SourceHistoryNotice;sourceHistoryNotice.Foreground=StudioTheme.Muted;
         AutomationProperties.SetName(sourceHistoryNotice,SourceHistoryNotice);
         AutomationProperties.SetHelpText(sourceHistoryNotice,"Dışa aktarma ve simülasyon öncesinde, varsa özgün dosyayla ölçü ve yerleşimi kontrol edin. Bu bilgi doğrulanmış üretim onayı değildir.");
-        project.Children.Add(sourceHistoryNotice);
         AutomationProperties.SetName(sourceHistoryDetails,"DXF kaynak ve aktarım notlarını incele");
         sourceHistoryDetails.Click+=(_,_)=>CreateDxfSourceHistoryWindow().ShowDialog();
-        project.Children.Add(sourceHistoryDetails);
+        project.Children.Add(NoticeRow(sourceHistoryNotice,sourceHistoryDetails));
         System.Windows.Automation.AutomationProperties.SetName(nestingHistoryNotice,"Pastal geçmişi durumu");
         System.Windows.Automation.AutomationProperties.SetLiveSetting(nestingHistoryNotice,System.Windows.Automation.AutomationLiveSetting.Polite);
-        project.Children.Add(nestingHistoryNotice);
         System.Windows.Automation.AutomationProperties.SetName(nestingHistoryDetails,"Pastal geçmişini incele");
         nestingHistoryDetails.Click+=(_,_)=> { if(Document.NestingSnapshot is not null) CreateNestingHistoryWindow().ShowDialog(); };
-        project.Children.Add(nestingHistoryDetails);
+        project.Children.Add(NoticeRow(nestingHistoryNotice,nestingHistoryDetails));
         System.Windows.Automation.AutomationProperties.SetName(exportNotice,"Dışa aktarma durumu");
         System.Windows.Automation.AutomationProperties.SetLiveSetting(exportNotice,System.Windows.Automation.AutomationLiveSetting.Polite);
-        project.Children.Add(exportNotice);
+        System.Windows.Automation.AutomationProperties.SetName(exportCancel,"HPGL dışa aktarımını iptal et");
+        exportCancel.Click += (_, _) => RequestExportCancellation();
+        project.Children.Add(NoticeRow(exportNotice,exportCancel));
         System.Windows.Automation.AutomationProperties.SetLiveSetting(dxfNotice,System.Windows.Automation.AutomationLiveSetting.Polite);
-        project.Children.Add(dxfNotice);
         System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
-        project.Children.Add(dxfCancel);
         dxfCancel.Click += (_,_) => RequestDxfCancellation();
-        project.Children.Add(dxfReview);
         AutomationProperties.SetName(dxfReview,"DXF önizlemesini aç");
         dxfReview.Click += (_,_) => ReviewPreparedDxf();
-        System.Windows.Automation.AutomationProperties.SetName(exportCancel,"HPGL dışa aktarımını iptal et");
-        project.Children.Add(exportCancel);
-        exportCancel.Click += (_, _) => RequestExportCancellation();
-        project.Children.Add(recoveryNotice);
-        project.Children.Add(recoveryDetails);
+        project.Children.Add(NoticeRow(dxfNotice,dxfCancel,dxfReview));
         AutomationProperties.SetName(recoveryDetails,"Kurtarma uyarısı ayrıntıları");
-        project.Children.Add(recoveryScanNotice);
+        project.Children.Add(NoticeRow(recoveryNotice,recoveryDetails));
         AutomationProperties.SetLiveSetting(recoveryScanNotice,AutomationLiveSetting.Polite);
         AutomationProperties.SetName(recoveryScanDetails,"Kurtarma taraması hatası ayrıntıları");
-        project.Children.Add(recoveryScanDetails);
-        project.Children.Add(recoveryOpen);
+        project.Children.Add(NoticeRow(recoveryScanNotice,recoveryScanDetails,recoveryOpen));
         recoveryDetails.Click += (_, _) => MessageBox.Show(this, recoveryNotice.ToolTip as string ?? "Ayrıntı bulunmuyor.", "Kurtarma uyarısı ayrıntıları", MessageBoxButton.OK, MessageBoxImage.Information);
         recoveryScanDetails.Click += (_, _) => MessageBox.Show(this, recoveryScanNotice.ToolTip as string ?? "Ayrıntı bulunmuyor.", "Kurtarma taraması hatası", MessageBoxButton.OK, MessageBoxImage.Warning);
         recoveryOpen.Click += (_, _) => OfferRecovery();
         Grid.SetColumn(project, 1); header.Children.Add(project);
-        var mode = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(12, 8, 12, 8), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = "YEREL ÇALIŞMA  ·  mm", Foreground = Muted, FontSize = 10 } };
+        var mode = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top, Child = new TextBlock { Text = "YEREL ÇALIŞMA  ·  mm", Foreground = Muted, FontSize = 10 } };
         Grid.SetColumn(mode, 2); header.Children.Add(mode);
         DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
 
-        var commandArea = new WrapPanel { Margin = new Thickness(16, 0, 16, 12) };
+        var commandArea = new WrapPanel { Margin = new Thickness(12, 0, 12, 6) };
         var start = CommandGroup(commandArea, "BAŞLANGIÇ");
         var design = AddButton(start, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "İstek hazırlar; kalıp oluşturmaz.");
         design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.Background;
@@ -280,9 +282,11 @@ public class MainWindow : Window
         projectOpenCancel.Visibility=Visibility.Collapsed;
         var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
-        AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true);
+        CompactLabel(AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true), "Güvenli kopya…");
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
+        // Slightly narrower buttons keep both groups and the two collapsed groups on one row at the minimum window width.
+        foreach (var command in start.Children.OfType<Button>().Concat(files.Children.OfType<Button>())) command.Padding = new Thickness(8);
         var exchange = CollapsibleCommands(commandArea, "Dosya aktarımı");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
@@ -338,7 +342,7 @@ public class MainWindow : Window
             var selectedTool = tool;
             var button = AddButton(tools, tool, () => { SetTool(selectedTool); if(ActiveTool==selectedTool)canvas?.Focus(); }, tool + " · " + shortcut + " (kalıp alanı odaktayken)");
             button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-            button.Padding = new Thickness(10, 10, 8, 10);
+            button.Padding = new Thickness(10, 4, 8, 4);
             var item = new Grid(); item.ColumnDefinitions.Add(new() { Width = new GridLength(24) }); item.ColumnDefinitions.Add(new()); item.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             item.Children.Add(new TextBlock { Text = glyph, FontSize = 18, VerticalAlignment = VerticalAlignment.Center });
             var label = new TextBlock { Text = tool, FontSize = 12, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(label, 1); item.Children.Add(label);
@@ -502,20 +506,24 @@ public class MainWindow : Window
         Grid.SetColumn(inspectorShell, 2); workspace.Children.Add(inspectorShell);
 
         var canvasArea = new DockPanel();
-        var canvasHeader = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 5, 10, 5) };
+        var canvasHeader = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 2, 10, 2) };
         var viewCommands = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(viewCommands, Dock.Right); canvasHeader.Children.Add(viewCommands);
         undoCommand = AddButton(viewCommands, "↶", Undo, "Geri al · Ctrl+Z");
         redoCommand = AddButton(viewCommands, "↷", Redo, "Yinele · Ctrl+Y");
         fitCommand = AddButton(viewCommands, "Tümünü göster", () => canvas?.Fit(), "Parçaları, iplik yönlerini ve tamamlanmamış çizimi çalışma alanına sığdır · F");
         System.Windows.Automation.AutomationProperties.SetName(undoCommand, "Geri al");
         System.Windows.Automation.AutomationProperties.SetName(redoCommand, "Yinele");
-        canvasTool.Foreground = Muted; canvasTool.FontSize = 11; canvasTool.VerticalAlignment = VerticalAlignment.Center; canvasHeader.Children.Add(canvasTool);
+        canvasTool.Foreground = Muted; canvasTool.FontSize = 11; canvasTool.VerticalAlignment = VerticalAlignment.Center;
+        DockPanel.SetDock(canvasTool, Dock.Left); canvasHeader.Children.Add(canvasTool);
+        // Unit, grid spacing and zoom sit beside the title instead of on the canvas, where they covered piece labels.
+        canvasView.Foreground = Muted; canvasView.FontSize = 11; canvasView.ToolTip = "Ölçü birimi · ızgara aralığı (mm) · görünüm yakınlığı";
+        canvasHeader.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(14, 0, 8, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Child = canvasView });
         DockPanel.SetDock(canvasHeader, Dock.Top); canvasArea.Children.Add(canvasHeader);
         AutomationProperties.SetName(historyCapacityNotice,"İşlem geçmişi kapasite uyarısı");
         AutomationProperties.SetHelpText(historyCapacityNotice,"Geri alma ve yineleme geçmişi boyut ve adım sayısı ile sınırlıdır. Kalan adımları araç çubuğundan inceleyin.");
         AutomationProperties.SetLiveSetting(historyCapacityNotice,AutomationLiveSetting.Polite);
         DockPanel.SetDock(historyCapacityNotice,Dock.Top); canvasArea.Children.Add(historyCapacityNotice);
-        canvas = new CadCanvas(this); canvasArea.Children.Add(canvas);
+        canvas = new CadCanvas(this); canvasArea.Children.Add(canvas); CanvasViewChanged();
         var canvasShell = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = canvasArea };
         Grid.SetColumn(canvasShell, 1); workspace.Children.Add(canvasShell);
 
@@ -676,10 +684,27 @@ public class MainWindow : Window
         button.Content = shortLabel;
         return button;
     }
+    /// <summary>One header notice: its wrapping text on the left and its actions on the same row to the right.
+    /// Every child keeps its own Visibility, so a notice with nothing to show takes no height.</summary>
+    private static Grid NoticeRow(TextBlock notice, params Button[] actions)
+    {
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        notice.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(notice);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var action in actions)
+        {
+            action.Margin = new Thickness(8, 4, 0, 0); action.Padding = new Thickness(9, 3, 9, 3); action.MinHeight = 26; action.FontSize = 11;
+            buttons.Children.Add(action);
+        }
+        Grid.SetColumn(buttons, 1); row.Children.Add(buttons);
+        return row;
+    }
     private static StackPanel CommandGroup(System.Windows.Controls.Panel parent, string title)
     {
-        var group = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
-        group.Children.Add(new TextBlock { Text = title, FontSize = 9, Foreground = Muted, Margin = new Thickness(5, 0, 0, 5) });
+        var group = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+        group.Children.Add(new TextBlock { Text = title, FontSize = 9, Foreground = Muted, Margin = new Thickness(5, 0, 0, 2) });
         var commands = new StackPanel { Orientation = Orientation.Horizontal }; group.Children.Add(commands); parent.Children.Add(group); return commands;
     }
     private static StackPanel CollapsibleCommands(System.Windows.Controls.Panel parent,string title)
@@ -687,7 +712,8 @@ public class MainWindow : Window
         var commands=new StackPanel { Margin=new Thickness(4),MaxWidth=300 };
         var scroll=new ScrollViewer { Content=commands,MaxHeight=210,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(scroll,title+" işlemleri");
-        var expander=new Expander { Header=title,Content=scroll,Margin=new Thickness(3),Foreground=StudioTheme.Text,HorizontalAlignment=HorizontalAlignment.Left };
+        // Bottom alignment puts the collapsed header on the same line as the command buttons beside it.
+        var expander=new Expander { Header=title,Content=scroll,Margin=new Thickness(3,3,3,8),Foreground=StudioTheme.Text,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Bottom };
         AutomationProperties.SetName(expander,title);
         AutomationProperties.SetHelpText(expander,"İşlemleri göstermek veya gizlemek için açın.");
         parent.Children.Add(expander);
@@ -769,6 +795,8 @@ public class MainWindow : Window
         recoveryDetails.Visibility=recoveryNotice.Visibility;
     }
     public void FitView() => canvas.Fit();
+    /// <summary>Called by the canvas whenever its zoom changes, to refresh the view information in the canvas title row.</summary>
+    internal void CanvasViewChanged() => canvasView.Text = canvas.ViewInfo;
     public void Select(Guid? id)
     {
         if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation()))return;
