@@ -70,7 +70,7 @@ internal sealed class SelectedDxfExportWindow : Window
         AutomationProperties.SetHelpText(Choices,"Satırdaki onay kutusuyla seçim yapın. Her satır parça adını, tam kimliğini ve varsa desteklenmeme nedenini gösterir.");
         VirtualizingPanel.SetIsVirtualizing(Choices,true);VirtualizingPanel.SetVirtualizationMode(Choices,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(Choices,true);
         Choices.SelectionChanged+=(_,_)=> { if(Choices.SelectedIndex>=0)Choices.SelectedIndex=-1; };
-        var checkbox=new FrameworkElementFactory(typeof(CheckBox));checkbox.SetValue(FrameworkElement.MarginProperty,new Thickness(4,6,4,6));checkbox.SetValue(Control.ForegroundProperty,StudioTheme.Text);
+        var checkbox=new FrameworkElementFactory(typeof(CheckBox));checkbox.SetValue(FrameworkElement.MarginProperty,new Thickness(4,6,4,6));checkbox.SetResourceReference(Control.ForegroundProperty,"Studio.Text");
         checkbox.SetBinding(AutomationProperties.NameProperty,new Binding(nameof(Choice.Label)));
         checkbox.SetBinding(UIElement.IsEnabledProperty,new Binding(nameof(Choice.Eligible)));
         checkbox.SetBinding(ToggleButton.IsCheckedProperty,new Binding(nameof(Choice.IsSelected)) { Mode=BindingMode.TwoWay,UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged });

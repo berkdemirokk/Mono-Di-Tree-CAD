@@ -1173,6 +1173,7 @@ internal static class DesktopVerification
             VerifyAboutAndCrashLog(studio,work,reportPath,checks);
             VerifyCompactWorkspace(studio,reportPath,checks);
             CommandVerification.Run(studio,checks);
+            ThemeVerification.Run(studio,reportPath,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
@@ -1907,6 +1908,7 @@ internal static class DesktopVerification
             VerifyFourAngleQuantityPreview(studio,work,checks);
             VerifyBulkPieceAngles(studio,checks);
             VerifyNestingHistory(studio,work,checks);
+            ThemeVerification.RunAtEnd(checks);
             Check(!studio.IsVisible && !textiles.IsVisible && !machine.IsVisible && !reopenedTextiles.IsVisible, "No window shown", checks);
             Check(AppPaths.PrepareProjectsDirectory().StartsWith(work, StringComparison.OrdinalIgnoreCase),
                 "Runtime data directory isolated from installation and verification stays local", checks);
