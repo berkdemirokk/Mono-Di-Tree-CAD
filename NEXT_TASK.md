@@ -37,3 +37,14 @@ WearCAD koruması ve arka planda çalışma talebi aynen geçerlidir. Kullanıc�
 1. Yeni sürümlü biçimde bilinmeyen alanların sessizce kaybolmasını engelleyecek ileri uyumluluk yaklaşımını test edin; kullanıcıya eski 0.3'ün yeni kurallı projeyi açamayacağını açıkça anlatın.
 2. Yeni kalıcılık akışının aktif hücre ve kapatma etkileşimi gerçek kullanıcı testi ile doğrulanmalı. 48 başsız kontrol yalnız programatik kanıttır.
 3. Yeni önizleme ve proje formatını ayrı sürüm olarak paketlemeden önce bağımsız incelemeyi ve tam regresyonu tamamlayın.
+
+## 15 Kasım 2026 sonrası güncel sıra
+Çoklu seçim, katmanlar (v8) ve tek segmentli açık parametrik Bézier/yay (v9) main dalındadır; aşağıdakiler hâlâ açıktır ve tamamlandı sayılmamalıdır.
+1. Fabrika cihaz modeli/protokolü ile gerçek DXF/WearCAD örnek korpusunu netleştirin (WP01). Kullanıcı dosyalarını yalnız ayrı kopyalarda kullanın; fiziksel iş göndermeyin.
+2. Gerçek operatörle UI kabul testi: çoklu seçim/grup sürükleme, katman paneli, parametrik kontrol penceresi ve poliline dönüştürme dâhil. Penceresiz `--verify` ve CI bunun yerine geçmez.
+3. İçbükey dikiş payında yerel ayrıntı korumasının bağımsız kanıtı; tek yönlü örnekleme denetimi Hausdorff veya özellik koruma kanıtı değildir.
+4. Dış (işbirliği yapmayan) yazıcının son kontrol ile dosya değiştirme arasındaki kayıt yarışı hâlâ kapanmadı.
+5. İleri uyumluluk ve bilinmeyen alan koruması: eski sürümlerin v8/v9 dosyalarını açamadığı açıkça bildirilmeli, yeni alanlar sessizce kaybolmamalı.
+6. İmzalı kurulum/güncelleme.
+7. Lisans aktivasyon hizmeti (güvenilir zaman, iptal, hesap).
+8. iOS gerçek cihaz kabulü; TestFlight yükleme iş akışının başarısı cihazda çalışma veya kullanıcı kabulü değildir.
