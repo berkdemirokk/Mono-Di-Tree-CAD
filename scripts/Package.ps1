@@ -1,10 +1,14 @@
 [CmdletBinding()]
 param(
-    [string]$OutputDirectory = 'C:\Users\pc\Documents\Codex\2026-10-31\a-2\outputs'
+    # Defaults to work\packages inside this checkout; work\ is ignored by Git.
+    [string]$OutputDirectory
 )
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
-$destination = [IO.Path]::GetFullPath($OutputDirectory)
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $root 'work\packages' }
+# Resolve a relative path against the PowerShell location, not the process directory.
+$destination = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
+$destination = [IO.Path]::GetFullPath($destination)
 $allowedOutputs = 'C:\Users\pc\Documents\Codex\2026-10-31\a-2\outputs'
 if ($destination -ne $allowedOutputs -and !$destination.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Package destination must be the designated outputs folder or a project subfolder.'
@@ -54,7 +58,9 @@ try {
         try {
             foreach ($file in (Get-ChildItem -LiteralPath $PublishedDirectory -File -Recurse | Sort-Object FullName)) {
                 if (($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Publish contains linked files.' }
-                $name = [IO.Path]::GetRelativePath($PublishedDirectory,$file.FullName).Replace('\','/')
+                # Path.GetRelativePath is unavailable in Windows PowerShell 5.1.
+                if (!$file.FullName.StartsWith($PublishedDirectory + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Publish file is outside the publish directory.' }
+                $name = $file.FullName.Substring($PublishedDirectory.Length + 1).Replace('\','/')
                 $entry = $zip.CreateEntry($name,[IO.Compression.CompressionLevel]::Optimal)
                 $entry.LastWriteTime = $fixedTime
                 $inputStream = $file.OpenRead(); $outputStream = $entry.Open()

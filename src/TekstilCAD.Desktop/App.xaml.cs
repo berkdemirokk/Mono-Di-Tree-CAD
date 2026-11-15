@@ -20,6 +20,8 @@ public partial class App : Application
             Shutdown(code);
             return;
         }
+        // Interactive runs only: verification modes keep their own failure reporting and data directory.
+        CrashReporter.Attach(this);
         new MainWindow().Show();
     }
 }

@@ -18,9 +18,10 @@ function Test-Zip([string]$Path, [string[]]$Required, [bool]$IsSource) {
             if ($name.StartsWith('/') -or $name.Contains(':') -or ($name.Split('/') -contains '..') -or !$names.Add($name)) { throw "Unsafe or duplicated ZIP entry: $name" }
             if ($IsSource -and $name -match '(^|/)(\.tools|bin|obj|work|artifacts|\.git|node_modules|\.cache)(/|$)|(^|/)\.env($|\.)|\.(pfx|p12|pem|key|user|suo)$') { throw "Excluded source entry: $name" }
             if ($name.EndsWith('/')) { continue }
-            $data = $entry.Open()
-            try { $hashes[$name] = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($data)) }
-            finally { $data.Dispose() }
+            # SHA256.HashData and Convert.ToHexString are unavailable in Windows PowerShell 5.1.
+            $data = $entry.Open(); $sha = [Security.Cryptography.SHA256]::Create()
+            try { $hashes[$name] = [BitConverter]::ToString($sha.ComputeHash($data)).Replace('-','') }
+            finally { $sha.Dispose(); $data.Dispose() }
         }
         foreach ($item in $Required) { if (!$names.Contains($item)) { throw "Required archive member missing: $item" } }
         return [ordered]@{ archive=[IO.Path]::GetFileName($Path); files=$hashes.Count; members=$hashes }
