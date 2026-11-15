@@ -1,10 +1,17 @@
+using System.Text.Json.Serialization;
+
 namespace TekstilCAD.Core;
 
 /// <summary>A single parametric contour segment. Curves keep their exact
 /// mathematical representation instead of being baked into a polyline.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+[JsonDerivedType(typeof(CurveSegment.Line), "line")]
+[JsonDerivedType(typeof(CurveSegment.CubicBezier), "cubicBezier")]
+[JsonDerivedType(typeof(CurveSegment.Arc), "arc")]
 public abstract record CurveSegment
 {
     /// <summary>Parametric length of the segment in millimetres.</summary>
+    [JsonIgnore]
     public abstract double Length { get; }
 
     /// <summary>Point on the segment at parameter t in [0, 1]. Out-of-range
@@ -14,6 +21,7 @@ public abstract record CurveSegment
     /// <summary>A straight line segment.</summary>
     public sealed record Line(Point2 Start, Point2 End) : CurveSegment
     {
+        [JsonIgnore]
         public override double Length => Geometry.Distance(Start, End);
         public override Point2 PointAt(double t)
         {
@@ -26,6 +34,7 @@ public abstract record CurveSegment
     /// control points.</summary>
     public sealed record CubicBezier(Point2 P0, Point2 P1, Point2 P2, Point2 P3) : CurveSegment
     {
+        [JsonIgnore]
         public override double Length => LengthFlattened(P0, P1, P2, P3, BezierFlatnessTolerance);
         public override Point2 PointAt(double t)
         {
@@ -39,7 +48,21 @@ public abstract record CurveSegment
     /// and sweep angle (radians, counter-clockwise positive).</summary>
     public sealed record Arc(Point2 Center, double Radius, double StartAngle, double SweepAngle) : CurveSegment
     {
-        public override double Length => Math.Abs(Radius * SweepAngle);
+        [JsonIgnore]
+        public override double Length
+        {
+            get
+            {
+                Geometry.Validate(Center);
+                if (!double.IsFinite(Radius) || Radius <= 0 ||
+                    !double.IsFinite(StartAngle) || !double.IsFinite(SweepAngle))
+                    throw new ArgumentOutOfRangeException(nameof(Radius), "Yayın yarıçapı ve açıları sonlu, yarıçap pozitif olmalıdır.");
+                var length = Math.Abs(Radius * SweepAngle);
+                if (!double.IsFinite(length))
+                    throw new InvalidDataException("Yay uzunluğu temsil edilemiyor.");
+                return length;
+            }
+        }
         public override Point2 PointAt(double t)
         {
             t = Clamp(t);
@@ -56,18 +79,30 @@ public abstract record CurveSegment
     /// de Casteljau subdivision until the control polygon is flat.</summary>
     private static double LengthFlattened(Point2 p0, Point2 p1, Point2 p2, Point2 p3, double tolerance)
     {
+        Geometry.Validate(p0);
+        Geometry.Validate(p1);
+        Geometry.Validate(p2);
+        Geometry.Validate(p3);
         var length = 0.0;
-        FlattenLength(p0, p1, p2, p3, tolerance, ref length);
+        var segments = 0;
+        FlattenLength(p0, p1, p2, p3, tolerance, ref length, ref segments);
         return length;
     }
 
-    private static void FlattenLength(Point2 a, Point2 b, Point2 c, Point2 d, double tolerance, ref double length)
+    private static void FlattenLength(Point2 a, Point2 b, Point2 c, Point2 d, double tolerance,
+                                      ref double length, ref int segments, int depth = 0)
     {
+        // Length is also used outside preview sampling. Bound it independently
+        // so an adversarial curve cannot exhaust the call stack or CPU.
+        if (depth >= 64 || segments >= 100_000)
+            throw new InvalidDataException("Bézier uzunluğu hesaplama sınırına ulaşıldı.");
         var flatness = Math.Max(DistancePointToSegment(b, a, d), DistancePointToSegment(c, a, d));
-        var span = Math.Max(Geometry.Distance(a, b), Math.Max(Geometry.Distance(b, c), Geometry.Distance(c, d)));
-        if (flatness <= tolerance || span <= Geometry.Epsilon)
+        var chord = Geometry.Distance(a, d);
+        var polygonLength = Geometry.Distance(a, b) + Geometry.Distance(b, c) + Geometry.Distance(c, d);
+        if (flatness <= tolerance && polygonLength - chord <= tolerance)
         {
-            length += Geometry.Distance(a, d);
+            segments++;
+            length += chord;
             return;
         }
         var ab = (a + b) * 0.5;
@@ -76,15 +111,15 @@ public abstract record CurveSegment
         var abbc = (ab + bc) * 0.5;
         var bccd = (bc + cd) * 0.5;
         var abbccd = (abbc + bccd) * 0.5;
-        FlattenLength(a, ab, abbc, abbccd, tolerance, ref length);
-        FlattenLength(abbccd, bccd, cd, d, tolerance, ref length);
+        FlattenLength(a, ab, abbc, abbccd, tolerance, ref length, ref segments, depth + 1);
+        FlattenLength(abbccd, bccd, cd, d, tolerance, ref length, ref segments, depth + 1);
     }
 
     internal static double DistancePointToSegment(Point2 p, Point2 a, Point2 b)
     {
         var ab = b - a;
         var ab2 = Geometry.Dot(ab, ab);
-        if (ab2 <= Geometry.Epsilon) return Geometry.Distance(p, a);
+        if (ab2 == 0) return Geometry.Distance(p, a);
         var t = Geometry.Dot(p - a, ab) / ab2;
         t = Clamp(t);
         var closest = a + ab * t;
@@ -95,6 +130,9 @@ public abstract record CurveSegment
 /// <summary>Sampling and measurement helpers for parametric curve segments.</summary>
 public static class CurveSampler
 {
+    // Sampling is a preview operation, not an unbounded allocation request.
+    private const int MaximumSamplePoints = 100_000;
+
     /// <summary>Sample every segment into one continuous polyline whose chord
     /// deviation from each parametric curve stays within <paramref name="toleranceMm"/>.</summary>
     public static List<Point2> Sample(IReadOnlyList<CurveSegment> segments, double toleranceMm)
@@ -111,6 +149,9 @@ public static class CurveSampler
             // Consecutive segments share an endpoint: emit it only once.
             if (i > 0 && result.Count > 0 && points[0] == result[^1])
                 points.RemoveAt(0);
+            if (points.Count > MaximumSamplePoints - result.Count)
+                throw new InvalidDataException("Eğri örnekleme nokta bütçesini aşıyor.");
+            foreach (var point in points) Geometry.Validate(point);
             result.AddRange(points);
         }
         return result;
@@ -121,7 +162,13 @@ public static class CurveSampler
     {
         ArgumentNullException.ThrowIfNull(segments);
         var sum = 0.0;
-        foreach (var seg in segments) sum += seg.Length;
+        foreach (var seg in segments)
+        {
+            var length = seg.Length;
+            if (!double.IsFinite(length) || length < 0 || !double.IsFinite(sum + length))
+                throw new InvalidDataException("Toplam eğri uzunluğu sonlu değil.");
+            sum += length;
+        }
         return sum;
     }
 
@@ -138,6 +185,10 @@ public static class CurveSampler
 
     private static List<Point2> SampleBezier(CurveSegment.CubicBezier bez, double tolerance)
     {
+        Geometry.Validate(bez.P0);
+        Geometry.Validate(bez.P1);
+        Geometry.Validate(bez.P2);
+        Geometry.Validate(bez.P3);
         var result = new List<Point2> { bez.P0 };
         Flatten(result, bez.P0, bez.P1, bez.P2, bez.P3, tolerance);
         return result;
@@ -145,26 +196,41 @@ public static class CurveSampler
 
     private static List<Point2> SampleArc(CurveSegment.Arc arc, double tolerance)
     {
-        if (!double.IsFinite(arc.Radius) || arc.Radius <= 0)
-            throw new ArgumentOutOfRangeException(nameof(arc), "Yay yarıçapı pozitif ve sınırlı olmalıdır.");
+        Geometry.Validate(arc.Center);
+        if (!double.IsFinite(arc.Radius) || arc.Radius <= 0 ||
+            !double.IsFinite(arc.StartAngle) || !double.IsFinite(arc.SweepAngle))
+            throw new ArgumentOutOfRangeException(nameof(arc), "Yay yarıçapı ve açıları sonlu, yarıçap pozitif olmalıdır.");
         var sweepAbs = Math.Abs(arc.SweepAngle);
-        if (sweepAbs <= Geometry.Epsilon) return new List<Point2> { arc.PointAt(0) };
+        // An angular epsilon is not a geometric epsilon: with a large radius,
+        // a tiny nonzero sweep can still span measurable millimetres.
+        // Preserve both endpoints unless the sweep is exactly zero.
+        if (sweepAbs == 0) return new List<Point2> { arc.PointAt(0) };
         // Maximum sub-sweep whose chord sagitta stays within tolerance:
         // sagitta = r * (1 - cos(delta/2)) <= tolerance.
         var ratio = tolerance / Math.Abs(arc.Radius);
         if (ratio >= 1.0) ratio = 0.999;
         var delta = 2.0 * Math.Acos(1.0 - ratio);
-        var count = Math.Max(1, (int)Math.Ceiling(sweepAbs / delta));
+        if (!double.IsFinite(delta) || delta <= 0)
+            throw new InvalidDataException("Yay toleransı sayısal hassasiyetin altında; güvenilir örnekleme yapılamıyor.");
+        var requiredCount = Math.Ceiling(sweepAbs / delta);
+        if (!double.IsFinite(requiredCount) || requiredCount > MaximumSamplePoints - 1)
+            throw new InvalidDataException("Yay örnekleme nokta bütçesini aşıyor.");
+        var count = Math.Max(1, (int)requiredCount);
         var result = new List<Point2>(count + 1);
         for (var k = 0; k <= count; k++) result.Add(arc.PointAt((double)k / count));
         return result;
     }
 
-    private static void Flatten(List<Point2> result, Point2 a, Point2 b, Point2 c, Point2 d, double tolerance)
+    private static void Flatten(List<Point2> result, Point2 a, Point2 b, Point2 c, Point2 d, double tolerance,
+                                int depth = 0)
     {
+        if (depth >= 64 || result.Count >= MaximumSamplePoints)
+            throw new InvalidDataException("Bézier örnekleme sınırına ulaşıldı.");
         var flatness = Math.Max(CurveSegment.DistancePointToSegment(b, a, d), CurveSegment.DistancePointToSegment(c, a, d));
-        var span = Math.Max(Geometry.Distance(a, b), Math.Max(Geometry.Distance(b, c), Geometry.Distance(c, d)));
-        if (flatness <= tolerance || span <= Geometry.Epsilon)
+        var chord = Geometry.Distance(a, d);
+        var polygonLength = Geometry.Distance(a, b) + Geometry.Distance(b, c) + Geometry.Distance(c, d);
+        // Distance to the chord alone misses collinear controls that reverse direction.
+        if (flatness <= tolerance && polygonLength - chord <= tolerance)
         {
             result.Add(d);
             return;
@@ -175,7 +241,7 @@ public static class CurveSampler
         var abbc = (ab + bc) * 0.5;
         var bccd = (bc + cd) * 0.5;
         var abbccd = (abbc + bccd) * 0.5;
-        Flatten(result, a, ab, abbc, abbccd, tolerance);
-        Flatten(result, abbccd, bccd, cd, d, tolerance);
+        Flatten(result, a, ab, abbc, abbccd, tolerance, depth + 1);
+        Flatten(result, abbccd, bccd, cd, d, tolerance, depth + 1);
     }
 }

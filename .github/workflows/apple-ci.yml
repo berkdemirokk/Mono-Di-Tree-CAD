@@ -2,9 +2,19 @@ name: iPhone simulator build and UI test
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Apple/**'
+      - '.github/workflows/apple-ci.yml'
 
 permissions:
   contents: read
+
+# Preserve CI capacity for the latest commit of each PR/branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:

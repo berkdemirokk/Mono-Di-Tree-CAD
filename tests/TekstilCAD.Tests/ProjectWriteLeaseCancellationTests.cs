@@ -113,8 +113,19 @@ public sealed class ProjectWriteLeaseCancellationTests
         Assert.Throws<OperationCanceledException>(()=>ProjectStorage.AcquireWriteLease(path,cancellation.Token,
             afterAcquireForVerification:_=> { acquired=true;cancellation.Cancel(); }));
         Assert.True(acquired);
-        var following=Task.Run(()=> { using var lease=ProjectStorage.AcquireWriteLease(path);return true; });
-        Assert.True(following.Wait(TimeSpan.FromSeconds(5)) && following.Result);
+        // A dedicated thread isolates mutex ownership from xUnit's busy
+        // thread pool. A timeout is still a failure, not an ignored condition.
+        bool reacquired = false;
+        Exception? followingError = null;
+        var following = new Thread(() =>
+        {
+            try { using var lease = ProjectStorage.AcquireWriteLease(path); reacquired = true; }
+            catch (Exception error) { followingError = error; }
+        }) { IsBackground = true };
+        following.Start();
+        Assert.True(following.Join(TimeSpan.FromSeconds(10)), "Following writer did not finish within 10 seconds.");
+        Assert.Null(followingError);
+        Assert.True(reacquired);
     }
 
     [Fact]
@@ -127,8 +138,19 @@ public sealed class ProjectWriteLeaseCancellationTests
         bool wasAbandoned=false;
         using(ProjectStorage.AcquireWriteLease(path,afterAcquireForVerification:abandoned=>wasAbandoned=abandoned))
             Assert.True(wasAbandoned);
-        var following=Task.Run(()=> { using var lease=ProjectStorage.AcquireWriteLease(path);return true; });
-        Assert.True(following.Wait(TimeSpan.FromSeconds(5)) && following.Result);
+        // A dedicated thread isolates mutex ownership from xUnit's busy
+        // thread pool. A timeout is still a failure, not an ignored condition.
+        bool reacquired = false;
+        Exception? followingError = null;
+        var following = new Thread(() =>
+        {
+            try { using var lease = ProjectStorage.AcquireWriteLease(path); reacquired = true; }
+            catch (Exception error) { followingError = error; }
+        }) { IsBackground = true };
+        following.Start();
+        Assert.True(following.Join(TimeSpan.FromSeconds(10)), "Following writer did not finish within 10 seconds.");
+        Assert.Null(followingError);
+        Assert.True(reacquired);
         GC.KeepAlive(abandonedLease);
     }
 

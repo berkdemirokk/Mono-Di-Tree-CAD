@@ -270,7 +270,7 @@ public sealed class CadCanvas : FrameworkElement
         cursor=drawing.Count>0 ? drawing[^1] : default;
         InvalidateVisual();
     }
-    private void AddValidated(List<Point2> points,bool closed)
+    private void AddValidated(List<Point2> points,bool closed,CurveSegment? sourceCurve = null)
     {
         foreach(var point in points) Geometry.Validate(point);
         if(closed) Geometry.ValidateContour(points);
@@ -282,7 +282,8 @@ public sealed class CadCanvas : FrameworkElement
             catch (ArgumentException ex)
             { throw new ArgumentException("Açık çizgi sıfır uzunluklu, üst üste binen veya kesişen kenar içeriyor; çizim tamamlanmadı.", ex); }
         }
-        owner.AddPiece(points,closed,()=> { observedCommits++;drawing.Clear(); });
+        owner.AddPiece(points,closed,()=> { observedCommits++;drawing.Clear(); },
+            sourceCurve is null ? null : [sourceCurve]);
     }
     public void FinishPolyline()
         => FinishPolylineCore(true);
@@ -601,14 +602,22 @@ public sealed class CadCanvas : FrameworkElement
         if(owner.ActiveTool=="Bézier")
         {
             drawing.Add(p);
-            if(drawing.Count==4) AddValidated(Geometry.SampleCubicBezier(drawing[0],drawing[1],drawing[2],drawing[3],64),false);
+            if(drawing.Count==4)
+            {
+                var curve = new CurveSegment.CubicBezier(drawing[0], drawing[1], drawing[2], drawing[3]);
+                AddValidated(ParametricContour.Sample([curve]), false, curve);
+            }
             else owner.SetStatus(ToolGuidance(owner.ActiveTool));
             InvalidateVisual();return;
         }
         if(owner.ActiveTool=="Yay")
         {
             drawing.Add(p);
-            if(drawing.Count==3) AddValidated(Arc(drawing[0],drawing[1],drawing[2]),false);
+            if(drawing.Count==3)
+            {
+                var curve = ArcSource(drawing[0], drawing[1], drawing[2]);
+                AddValidated(ParametricContour.Sample([curve]), false, curve);
+            }
             else owner.SetStatus(ToolGuidance(owner.ActiveTool));
             InvalidateVisual();return;
         }
@@ -953,6 +962,21 @@ public sealed class CadCanvas : FrameworkElement
         if(Geometry.HasSelfIntersections(points,false,cancellationToken))
             throw new ArgumentException("Nokta taşınamadı: açık çizgi sıfır uzunluklu, üst üste binen veya kesişen bir kenar oluşturuyor.");
     }
+    // Preserve mathematical centre/radius/angles instead of baking only the
+    // old 64-segment visual approximation into the project file.
+    private static CurveSegment.Arc ArcSource(Point2 center, Point2 start, Point2 end)
+    {
+        var radius = Geometry.Distance(center, start);
+        if (radius < 0.001 || Geometry.Distance(center, end) < 0.001)
+            throw new ArgumentException("Yay yarıçapı ve bitiş yönü sıfır olamaz.");
+        var a = Math.Atan2(start.Y - center.Y, start.X - center.X);
+        var b = Math.Atan2(end.Y - center.Y, end.X - center.X);
+        var sweep = (b - a + 2 * Math.PI) % (2 * Math.PI);
+        if (sweep < 1e-6)
+            throw new ArgumentException("Yayın başlangıç ve bitiş yönleri farklı olmalıdır.");
+        return new CurveSegment.Arc(center, radius, a, sweep);
+    }
+
     private static List<Point2> Arc(Point2 center,Point2 start,Point2 end)
     {
         var radius=Geometry.Distance(center,start);

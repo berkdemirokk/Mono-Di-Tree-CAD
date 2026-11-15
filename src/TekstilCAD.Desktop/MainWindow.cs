@@ -397,6 +397,10 @@ public class MainWindow : Window
         y.TextChanged += (_, _) => CapturePropertyDraft();
         selectionCommands.Add(AddButton(inspector, "Parça bilgileri…", EditPieceMetadata, "Adetli pastal kesim rolünü, adedi ve malzemeyi kullanır. Temel pastal her parçayı bir kez yerleştirir; makine çıktısı bu bilgileri taşımaz."));
         selectionCommands.Add(AddButton(inspector,"İplik yönü…",EditGrainline,"Seçili parçanın iplik yönü çizgisini girin veya kaldırın. SVG çizgiyi görsel olarak içerir; işaretli parçaların DXF ve HPGL çıktısı henüz desteklenmez."));
+        selectionCommands.Add(AddButton(inspector, "Parametrik konturu düzenle…", EditParametricContour,
+            "Bézier kontrol noktalarını veya yay merkezi/açılarını değiştirir. Kaydedilmiş analitik geometri korunur."));
+        selectionCommands.Add(AddButton(inspector, "Parametrik konturu poliline dönüştür…", FlattenParametricContour,
+            "Bézier/yay parametrelerini onaydan sonra kaldırıp mevcut örneklenmiş noktaları sabit kontur olarak tutar; geri alınabilir."));
         AutomationProperties.SetName(grainlineStatus,"İplik yönü durumu");
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
@@ -1019,8 +1023,61 @@ public class MainWindow : Window
         if(changed) { dirty=true; onCommitted?.Invoke(); AfterCommitBeforeRefreshForVerification?.Invoke(); }
         dirty = session.IsDirty; Refresh(); SetStatus(changed ? description : "Değişiklik yok · Çalışmanız ve işlem geçmişi korundu");
     }
+    private void EditParametricContour()
+    {
+        if (Selected is not { Curves: { Count: > 0 } } piece)
+        { SetStatus("Seçilen parçada kayıtlı parametrik kontrol noktası yok."); return; }
+        if (!IsPieceEditable(piece) || HasPropertyDraftFor(piece.Id))
+        { SetStatus("Katman kilidini veya uygulanmamış ad/konum taslağını önce çözün."); return; }
+        if (Document.GradingRules.Any(rule => rule.SourcePieceId == piece.Id) || piece.Notches is not null)
+        {
+            MessageBox.Show(this, "Bu parçada serileme kuralı veya çentik işareti var. " +
+                "Kontrol noktalarını değiştirmeden önce bağlı üretim verilerini ayrı olarak inceleyin. " +
+                "Kaynak veri otomatik silinmeyecek.", "Parametrik düzenleme engellendi",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        var id = piece.Id;
+        var initial = piece.Clone();
+        var epoch = projectEpoch;
+        new ParametricCurveEditorWindow(this, initial, segments =>
+        {
+            var current = Document.Pieces.FirstOrDefault(item => item.Id == id);
+            if (projectEpoch != epoch || SelectedId != id || current is null ||
+                !IsPieceEditable(current) || HasPropertyDraftFor(id) ||
+                !DocumentSession.ContentEquals(
+                    new ProjectDocument { Pieces = [initial] },
+                    new ProjectDocument { Pieces = [current] }))
+                throw new InvalidOperationException("Parça düzenleme sırasında değişti. Pencereyi kapatıp güncel konturu yeniden açın.");
+            CommitObserved("Parametrik kontrol noktaları güncellendi", () =>
+            {
+                var live = Document.Pieces.First(item => item.Id == id);
+                live.Curves = [.. segments];
+                ParametricContour.Regenerate(live);
+                if (live.Grainline is not null) live.Grainline.NeedsReview = true;
+            });
+        }).ShowDialog();
+    }
+
+    private void FlattenParametricContour()
+    {
+        if (Selected is not { Curves: { Count: > 0 } } piece)
+        { SetStatus("Seçilen parçada dönüşecek parametrik kontur yok."); return; }
+        if (!IsPieceEditable(piece) || HasPropertyDraftFor(piece.Id))
+        { SetStatus("Katman kilidini veya uygulanmamış alan taslağını önce çözün."); return; }
+        if (MessageBox.Show(this,
+            "Bézier/yay kontrol parametreleri kaldırılacak. Görünen kontur noktaları aynı kalacak. " +
+            "Bu değişiklik Geri Al ile geri getirilebilir. Devam edilsin mi?",
+            "Parametrik veriyi poliline dönüştür", MessageBoxButton.YesNo,
+            MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+        var id = piece.Id;
+        CommitObserved("Parametrik kontur sabit poliline dönüştürüldü",
+            () => ParametricContour.Detach(Document.Pieces.First(item => item.Id == id)));
+    }
+
     public void AddPiece(List<Point2> points,bool closed) => AddPiece(points,closed,null);
-    internal void AddPiece(List<Point2> points,bool closed,Action? onCommitted)
+    internal void AddPiece(List<Point2> points,bool closed,Action? onCommitted,
+                           IReadOnlyList<CurveSegment>? curves = null)
     {
         if (points.Count < (closed ? 3 : 2)) return;
         // New geometry goes to the layer selected in the panel. A hidden or locked
@@ -1031,7 +1088,7 @@ public class MainWindow : Window
         if (target is not { Visible: true, Locked: false })
         { SetStatus("Kalıp eklenmedi · Seçili ve varsayılan katman gizli veya kilitli. Önce bir katmanı görünür ve kilitsiz yapın."); return; }
         var layerId = target.Id;
-        CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", LayerId=layerId, Points=[.. points], Closed=closed }; Document.Pieces.Add(p); SetSelectionCore([p.Id],p.Id); },onCommitted);
+        CommitObserved("Kalıp geometrisi oluşturuldu",() => { var p=new PatternPiece { Name=$"Parça {Document.Pieces.Count+1}", LayerId=layerId, Points=[.. points], Closed=closed, Curves=curves is null ? null : [..curves] }; Document.Pieces.Add(p); SetSelectionCore([p.Id],p.Id); },onCommitted);
     }
     internal Action? AfterDxfLoadBeforeRefreshForVerification { get; set; }
     internal Action? AfterProjectLoadBeforeRefreshForVerification { get; set; }
