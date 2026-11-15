@@ -183,4 +183,21 @@ public sealed class PieceNameSearchTests
         _ = PieceNameSearch.FindPiecesByNameFolded(document, "on");
         Assert.True(DocumentSession.ContentEquals(snapshot, document));
     }
+
+    [Theory]
+    [InlineData("​")]
+    [InlineData("­")]
+    [InlineData(" ​ ")]
+    public void QueriesOfOnlyInvisibleCharactersMatchNothing(string query)
+    {
+        Assert.Empty(PieceNameSearch.FindPiecesByName(Named(Names), query));
+    }
+
+    [Fact]
+    public void FoldAndFoldedSearchDoNotThrowOnAnUnpairedSurrogate()
+    {
+        var lone = "A" + (char)0xD800;
+        Assert.Equal("a" + (char)0xD800, PieceNameSearch.Fold(lone));
+        Assert.Empty(PieceNameSearch.FindPiecesByNameFolded(Named(Names), lone));
+    }
 }

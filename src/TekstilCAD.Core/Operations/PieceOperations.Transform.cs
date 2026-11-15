@@ -31,11 +31,13 @@ public static partial class PieceOperations
             var bounds = Geometry.Bounds(piece.Points);
             var dx = x - bounds.MinX;
             var dy = y - bounds.MinY;
-            var summary = $"{Quote(piece.Name)} sol üst köşesi X {Mm(x)}, Y {Mm(y)} konumuna taşındı.";
+            var summary = dx == 0 && dy == 0
+                ? $"{Quote(piece.Name)} zaten orada; taşıma gerekmedi."
+                : $"{Quote(piece.Name)} sol üst köşesi X {Mm(x)}, Y {Mm(y)} konumuna taşındı.";
             var result = MoveCore(document, index, piece, dx, dy, summary);
             if (!result.Succeeded || (dx == 0 && dy == 0)) return result;
             var actual = Geometry.Bounds(result.Piece!.Points);
-            return TargetMatches(actual.MinX, x) && TargetMatches(actual.MinY, y)
+            return TargetMatches(actual.MinX, x, bounds.MinX) && TargetMatches(actual.MinY, y, bounds.MinY)
                 ? result
                 : Fail(PieceOperationError.Precision,
                     $"{Quote(piece.Name)} için istenen konum sayısal hassasiyetle yeterince temsil edilemiyor; hiçbir şey değişmedi. Daha küçük koordinatlar girin.");
@@ -155,6 +157,8 @@ public static partial class PieceOperations
                     $"Yeniden boyutlandırma {Quote(piece.Name)} konturunu geçersiz yapardı (noktalar üst üste biniyor); hiçbir şey değişmedi. Daha büyük bir ölçü girin.");
 
             var changed = !points.SequenceEqual(piece.Points);
+            // Marks must match their vertices before they are re-anchored (also rejects a stray vertex index).
+            if (piece.Notches is not null) _ = MarkedPieceTranslation.Translate(piece, 0, 0);
             var resized = piece.Clone();
             resized.Points = points;
             resized.Notches = piece.Notches?.Select(m => new NotchMark { VertexIndex = m.VertexIndex, Position = points[m.VertexIndex] }).ToList();

@@ -172,8 +172,9 @@ public static partial class PieceOperations
         return string.Join(", ", parts) + " kaydırıldı";
     }
 
-    private static string CopyName(string name)
+    private static string CopyName(string? name)
     {
+        name ??= "";
         const string suffix = " kopya";
         var length = Math.Min(name.Length, MaximumStoredNameLength - suffix.Length);
         if (length < name.Length && length > 0 && char.IsHighSurrogate(name[length - 1])) length--;

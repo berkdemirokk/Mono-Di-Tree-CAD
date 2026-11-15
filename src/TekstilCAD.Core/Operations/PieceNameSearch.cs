@@ -22,7 +22,8 @@ public static class PieceNameSearch
     {
         ArgumentNullException.ThrowIfNull(document);
         var query = text?.Trim() ?? "";
-        if (query.Length == 0) return [];
+        // A query of only invisible characters (zero-width space, soft hyphen) would be "empty" to the linguistic search and match everything.
+        if (query.All(c => char.IsWhiteSpace(c) || char.IsControl(c) || CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format)) return [];
         var compare = CultureInfo.GetCultureInfo("tr-TR").CompareInfo;
         var matches = new List<PieceMatch>();
         for (var i = 0; i < document.Pieces.Count; i++)
@@ -62,7 +63,10 @@ public static class PieceNameSearch
     public static string Fold(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var decomposed = text.Normalize(NormalizationForm.FormD);
+        string decomposed;
+        // Normalization rejects an unpaired surrogate; user-typed text must not make the search throw, so it is folded as it is.
+        try { decomposed = text.Normalize(NormalizationForm.FormD); }
+        catch (ArgumentException) { decomposed = text; }
         var builder = new StringBuilder(decomposed.Length);
         foreach (var c in decomposed)
         {

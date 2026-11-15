@@ -157,4 +157,12 @@ public sealed class PieceRenameTests
     {
         AssertUndoRoundTrip(OneRect(), d => PieceOperations.Rename(d, d.Pieces[0].Id, "Yeni"));
     }
+
+    [Fact]
+    public void ATinyNegativeAmountIsNotShownAsMinusZero()
+    {
+        var document = OneRect();
+        var result = PieceOperations.AddRectangle(document, -1e-9, 10);
+        Assert.Equal("Genişlik 0,001 mm değerinden büyük olmalı; girilen: 0 mm. Daha büyük bir ölçü girin.", result.Error);
+    }
 }

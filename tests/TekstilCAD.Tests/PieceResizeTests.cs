@@ -200,4 +200,14 @@ public sealed class PieceResizeTests
         var document = Doc(Rect("A", 0, 0, 10, 10), Rect("B", 50, 0, 10, 10));
         AssertUndoRoundTrip(document, d => PieceOperations.Resize(d, d.Pieces[0].Id, 33, 77));
     }
+
+    [Fact]
+    public void ANotchMarkWithAStrayVertexIndexIsRefusedNotMisreported()
+    {
+        var piece = Rect("A", 0, 0, 10, 10);
+        piece.Notches = [new NotchMark { VertexIndex = 99, Position = new(1, 1) }];
+        var result = PieceOperations.Resize(Doc(piece), piece.Id, 20, 20);
+        Assert.False(result.Succeeded);
+        Assert.NotEqual(PieceOperationError.OutOfRange, result.ErrorCode);
+    }
 }

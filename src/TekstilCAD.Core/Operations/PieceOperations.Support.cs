@@ -40,7 +40,12 @@ public static partial class PieceOperations
     public static IReadOnlyList<PieceMatch> FindPiecesByNameFolded(ProjectDocument document, string? text)
         => PieceNameSearch.FindPiecesByNameFolded(document, text);
 
-    private static string Mm(double value) => double.IsFinite(value) ? value.ToString("#,0.######", Tr) + " mm" : "geçersiz değer";
+    private static string Mm(double value)
+    {
+        if (!double.IsFinite(value)) return "geçersiz değer";
+        var text = value.ToString("#,0.######", Tr);
+        return (text == "-0" ? "0" : text) + " mm";
+    }
 
     /// <summary>Name for a message: shortened, controls replaced, wrapped in typographic quotes.</summary>
     private static string Quote(string? name)
@@ -130,10 +135,13 @@ public static partial class PieceOperations
     }
 
     // An eight-ULP bound is a representation check around the requested double, as in the inspector's apply path.
-    private static bool TargetMatches(double actual, double requested)
+    // The displacement is rounded on the grid of the larger of the old and the new coordinate, so the tolerance must use that
+    // magnitude, not the (possibly much smaller) target alone.
+    private static bool TargetMatches(double actual, double requested, double previous)
     {
         if (actual == requested) return true;
-        var ulp = Math.Max(Math.Abs(Math.BitIncrement(requested) - requested), Math.Abs(requested - Math.BitDecrement(requested)));
+        var scale = Math.Max(Math.Abs(requested), Math.Abs(previous));
+        var ulp = Math.Max(Math.Abs(Math.BitIncrement(scale) - scale), Math.Abs(scale - Math.BitDecrement(scale)));
         return Math.Abs(actual - requested) <= 8 * ulp;
     }
 

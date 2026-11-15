@@ -252,4 +252,27 @@ public sealed class PieceMoveTests
     {
         AssertUndoRoundTrip(OneRect(), d => PieceOperations.MoveTo(d, d.Pieces[0].Id, 500, 600));
     }
+
+    [Theory]
+    [InlineData(1000, 12.3, 45.6)]
+    [InlineData(5000, 0.1, 0.7)]
+    [InlineData(123456.789, 0.1, 0.2)]
+    [InlineData(-5000, -0.3, 0.9)]
+    public void MoveTowardsTheOriginToAFineTargetIsNotRefusedForRounding(double start, double x, double y)
+    {
+        var document = Doc(Rect("A", start, start, 100, 50));
+        var result = Run(document, d => PieceOperations.MoveTo(d, d.Pieces[0].Id, x, y));
+        var box = Geometry.Bounds(result.Piece!.Points);
+        Assert.Equal(x, box.MinX, 9);
+        Assert.Equal(y, box.MinY, 9);
+        Assert.Equal(100, box.Width, 9);
+    }
+
+    [Fact]
+    public void MoveToTheCurrentPositionSaysNothingMoved()
+    {
+        var document = Doc(Rect("A", 10, 50, 120, 80));
+        var result = PieceOperations.MoveTo(document, document.Pieces[0].Id, 10, 50);
+        Assert.Equal("“A” zaten orada; taşıma gerekmedi.", result.Summary);
+    }
 }
