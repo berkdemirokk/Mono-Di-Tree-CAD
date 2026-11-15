@@ -24,8 +24,10 @@ internal sealed class AboutWindow : Window
     internal Button CopySummary { get; } = new() { Content = "Sürüm bilgisini kopyala", Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 8, 0) };
     internal TextBlock Status { get; } = new() { TextWrapping = TextWrapping.Wrap, Foreground = StudioTheme.Muted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
 
-    /// <summary>Opens a folder or file with Windows; replaced during background verification.</summary>
-    internal Func<string, bool> ShellOpen { get; set; } = OpenWithWindows;
+    /// <summary>Shows a folder in File Explorer; replaced during background verification.</summary>
+    internal Func<string, bool> OpenFolder { get; set; } = ShowInExplorer;
+    /// <summary>Opens the notices text file with its registered viewer; replaced during background verification.</summary>
+    internal Func<string, bool> OpenFile { get; set; } = OpenWithWindows;
     /// <summary>Copies text to the clipboard; replaced during background verification.</summary>
     internal Action<string> CopyText { get; set; } = Clipboard.SetText;
 
@@ -77,8 +79,8 @@ internal sealed class AboutWindow : Window
         var folders = new WrapPanel();
         AutomationProperties.SetHelpText(OpenData, "Klasörü Windows Dosya Gezgini'nde açar; hiçbir dosyayı değiştirmez.");
         AutomationProperties.SetHelpText(OpenLogs, "Beklenmeyen hata günlüklerinin klasörünü açar. Günlükler yalnız bu bilgisayarda tutulur.");
-        OpenData.Click += (_, _) => Open(AppPaths.DataDirectory, "Veri klasörü henüz oluşturulmadı; ilk kayıt veya kurtarma kaydıyla oluşur.");
-        OpenLogs.Click += (_, _) => Open(AppPaths.LogsDirectory, "Henüz hata günlüğü yok.");
+        OpenData.Click += (_, _) => ShowFolder(AppPaths.DataDirectory, "Veri klasörü henüz oluşturulmadı; ilk kayıt veya kurtarma kaydıyla oluşur.");
+        OpenLogs.Click += (_, _) => ShowFolder(AppPaths.LogsDirectory, "Henüz hata günlüğü yok.");
         folders.Children.Add(OpenData); folders.Children.Add(OpenLogs); panel.Children.Add(folders);
 
         panel.Children.Add(Heading("AÇIK KAYNAK BİLDİRİMLERİ"));
@@ -86,7 +88,7 @@ internal sealed class AboutWindow : Window
         var notices = Path.Combine(AppContext.BaseDirectory, NoticesFileName);
         OpenNotices.IsEnabled = File.Exists(notices);
         if (!OpenNotices.IsEnabled) OpenNotices.ToolTip = "Bildirim dosyası bu kurulumda bulunamadı.";
-        OpenNotices.Click += (_, _) => Open(notices, "Bildirim dosyası bulunamadı.");
+        OpenNotices.Click += (_, _) => ShowNotices(notices);
         panel.Children.Add(OpenNotices);
 
         CopySummary.Click += (_, _) =>
@@ -108,14 +110,26 @@ internal sealed class AboutWindow : Window
     internal static string SupportSummary() =>
         AppInfo.ProductName + Environment.NewLine + VersionLine() + Environment.NewLine + EnvironmentLine();
 
-    private void Open(string path, string missing)
+    private void ShowFolder(string path, string missing)
     {
         try
         {
-            if (!Directory.Exists(path) && !File.Exists(path)) { Announce(missing); return; }
-            Announce(ShellOpen(path) ? "Windows'ta açıldı." : "Windows bu konumu açamadı.");
+            // Only an existing directory is handed over, and only as an argument to File Explorer, so a
+            // file or a program that happens to carry the folder's name can never be started from here.
+            if (!Directory.Exists(path)) { Announce(missing); return; }
+            Announce(OpenFolder(path) ? "Windows'ta açıldı." : "Windows bu konumu açamadı.");
         }
         catch (Exception) { Announce("Windows bu konumu açamadı."); }
+    }
+
+    private void ShowNotices(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) { Announce("Bildirim dosyası bulunamadı."); return; }
+            Announce(OpenFile(path) ? "Windows'ta açıldı." : "Windows bu dosyayı açamadı.");
+        }
+        catch (Exception) { Announce("Windows bu dosyayı açamadı."); }
     }
 
     private void Announce(string text)
@@ -127,6 +141,15 @@ internal sealed class AboutWindow : Window
     private static TextBlock Heading(string text) =>
         new() { Text = text, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = StudioTheme.Muted, Margin = new Thickness(0, 18, 0, 6) };
 
+    private static bool ShowInExplorer(string directory)
+    {
+        var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe")) { UseShellExecute = false };
+        start.ArgumentList.Add(directory);
+        using var process = Process.Start(start);
+        return process is not null;
+    }
+
+    // The path is the fixed notices .txt beside the executable, so its registered viewer is a text editor.
     private static bool OpenWithWindows(string path)
     {
         using var process = Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });

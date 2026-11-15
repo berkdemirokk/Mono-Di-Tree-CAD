@@ -1,8 +1,12 @@
 name: Windows preview release
 
-# Builds, tests and packages the Windows x64 preview. A pushed tag such as v0.4.0 or
-# v0.4.0-preview.1 also publishes the packages as a GitHub pre-release. Packages are unsigned
-# development previews: no code signature, installer or production certification.
+# Builds, tests, verifies and packages the Windows x64 preview.
+# - A pushed tag such as v0.4.0 or v0.4.0-preview.1, on a commit that is already on main, also
+#   publishes the packages as a GitHub pre-release.
+# - A manual run never publishes, whatever ref it is started on: it only uploads the packages as a
+#   workflow artifact.
+# Packages are unsigned development previews: no code signature, installer or production
+# certification.
 on:
   push:
     tags: [ 'v*' ]
@@ -19,18 +23,21 @@ jobs:
   package:
     runs-on: windows-latest
     timeout-minutes: 45
-    permissions:
-      contents: write
     steps:
+      # Full history is needed to check that a tagged commit is on main. The token is not kept in
+      # the checkout: nothing in this job may write to the repository.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
 
-      - name: Check that the tag matches the project version
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Check the tag against the project version and main
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           TAG: ${{ github.ref_name }}
@@ -41,12 +48,33 @@ jobs:
           if ($env:TAG -ne "v$version" -and !$env:TAG.StartsWith("v$version-")) {
             throw "Tag $($env:TAG) does not match project version $version. Use v$version or v$version-<label>."
           }
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0) { throw 'The tagged commit is not on main; a preview is published only from main.' }
 
       - name: Build solution (Release)
         run: dotnet build TekstilCAD.slnx -c Release --nologo
 
       - name: Run unit tests
         run: dotnet test tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj -c Release --no-build --nologo
+
+      # The same gate docs/RELEASE_CHECKLIST.md lists: no package unless the desktop checks pass.
+      - name: Run headless desktop verification
+        shell: pwsh
+        run: |
+          $out = Join-Path $PWD 'work\release-verify'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $report = Join-Path $out 'report.json'
+          $exe = Join-Path $PWD 'src\TekstilCAD.Desktop\bin\Release\net10.0-windows\TekstilCAD.Studio.exe'
+          $process = Start-Process -FilePath $exe -ArgumentList '--verify', "`"$report`"" -WorkingDirectory $PWD -PassThru
+          $null = $process.Handle   # keeps ExitCode readable after the process ends
+          if (!$process.WaitForExit(15 * 60 * 1000)) { $process.Kill(); throw 'Desktop verification did not finish within 15 minutes.' }
+          if (!(Test-Path -LiteralPath $report)) { throw "Desktop verification wrote no report (exit code $($process.ExitCode))." }
+          $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+          Write-Host "status=$($result.status) checks=$($result.checks.Count) exit=$($process.ExitCode)"
+          if ($result.status -ne 'PASS' -or $process.ExitCode -ne 0) {
+            Write-Host $result.failure
+            throw 'Desktop verification failed; nothing is packaged.'
+          }
 
       - name: Package source and Windows x64 archives
         shell: pwsh
@@ -60,23 +88,37 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Separate job so that only this step, which runs no project code, holds a write token.
+  publish:
+    needs: package
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: tekstilcad-windows-x64-preview
+          path: packages
+
       - name: Publish GitHub pre-release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          $notes = @(
-            'Windows x64 geliştirme önizlemesi. Ticari üretim için tamamlanmış veya sertifikalı değildir.'
-            ''
-            '- `TekstilCAD-Windows-x64-*.zip`: ayrı bir klasöre açıp `TekstilCAD.Studio.exe` çalıştırın; .NET kurulumu gerekmez.'
-            '- Paket imzasızdır; Windows SmartScreen veya Akıllı Uygulama Denetimi uyarı verebilir ya da çalıştırmayı engelleyebilir.'
-            '- `TekstilCAD-manifest-*.json` arşivlerin SHA-256 özetlerini içerir.'
-            '- Bilinen sınırlar: depodaki `KNOWN_ISSUES.md`.'
-          ) -join "`n"
-          Set-Content -LiteralPath work/release-notes.md -Value $notes -Encoding utf8
-          $files = @(Get-ChildItem -LiteralPath work/packages -File | ForEach-Object FullName)
-          if ($files.Count -lt 3) { throw 'Expected source archive, Windows archive and manifest.' }
-          gh release create $env:TAG @files --prerelease --verify-tag --title "Mono Di Tree CAD $($env:TAG) (önizleme)" --notes-file work/release-notes.md
-          if ($LASTEXITCODE -ne 0) { throw 'GitHub release could not be created.' }
+          set -euo pipefail
+          count=$(find packages -maxdepth 1 -type f | wc -l)
+          if [ "$count" -lt 3 ]; then echo "Expected source archive, Windows archive and manifest." >&2; exit 1; fi
+          cat > notes.md <<'NOTES'
+          Windows x64 geliştirme önizlemesi. Ticari üretim için tamamlanmış veya sertifikalı değildir.
+
+          - `TekstilCAD-Windows-x64-*.zip`: ayrı bir klasöre açıp `TekstilCAD.Studio.exe` çalıştırın; .NET kurulumu gerekmez.
+          - Paket imzasızdır; Windows SmartScreen veya Akıllı Uygulama Denetimi uyarı verebilir ya da çalıştırmayı engelleyebilir.
+          - `TekstilCAD-manifest-*.json` arşivlerin SHA-256 özetlerini içerir.
+          - Bilinen sınırlar: depodaki `KNOWN_ISSUES.md`.
+          NOTES
+          gh release create "$TAG" packages/* --repo "$REPOSITORY" --prerelease --verify-tag \
+            --title "Mono Di Tree CAD $TAG (önizleme)" --notes-file notes.md

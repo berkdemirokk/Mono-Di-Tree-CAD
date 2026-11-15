@@ -21,7 +21,8 @@ public partial class App : Application
             return;
         }
         // Interactive runs only: verification modes keep their own failure reporting and data directory.
-        CrashReporter.Attach(this);
+        CrashReporter.Attach();
+        CrashReporter.ShowPendingNotice();
         new MainWindow().Show();
     }
 }

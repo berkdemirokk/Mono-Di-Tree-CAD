@@ -75,7 +75,8 @@ try {
         archives = @(@{name=[IO.Path]::GetFileName($sourceZip);sha256=(Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash},@{name=[IO.Path]::GetFileName($runtimeZip);sha256=(Get-FileHash -LiteralPath $runtimeZip -Algorithm SHA256).Hash})
         verification = $verification
     }
-    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+    # Set-Content -Encoding utf8 adds a byte order mark under Windows PowerShell 5.1; write without one.
+    [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding($false)))
     Write-Output $sourceZip
     Write-Output $runtimeZip
     Write-Output $manifestPath
