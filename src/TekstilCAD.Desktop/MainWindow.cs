@@ -672,7 +672,10 @@ public class MainWindow : Window
     {
         var full = (string)button.Content;
         AutomationProperties.SetName(button, full);
-        button.ToolTip = button.ToolTip is string hint ? full + "\n" + hint : full;
+        // Without an explicit help text WPF reports the tooltip, which now starts with the name; a screen
+        // reader would then say the name twice.
+        if (button.ToolTip is string hint) { AutomationProperties.SetHelpText(button, hint); button.ToolTip = full + "\n" + hint; }
+        else button.ToolTip = full;
         button.Content = shortLabel;
         return button;
     }

@@ -6,10 +6,10 @@ Bu belge yalnız **Windows x64 geliştirme önizlemesinin** GitHub'da ön sürü
 
 1. `src/TekstilCAD.Desktop/TekstilCAD.Desktop.csproj` içindeki `Version` değerini belirleyin (ör. `0.4.0`).
 2. Aşağıdaki kapıların tümü `main` üzerinde geçmiş olmalı.
-3. Sürümle eşleşen etiketi gönderin: `v0.4.0` ya da `v0.4.0-preview.1`. Etiket sürümle eşleşmezse iş akışı durur.
-4. `.github/workflows/windows-release.yml` derler, testleri çalıştırır, `scripts/Package.ps1` ile kaynak ZIP, Windows x64 ZIP ve SHA-256 manifestini üretir ve GitHub ön sürümü olarak yayımlar.
+3. `main` üzerindeki bir commit'e sürümle eşleşen etiketi gönderin: `v0.4.0` ya da `v0.4.0-preview.1`. Etiket sürümle eşleşmezse ya da etiketli commit `main` üzerinde değilse iş akışı durur.
+4. `.github/workflows/windows-release.yml` derler, birim testlerini ve penceresiz masaüstü doğrulamasını çalıştırır, `scripts/Package.ps1` ile kaynak ZIP, Windows x64 ZIP ve SHA-256 manifestini üretir. Doğrulama `PASS` değilse paket üretilmez. Yayın ayrı bir işte, yalnız etiket gönderiminde yapılır; depoya yazma yetkisi yalnız o iştedir.
 
-Etiket göndermeden denemek için iş akışını elle başlatın (`workflow_dispatch`): paketler yalnız iş akışı çıktısı olarak yüklenir, yayın oluşturulmaz.
+Etiket göndermeden denemek için iş akışını elle başlatın (`workflow_dispatch`): paketler yalnız iş akışı çıktısı olarak yüklenir. Elle başlatma, hangi dal ya da etiket üzerinde çalıştırılırsa çalıştırılsın yayın oluşturmaz.
 
 Yerelde paket: `.\scripts\Package.ps1` (çıktı `work\packages`). Windows PowerShell 5.1 ve PowerShell 7 ile çalışır; çalışma kopyası temiz olmalıdır.
 

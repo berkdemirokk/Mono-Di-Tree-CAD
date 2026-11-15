@@ -29,8 +29,9 @@ internal static class AppInfo
         if (version.Length == 0) version = fallbackText;
         if (plus < 0) return (version, null);
         var revision = informational[(plus + 1)..].Trim();
-        // Only a hexadecimal Git revision is shown; other build metadata is not guessed at.
-        if (revision.Length < 7 || !revision.All(Uri.IsHexDigit)) return (version, null);
+        // Only a hexadecimal Git revision is shown; other build metadata is not guessed at. A value
+        // made of digits alone is more likely a date or a build counter than a revision.
+        if (revision.Length < 7 || !revision.All(Uri.IsHexDigit) || !revision.Any(char.IsLetter)) return (version, null);
         return (version, revision[..Math.Min(12, revision.Length)].ToLowerInvariant());
     }
 }
