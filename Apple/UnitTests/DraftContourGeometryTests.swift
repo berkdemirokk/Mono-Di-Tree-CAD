@@ -80,7 +80,8 @@ final class DraftContourGeometryTests: XCTestCase {
         view = view.zoomed(by: 1e9)
         XCTAssertEqual(view.zoom, DraftViewport.maxZoom)
         XCTAssertFalse(view.canZoomIn)
-        view = view.panned(by: CGSize(width: 40, height: -20), in: CGSize(width: 300, height: 200))
+        view = view.panned(by: CGSize(width: 40, height: -20), in: CGSize(width: 300, height: 200),
+                           content: CGSize(width: 200, height: 100))
         XCTAssertEqual(view.pan, CGSize(width: 40, height: -20))
         view = view.zoomed(by: 1e-9)
         XCTAssertTrue(view.isFit, "zooming back out to fit must also clear the pan")
@@ -92,12 +93,55 @@ final class DraftContourGeometryTests: XCTestCase {
 
     func testViewportPanIsBoundedAndIgnoredAtFit() {
         let size = CGSize(width: 300, height: 200)
-        XCTAssertEqual(DraftViewport().panned(by: CGSize(width: 50, height: 50), in: size), DraftViewport())
+        let content = CGSize(width: 200, height: 100)
+        XCTAssertEqual(DraftViewport().panned(by: CGSize(width: 50, height: 50), in: size, content: content),
+                       DraftViewport())
         let zoomed = DraftViewport().zoomed(by: 2)
-        let far = zoomed.panned(by: CGSize(width: 1e9, height: -1e9), in: size)
-        XCTAssertEqual(far.pan.width, 300, accuracy: 1e-9)   // size * zoom / 2
-        XCTAssertEqual(far.pan.height, -200, accuracy: 1e-9)
-        XCTAssertEqual(zoomed.panned(by: CGSize(width: CGFloat.infinity, height: 0), in: size), zoomed)
+        let far = zoomed.panned(by: CGSize(width: 1e9, height: -1e9), in: size, content: content)
+        // (content * zoom + size) / 2 - keepVisible
+        XCTAssertEqual(far.pan.width, (200 * 2 + 300) / 2 - DraftViewport.keepVisible, accuracy: 1e-9)
+        XCTAssertEqual(far.pan.height, -((100 * 2 + 200) / 2 - DraftViewport.keepVisible), accuracy: 1e-9)
+        XCTAssertEqual(zoomed.panned(by: CGSize(width: CGFloat.infinity, height: 0), in: size, content: content),
+                       zoomed)
+    }
+
+    func testPannedAwayDrawingStillKeepsPartOfItInView() throws {
+        let size = CGSize(width: 390, height: 230)
+        let fit = try XCTUnwrap(DraftCanvasMap(size: size, minX: 0, maxX: 100, minY: 0, maxY: 150, inset: 30))
+        for zoom in [2.0, 6.0, 24.0] {
+            let view = DraftViewport().zoomed(by: zoom)
+            let right = view.panned(by: CGSize(width: 1e9, height: 0), in: size, content: fit.contentSize)
+            let left = view.panned(by: CGSize(width: -1e9, height: 0), in: size, content: fit.contentSize)
+            // Pushed right, the drawing's left edge must still be inside the area; pushed left, its right edge.
+            let leftEdge = fit.viewed(right, in: size).screen(DraftPoint(x: 0, y: 75)).x
+            let rightEdge = fit.viewed(left, in: size).screen(DraftPoint(x: 100, y: 75)).x
+            XCTAssertLessThan(leftEdge, size.width - DraftViewport.keepVisible + 1e-6)
+            XCTAssertGreaterThan(rightEdge, DraftViewport.keepVisible - 1e-6)
+        }
+    }
+
+    func testCenteringBringsAPointToTheMiddleAtAnyZoom() throws {
+        let size = CGSize(width: 390, height: 230)
+        let fit = try XCTUnwrap(DraftCanvasMap(size: size, minX: 0, maxX: 300, minY: 0, maxY: 200, inset: 30))
+        for zoom in [1.6, 4.0, 10.0] {
+            let target = p(40, 150)
+            let pan = fit.panCentering(target, zoom: zoom, in: size)
+            let view = DraftViewport(zoom: zoom, pan: pan)
+            let at = fit.viewed(view, in: size).screen(target)
+            XCTAssertEqual(at.x, size.width / 2, accuracy: 1e-6)
+            XCTAssertEqual(at.y, size.height / 2, accuracy: 1e-6)
+        }
+    }
+
+    func testExportFileNameFollowsTheProjectNameAndStaysSafe() {
+        XCTAssertEqual(CADSketchImport.exportFileName(forProjectNamed: "Örnek kalıp"), "Örnek kalıp.tcad")
+        XCTAssertEqual(CADSketchImport.exportFileName(forProjectNamed: "a/b\\c:d*e?f\"g<h>i|j"), "a-b-c-d-e-f-g-h-i-j.tcad")
+        XCTAssertEqual(CADSketchImport.exportFileName(forProjectNamed: "  ..gizli.. "), "gizli.tcad")
+        XCTAssertEqual(CADSketchImport.exportFileName(forProjectNamed: "   "), "Mono Di Tree cizimi.tcad")
+        XCTAssertEqual(CADSketchImport.exportFileName(forProjectNamed: "///"), "---.tcad")
+        let long = String(repeating: "x", count: 200)
+        XCTAssertEqual(CADSketchImport.exportFileName(forProjectNamed: long).count, 60 + ".tcad".count)
+        XCTAssertFalse(CADSketchImport.exportFileName(forProjectNamed: "satır\nsonu").contains("\n"))
     }
 
     func testZoomedMapKeepsTheCentreAndStaysInvertible() throws {
@@ -112,7 +156,8 @@ final class DraftContourGeometryTests: XCTestCase {
         let same = fit.viewed(DraftViewport(), in: size)
         XCTAssertEqual(same.screen(p(37, 11)).x, fit.screen(p(37, 11)).x, accuracy: 1e-9)
         // Panning moves the drawing by exactly the pan, and the round trip still holds.
-        let panned = fit.viewed(DraftViewport().zoomed(by: 3).panned(by: CGSize(width: 25, height: -10), in: size), in: size)
+        let panned = fit.viewed(DraftViewport().zoomed(by: 3)
+            .panned(by: CGSize(width: 25, height: -10), in: size, content: fit.contentSize), in: size)
         let base = fit.viewed(DraftViewport().zoomed(by: 3), in: size)
         XCTAssertEqual(panned.screen(p(80, 40)).x - base.screen(p(80, 40)).x, 25, accuracy: 1e-9)
         XCTAssertEqual(panned.screen(p(80, 40)).y - base.screen(p(80, 40)).y, -10, accuracy: 1e-9)

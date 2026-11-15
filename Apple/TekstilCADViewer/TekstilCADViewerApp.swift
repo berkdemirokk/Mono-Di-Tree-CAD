@@ -133,19 +133,19 @@ private struct ContentView: View {
                 if let notice = project.formatNotice {
                     Text(notice)
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color(red: 0.60, green: 0.30, blue: 0.0))
                         .accessibilityAddTraits(.isStaticText)
                 }
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Gösterilen parça").font(.caption).foregroundStyle(.secondary)
+                                Text("Gösterilen parça").font(.caption).foregroundStyle(AppTheme.muted)
                                 Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
                                     .font(.headline).lineLimit(1)
                             }
                             Spacer()
-                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(.secondary)
+                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(AppTheme.muted)
                         }
                         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
                         .contentShape(Rectangle())
@@ -167,13 +167,13 @@ private struct ContentView: View {
                         .background(Color.secondary.opacity(0.08))
                 } else {
                     Text("Bu projede görüntülenebilir kontur yok.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.muted)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.secondary.opacity(0.08))
                 }
                 Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(AppTheme.muted)
             } else {
                 home.disabled(isLoading)
             }
@@ -274,6 +274,7 @@ private struct ContentView: View {
                         .foregroundStyle(AppTheme.muted)
                     Text("Kalıbını kolayca oluştur").font(.largeTitle.bold())
                         .foregroundStyle(AppTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
                     Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
                         .font(.body).foregroundStyle(AppTheme.muted)
                 }
@@ -295,7 +296,7 @@ private struct ContentView: View {
                             .frame(maxWidth: .infinity, minHeight: 46)
                     }
                     .buttonStyle(.appSecondary)
-                    .accessibilityHint("Dosyalardan bir proje seçerek konturlarını önizleyin.")
+                    .accessibilityHint("Yalnızca önizleme açar. Düzenlemek için açtıktan sonra kopyasını oluşturun.")
                 }
 
                 VStack(alignment: .leading, spacing: 14) {
@@ -607,7 +608,7 @@ private struct PiecePicker: View {
                 }
                 if matchingIndices.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Eşleşen parça bulunamadı.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppTheme.muted)
                 }
             }
             .searchable(text: $search, prompt: "Parça ara")
@@ -654,7 +655,7 @@ private struct PieceDetails: View {
                 Text(piece.grainStatus)
                 Text("En: \((bounds.maxX - bounds.minX).formatted(.number.precision(.fractionLength(0...2)))) • Boy: \((bounds.maxY - bounds.minY).formatted(.number.precision(.fractionLength(0...2))))")
                 Text("Boyutlar dosyadaki koordinat birimindedir.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.muted)
             }
             .font(.caption)
             .frame(maxWidth: .infinity, alignment: .leading)

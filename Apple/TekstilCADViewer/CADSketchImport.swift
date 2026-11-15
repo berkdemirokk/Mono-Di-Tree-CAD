@@ -10,6 +10,19 @@ enum CADSketchImport {
     private static let maximumPieces = 250
     private static let maximumTotalPoints = 20_000
 
+    /// A file name taken from the project name, safe on every file system a file is shared to.
+    static func exportFileName(forProjectNamed name: String) -> String {
+        let forbidden = CharacterSet(charactersIn: "/\\:*?\"<>|")
+            .union(.controlCharacters).union(.newlines)
+        let cleaned = name.unicodeScalars
+            .map { forbidden.contains($0) ? "-" : String($0) }
+            .joined()
+        let trimSet = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))
+        let limited = String(cleaned.trimmingCharacters(in: trimSet).prefix(60))
+            .trimmingCharacters(in: trimSet)
+        return (limited.isEmpty ? "Mono Di Tree cizimi" : limited) + ".tcad"
+    }
+
     private static func number(_ value: Any?) -> Double? {
         guard let value = value as? NSNumber,
               CFGetTypeID(value) != CFBooleanGetTypeID(),

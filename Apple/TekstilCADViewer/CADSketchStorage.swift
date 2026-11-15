@@ -26,7 +26,7 @@ enum SketchStoreError: LocalizedError {
         case .invalid: return "Dosyanın içeriği veya sürümü desteklenmiyor."
         case .oversized: return "Dosya izin verilen boyutu aşıyor."
         case .identity: return "Dosyanın proje kimliği kayıtla eşleşmiyor."
-        case .changed: return "Kayıt başka bir çalışma tarafından değiştirildi. Projeyi yeniden açın."
+        case .changed: return "Kayıt başka bir çalışma tarafından değiştirildi. Çalışmanı kaybetmemek için «Farklı kopya kaydet»i kullan ya da projeyi yeniden aç."
         }
     }
 }

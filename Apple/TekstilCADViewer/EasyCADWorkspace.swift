@@ -29,6 +29,9 @@ struct EasyCADWorkspace: View {
     @State private var liveZoom = 1.0
     @State private var livePan = CGSize.zero
     @State private var panning = false
+    @State private var pinching = false
+    @State private var canvasSize = CGSize.zero
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editingPoints: DraftPiece?
     @State private var showingTouchComposer = false
     @State private var shouldStoreImportedSeed = false
@@ -261,11 +264,14 @@ struct EasyCADWorkspace: View {
         guard !document.pieces.isEmpty else { problem = "Önce en az bir parça ekleyin."; return }
         do {
             let bytes = try CADSketchImport.encode(document)
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("MonoDiTree-\(UUID().uuidString).tcad")
+            // Named after the project, so the file is recognisable in Files and Mail.
+            let folder = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let url = folder.appendingPathComponent(CADSketchImport.exportFileName(forProjectNamed: document.name))
             try bytes.write(to: url, options: .atomic)
             exportURL = url
-            success = "Dosya hazır. Paylaş düğmesinden Dosyalara Kaydet'i seçin."
+            success = "Dosya hazır. Aşağıdaki «Paylaş veya Dosyalara kaydet» düğmesine dokun."
         } catch {
             problem = "Dosya hazırlanamadı: \(error.localizedDescription)"
         }
@@ -316,11 +322,11 @@ struct EasyCADWorkspace: View {
                 Text(viewport.isFit
                      ? "\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır"
                      : "\(document.pieces.count) parça • \(String(format: "%.1f", viewport.zoom))× yakınlaştırıldı")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(AppTheme.muted)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
             }
             if let success {
-                Text(success).font(.footnote).foregroundStyle(.secondary)
+                Text(success).font(.footnote).foregroundStyle(AppTheme.muted)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
             }
         }
@@ -348,6 +354,7 @@ struct EasyCADWorkspace: View {
     private var addSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("1 · Parça ekle", systemImage: "plus.square.on.square").font(.headline)
+                .accessibilityAddTraits(.isHeader)
             // Side by side only at their natural one-line widths; otherwise stacked full width
             // (narrow screens, large text). An equal split would give the longer label half the
             // row and wrap it even though the pair as a whole fits.
@@ -364,7 +371,7 @@ struct EasyCADWorkspace: View {
             Button {
                 if !hasPendingDetails || saveDetails() { showingTouchComposer = true }
             } label: {
-                Label("Parmakla yeni kontur çiz", systemImage: "pencil.tip.crop.circle")
+                Label("Parmakla şekil çiz", systemImage: "pencil.tip.crop.circle")
                     .frame(maxWidth: .infinity, minHeight: 50)
             }
             .buttonStyle(.appSecondary)
@@ -406,8 +413,8 @@ struct EasyCADWorkspace: View {
             .focused($pieceNameFocused)
             .onSubmit { pieceNameFocused = false }
         HStack {
-            millimetreField("X", label: "X (mm)", text: $pieceX)
-            millimetreField("Y", label: "Y (mm)", text: $pieceY)
+            millimetreField("X", label: "Soldan uzaklık (mm)", text: $pieceX)
+            millimetreField("Y", label: "Alttan uzaklık (mm)", text: $pieceY)
         }
         if document.pieces[index].closed {
             HStack {
@@ -420,7 +427,7 @@ struct EasyCADWorkspace: View {
         Button("Ölçüleri, konumu ve adı uygula") { _ = saveDetails() }
             .buttonStyle(.appPrimary)
         if document.pieces[index].points.count <= DraftContourGeometry.pointLimit {
-            Button("Kontur noktalarını düzenle") {
+            Button("Köşe noktalarını düzenle") {
                 if !hasPendingDetails || saveDetails() { editingPoints = document.pieces[index] }
             }
             .buttonStyle(.appSecondary)
@@ -444,10 +451,11 @@ struct EasyCADWorkspace: View {
     private var editSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("2 · Düzenle", systemImage: "slider.horizontal.3").font(.headline)
-            Toggle("Sürüklerken 5 mm'ye hizala", isOn: $snapToFiveMillimeters)
+                .accessibilityAddTraits(.isHeader)
+            Toggle("5 mm'lik adımlarla sürükle", isOn: $snapToFiveMillimeters)
                 .font(.caption)
             Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(AppTheme.muted)
             Picker("Parça seç", selection: Binding(
                 get: { selectedID },
                 set: { _ = selectFromCanvasOrMenu($0) }
@@ -466,10 +474,11 @@ struct EasyCADWorkspace: View {
     private var saveSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("3 · Kaydet", systemImage: "square.and.arrow.up").font(.headline)
+                .accessibilityAddTraits(.isHeader)
             TextField("Proje adı", text: $projectName)
                 .textFieldStyle(.roundedBorder)
-            Button("Proje adını uygula") { _ = saveDetails() }
-                .buttonStyle(.appSecondary)
+            Text("Çizimin cihazda otomatik saklanır. Listede kalıcı görünmesi için Projeyi kaydet'e bas.")
+                .font(.caption).foregroundStyle(AppTheme.muted)
             Button {
                 guard saveDetails() else { return }
                 do {
@@ -511,7 +520,7 @@ struct EasyCADWorkspace: View {
                 .buttonStyle(.appPrimary)
             }
             Text("Yalnız yeni çizim parçaları dışa aktarılır. Bu araç, içe alınmış fabrika dosyalarını değiştirmez.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(AppTheme.muted)
         }
     }
 
@@ -538,7 +547,7 @@ struct EasyCADWorkspace: View {
                 .accessibilityIdentifier("workshop-tools")
             }
             .background(AppTheme.page.ignoresSafeArea())
-            .animation(.default, value: keyboardVisible)
+            .animation(reduceMotion ? nil : .default, value: keyboardVisible)
             // The drawing can leave the screen while the keyboard changes; a drag that was in
             // progress then never ends, so its state is dropped here.
             .onChange(of: keyboardVisible) { _ in
@@ -546,8 +555,27 @@ struct EasyCADWorkspace: View {
                 draggedPieceID = nil
                 currentDrag = .zero
                 panning = false
+                pinching = false
                 livePan = .zero
                 liveZoom = 1
+                // The drawing gets smaller with the keyboard up; a zoomed view would point at
+                // places that are no longer on screen.
+                if keyboardVisible { viewport = DraftViewport() }
+            }
+            .onChange(of: document.pieces.isEmpty) { isEmpty in
+                if isEmpty { viewport = DraftViewport() }
+            }
+            .onChange(of: problem) { _ in
+                // An alert can cancel a gesture half way; its live values must not stay behind.
+                liveZoom = 1
+                livePan = .zero
+                panning = false
+                pinching = false
+            }
+            .onChange(of: success) { message in announce(message) }
+            .onChange(of: viewport.zoom) { zoom in
+                announce(viewport.isFit ? "Ekrana sığdırıldı"
+                                        : "Yakınlaştırma \(String(format: "%.1f", zoom)) kat")
             }
             .modifier(KeyboardVisibility(visible: $keyboardVisible))
             #if os(iOS)
@@ -632,8 +660,14 @@ struct EasyCADWorkspace: View {
         }
     }
 
+    private func announce(_ message: String?) {
+        #if os(iOS)
+        if let message { UIAccessibility.post(notification: .announcement, argument: message) }
+        #endif
+    }
+
     // Drawing, hit testing and finger movement share the same transform.
-    private func transform(_ size: CGSize) -> DraftCanvasMap? {
+    private func fitMap(_ size: CGSize) -> DraftCanvasMap? {
         guard let first = document.pieces.first?.points.first, size.width > 40, size.height > 40 else { return nil }
         var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
         for piece in document.pieces {
@@ -642,10 +676,25 @@ struct EasyCADWorkspace: View {
                 minY = min(minY, p.y); maxY = max(maxY, p.y)
             }
         }
-        guard let fit = DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 16)
-        else { return nil }
-        let live = viewport.zoomed(by: liveZoom).panned(by: livePan, in: size)
+        // The margin leaves room for the measurement tags around the selected piece.
+        return DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 30)
+    }
+
+    private func transform(_ size: CGSize) -> DraftCanvasMap? {
+        guard let fit = fitMap(size) else { return nil }
+        let live = viewport.zoomed(by: liveZoom)
+            .panned(by: livePan, in: size, content: fit.contentSize)
         return fit.viewed(live, in: size)
+    }
+
+    /// Brings the selected piece to the middle of the drawing area without any gesture.
+    private func centerOnSelected() {
+        guard let index = selectedIndex, let fit = fitMap(canvasSize) else { return }
+        let piece = document.pieces[index]
+        let middle = DraftPoint(x: (piece.minX + piece.maxX) / 2, y: (piece.minY + piece.maxY) / 2)
+        let pan = fit.panCentering(middle, zoom: viewport.zoom, in: canvasSize)
+        viewport = DraftViewport(zoom: viewport.zoom)
+            .panned(by: pan, in: canvasSize, content: fit.contentSize)
     }
 
     private func segmentDistance(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> Double {
@@ -767,6 +816,8 @@ struct EasyCADWorkspace: View {
             })
             .simultaneousGesture(DragGesture(minimumDistance: 8)
                 .onChanged { value in
+                    // Two fingers moving together are a pinch, not a drag of a piece or the view.
+                    if pinching { return }
                     if !dragStarted {
                         dragStarted = true
                         let piece = hitPiece(value.startLocation, size: geometry.size)
@@ -780,7 +831,8 @@ struct EasyCADWorkspace: View {
                 }
                 .onEnded { value in
                     if panning {
-                        viewport = viewport.panned(by: value.translation, in: geometry.size)
+                        viewport = viewport.panned(by: value.translation, in: geometry.size,
+                                                   content: fitMap(geometry.size)?.contentSize ?? .zero)
                         panning = false
                         livePan = .zero
                     }
@@ -788,13 +840,18 @@ struct EasyCADWorkspace: View {
                 })
             .simultaneousGesture(MagnificationGesture()
                 .onChanged { value in
+                    pinching = true
                     // A piece that is being dragged keeps its scale until it is dropped.
                     if draggedPieceID == nil { liveZoom = Double(value) }
                 }
-                .onEnded { value in
-                    if draggedPieceID == nil { viewport = viewport.zoomed(by: Double(value)) }
+                .onEnded { _ in
+                    // Commit what was shown; liveZoom is 1 when a piece was being dragged.
+                    viewport = viewport.zoomed(by: liveZoom)
                     liveZoom = 1
+                    pinching = false
                 })
+            .onAppear { canvasSize = geometry.size }
+            .onChange(of: geometry.size) { canvasSize = $0 }
         }
         .clipped()
         .frame(height: canvasHeight)
@@ -802,13 +859,21 @@ struct EasyCADWorkspace: View {
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
         .accessibilityLabel("Dokunarak parça seçebileceğiniz kalıp önizlemesi")
-        .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Alternatif: Parça seç menüsü.")
+        .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Yakınlaştırmak için yukarı, uzaklaştırmak için aşağı kaydırın. Alternatif: Parça seç menüsü.")
+        .accessibilityValue(canvasSpokenValue)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: viewport = viewport.zoomed(by: DraftViewport.step)
+            case .decrement: viewport = viewport.zoomed(by: 1 / DraftViewport.step)
+            @unknown default: break
+            }
+        }
         .overlay {
             if document.pieces.isEmpty {
                 VStack(spacing: 4) {
                     Text("Kalıbını oluştur").font(.headline)
                     Text("Aşağıdan bir şekil ekle. Ölçüler milimetredir.")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(.subheadline).foregroundStyle(AppTheme.muted)
                         .multilineTextAlignment(.center)
                 }
                 .padding(8)
@@ -820,12 +885,31 @@ struct EasyCADWorkspace: View {
         }
     }
 
+    private var canvasSpokenValue: String {
+        var text = "\(document.pieces.count) parça. "
+        if let index = selectedIndex {
+            let piece = document.pieces[index]
+            text += "Seçili: \(piece.name). "
+            if piece.closed {
+                text += "En \(DraftPiece.display(piece.maxX - piece.minX)) milimetre, boy \(DraftPiece.display(piece.maxY - piece.minY)) milimetre. "
+            } else {
+                text += "Uzunluk \(DraftPiece.display(piece.lineLength)) milimetre. "
+            }
+        }
+        text += viewport.isFit ? "Ekrana sığdırılmış." : "Yakınlaştırma \(String(format: "%.1f", viewport.zoom)) kat."
+        return text
+    }
+
     // Buttons for the same zoom the pinch gesture gives, so nothing depends on two fingers.
     private var zoomControls: some View {
         HStack(spacing: 6) {
             if !viewport.isFit {
                 zoomButton("Ekrana sığdır", systemImage: "arrow.up.left.and.down.right.magnifyingglass",
                            id: "zoom-fit", enabled: true) { viewport = DraftViewport() }
+            }
+            if !viewport.isFit && selectedIndex != nil {
+                zoomButton("Seçili parçayı göster", systemImage: "scope",
+                           id: "zoom-selected", enabled: true) { centerOnSelected() }
             }
             zoomButton("Uzaklaştır", systemImage: "minus.magnifyingglass",
                        id: "zoom-out", enabled: viewport.canZoomOut) {

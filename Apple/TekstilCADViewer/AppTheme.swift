@@ -132,6 +132,7 @@ struct StepBadge: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Adım \(number): \(title). \(detail)")
     }
 }
