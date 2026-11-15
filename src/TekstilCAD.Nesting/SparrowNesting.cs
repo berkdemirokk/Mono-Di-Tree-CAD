@@ -262,20 +262,17 @@ public static class SparrowNesting
 
     private static void CheckPairwiseGap(Path64[] contours, double gap, CancellationToken cancellationToken)
     {
-        // Two contours at least (gap - tolerance) apart cannot overlap after each grows by half of that.
-        var half = Math.Max(0, gap - Tolerance) / 2 * Scale;
-        var grown = new Path64[contours.Length];
+        // Two contours at least (gap - tolerance) apart cannot overlap after each is offset by half of that.
+        // With a zero gap the offset is a small shrink, so float noise along shared edges is not an overlap.
+        var half = (gap - Tolerance) / 2 * Scale;
+        var grown = new Paths64[contours.Length];
         var boxes = new Rect64[contours.Length];
         for (var i = 0; i < contours.Length; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (half > 0)
-            {
-                var result = Clipper.InflatePaths(new Paths64 { contours[i] }, half, JoinType.Round, EndType.Polygon);
-                if (result.Count != 1) throw new SparrowResultRejectedException("Parça aralığı tek bir dış kontur oluşturmadı; sonuç kullanılmadı.");
-                grown[i] = result[0];
-            }
-            else grown[i] = contours[i];
+            grown[i] = Clipper.InflatePaths(new Paths64 { contours[i] }, half, half > 0 ? JoinType.Round : JoinType.Miter, EndType.Polygon);
+            if (grown[i].Count == 0 || half > 0 && grown[i].Count != 1)
+                throw new SparrowResultRejectedException("Parça aralığı denetimi için kontur oluşturulamadı; sonuç kullanılmadı.");
             boxes[i] = Clipper.GetBounds(grown[i]);
         }
         for (var i = 0; i < grown.Length; i++)
@@ -283,7 +280,7 @@ public static class SparrowNesting
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!boxes[i].Intersects(boxes[j])) continue;
-                foreach (var path in Clipper.Intersect(new Paths64 { grown[i] }, new Paths64 { grown[j] }, FillRule.NonZero))
+                foreach (var path in Clipper.Intersect(grown[i], grown[j], FillRule.NonZero))
                     if (Math.Abs(Clipper.Area(path)) > 1)
                         throw new SparrowResultRejectedException("sparrow yerleşiminde çakışma ya da yetersiz parça aralığı bulundu; sonuç kullanılmadı.");
             }
