@@ -36,7 +36,7 @@ internal static class CommandCatalogueData
         all.Add(D("start.new", GStart, "Yeni proje başlat",
             "Boş bir çalışma başlatır; kaydedilmemiş işiniz varsa önce sorar.",
             "Yeni", ["yeni proje", "boş sayfa"],
-            ["sıfırdan başla", "temiz sayfa", "yeni kalıp"]));
+            ["sıfırdan başla", "temiz sayfa", "yeni kalıp", "yeni iş"]));
         all.Add(D("start.open", GStart, "Proje aç…",
             "Daha önce kaydettiğiniz bir projeyi dosyadan açar.",
             "Aç…", ["proje aç", "dünkü işi getir"],
@@ -44,19 +44,19 @@ internal static class CommandCatalogueData
         all.Add(D("start.save", GStart, "Projeyi kaydet",
             "Çalışmanızı dosyaya yazar; ilk kayıtta dosya adı sorulur.",
             "Kaydet", ["kaydet", "projeyi kaydet"],
-            ["sakla", "dosyaya yaz"]));
+            ["sakla", "dosyaya yaz", "kaydet"]));
         all.Add(D("start.save-as", GStart, "Başka adla kaydet…",
             "Çalışmayı yeni bir ad vererek ayrı bir dosyaya kaydeder.",
             "Farklı kaydet…", ["farklı kaydet", "başka adla kaydet"],
             ["yeni isimle kaydet", "adını değiştirerek kaydet"]));
         all.Add(D("start.save-copy", GStart, "Yedek kopya kaydet…",
-            "Açık dosyaya dokunmadan yeni bir kopya yazar.",
+            "Açık dosyaya dokunmadan ayrı bir yedek kopya yazar.",
             "Yeni dosya olarak güvenli kopya…", ["yedeğini al", "yedek kopya"],
             ["yedek", "güvenli kopya", "kopyasını kaydet"]));
         all.Add(D("start.recovery-scan", GStart, "Kurtarma kayıtlarını tara",
-            "Beklenmedik kapanmadan kalan otomatik kayıtları arar; açık projeyi değiştirmez.",
+            "Program beklenmedik biçimde kapandıysa kalan otomatik kayıtları arar; açık projeyi değiştirmez.",
             "Kurtarma tara", ["kurtarma tara", "kurtarma kayıtlarını tara"],
-            ["kurtar", "kayıp iş", "otomatik kayıt"]));
+            ["kurtar", "kayıp iş", "otomatik kayıt", "bilgisayar kapandı"]));
 
         // ---- Çizim ----
         all.Add(D("draw.tool-select", GDraw, "Fareyle parça seç",
@@ -70,7 +70,7 @@ internal static class CommandCatalogueData
         all.Add(D("draw.tool-polyline", GDraw, "Nokta nokta çiz",
             "Her tıklamada bir köşe eklersiniz; Enter şekli kapatır, Esc vazgeçirir.",
             "Çoklu çizgi", ["nokta nokta çiz", "çoklu çizgi aracı"],
-            ["kontur çiz", "çokgen", "serbest şekil"]));
+            ["şekil çiz", "çokgen", "serbest şekil"]));
         all.Add(D("draw.tool-rect", GDraw, "Fareyle dikdörtgen çiz",
             "İki köşeye tıklayarak dikdörtgen çizersiniz.",
             "Dikdörtgen", ["dikdörtgen aracı", "fareyle dikdörtgen"],
@@ -83,12 +83,12 @@ internal static class CommandCatalogueData
             "Üç noktaya tıklayarak kavisli bir kenar (yay) çizersiniz.",
             "Yay", ["yay aracı", "yay çiz"],
             ["yarım daire", "kemer", "daire parçası"]));
-        all.Add(D("draw.coordinate", GDraw, "Koordinatla nokta ekle…",
-            "Önce bir çizim aracı seçin; sonra noktanın X ve Y değerlerini milimetre olarak yazarsınız.",
+        all.Add(D("draw.coordinate", GDraw, "Yerini yazarak nokta ekle…",
+            "Önce bir çizim aracı seçin; sonra noktanın yerini X ve Y değerleriyle milimetre olarak yazarsınız.",
             "Koordinatla nokta gir…", ["koordinat gir", "koordinatla çiz"],
-            ["x y değeri", "tam yerini yaz", "ölçüyle nokta"]));
-        all.Add(D("draw.finish-open", GDraw, "Çizgiyi uçları birleştirmeden bitir",
-            "Sürmekte olan çizimi kapatmadan bitirir; en az iki nokta gerekir.",
+            ["x y değeri", "tam yerini yaz", "ölçüyle nokta", "koordinat"]));
+        all.Add(D("draw.finish-open", GDraw, "Çizgiyi kapatmadan bitir",
+            "Sürmekte olan çizimi uçlarını birleştirmeden bitirir; en az iki nokta gerekir.",
             "Açık çizgiyi bitir", ["çizimi açık bırak", "açık bitir"],
             ["açık bırak", "çizimi bitir"]));
         all.Add(F("draw.rectangle", GDraw, "Ölçü yazarak dikdörtgen çiz",
@@ -108,7 +108,7 @@ internal static class CommandCatalogueData
         all.Add(F("piece.rotate", GPiece, "Parçayı döndür",
             "Seçili parçayı kendi ortası etrafında çevirir; açıyı yazabilirsiniz.",
             ["döndür", "90 derece döndür", "çeyrek tur"],
-            "çevir", "tur at"));
+            "çevir", "tur at", "açı"));
         all.Add(F("piece.resize", GPiece, "Parçanın ölçüsünü değiştir",
             "Dikdörtgen bir parçanın genişliğini ya da boyunu yazıyla değiştirir.",
             ["genişliği 95 yap", "boyu 60 yap", "95 x 60 yap"],
@@ -139,7 +139,7 @@ internal static class CommandCatalogueData
         all.Add(D("piece.mirror", GPiece, "Parçayı sağ-sol aynala",
             "Seçili parçanın aynadaki görüntüsünü yapar; sağ taraf sola, sol taraf sağa geçer.",
             "Aynala", ["aynala", "sağ sol aynala"],
-            ["ayna", "ayna görüntüsü", "simetri"]));
+            ["ayna", "ayna görüntüsü", "simetri", "yansıt"]));
         all.Add(D("piece.mirror-h", GPiece, "Parçayı alt-üst aynala",
             "Seçili parçayı alt ve üstü yer değiştirecek biçimde ters çevirir.",
             "Yatay aynala", ["alt üst aynala", "yatay aynala"],
@@ -152,11 +152,11 @@ internal static class CommandCatalogueData
         all.Add(D("piece.duplicate", GPiece, "Parçanın kopyasını çıkar…",
             "Seçili parçadan aynı yerde bir kopya yapar; neleri kopyalayacağınızı sorar.",
             "Parçayı çoğalt…", ["çoğalt", "kopyala", "bir kopya daha"],
-            ["kopya", "bir tane daha", "ikiye katla"]));
+            ["kopya", "kopyala", "bir tane daha", "ikiye katla"]));
         all.Add(D("piece.delete", GPiece, "Seçili parçayı sil",
             "Seçili parçayı projeden kaldırır; geri alınabilir.",
             "Parçayı sil", ["sil", "parçayı sil", "kaldır"],
-            ["at", "yok et", "çıkar"]));
+            ["sil", "at", "yok et", "çıkar"]));
         all.Add(D("piece.group-move", GPiece, "Birkaç parçayı birlikte taşı…",
             "Listeden birden çok parça seçip hepsini aynı miktarda kaydırır; tek adımda geri alınır.",
             "Birden fazla parçayı taşı…", ["birden fazla parçayı taşı", "parçaları taşı"],
@@ -176,7 +176,7 @@ internal static class CommandCatalogueData
         all.Add(D("piece.curve-flatten", GPiece, "Eğriyi sabit çizgiye çevir…",
             "Eğri ayarlarını bırakır; mevcut noktalar sabit çizgi olarak kalır. Geri alınabilir.",
             "Parametrik konturu poliline dönüştür…", None,
-            ["eğriyi düzleştir", "poliline çevir", "sabitle"]));
+            ["eğriyi düzleştir", "eğriyi çizgi yap", "sabitle"]));
         all.Add(X("piece.apply-fields", GPiece, "Ad ve konum kutularını uygula",
             "Ayrıntılı görünümde Ad, X ve Y kutularına yazdıklarınızı seçili parçaya uygular.",
             "Konumu ve adı uygula", "Konumu ve adı uygula",
@@ -192,17 +192,17 @@ internal static class CommandCatalogueData
 
         // ---- Ölçü, beden ve pastal ----
         all.Add(F("size.seam", GSize, "Dikiş payı ver…",
-            "Parçanın dış kenarına eşit genişlikte pay ekler; sonuç ayrı bir parça olur. Tekstil araçları penceresi açılır.",
+            "Parçanın dış kenarına eşit genişlikte pay ekler ve sonucu ayrı bir parça yapar; Tekstil araçları penceresi açılır.",
             ["1 cm dikiş payı", "dikiş payı 10", "bir buçuk santim pay ver"],
-            "pay", "pay ekle", "dikiş", "kenar payı"));
+            "pay", "pay ekle", "dikiş", "kenar payı", "dikiş payı ekle"));
         all.Add(F("size.grade", GSize, "Beden oluştur…",
-            "Seçili parçadan daha büyük ya da daha küçük bedenler üretir (serileme). Tekstil araçları penceresi açılır.",
+            "Seçili parçadan daha büyük ya da daha küçük bedenler üretir (serileme); Tekstil araçları penceresi açılır.",
             ["bir beden büyüt", "bir üst beden", "L bedeni çıkar", "serileme yap"],
-            "serileme", "beden", "büyük beden", "küçük beden"));
+            "serileme", "beden", "büyük beden", "küçük beden", "başka beden"));
         all.Add(F("size.nest", GSize, "Pastal yerleştir…",
-            "Parçaları kumaşın eni içine dizerek pastal planı hazırlar; temel pastal bütün parçaların yerini değiştirir.",
+            "Parçaları kumaşın eni içine dizerek pastal planı hazırlar; temel pastalda bütün parçaların yeri değişir.",
             ["pastal yap", "parçaları yerleştir", "kumaş eni 150 santim pastal"],
-            "pastal", "kumaşa diz", "fire", "yerleşim"));
+            "pastal", "kumaşa diz", "fire", "yerleşim", "kumaş eni"));
         all.Add(D("size.textile-tools", GSize, "Tekstil araçlarını aç…",
             "Dikiş payı, beden ve pastal işlerinin hepsini tek pencerede açar.",
             "Tekstil araçları…", None,
@@ -217,8 +217,8 @@ internal static class CommandCatalogueData
             "Başka bir programdan DXF dosyası alır; ölçü birimini siz seçersiniz, onaylayana kadar projeniz değişmez.",
             "DXF al…", ["dxf al", "dxf aç", "içe aktar"],
             ["dxf yükle", "başka programdan al", "dosyadan kalıp al"]));
-        all.Add(D("exchange.block-copy", GExchange, "DXF'teki hazır tanımdan kopya çıkar…",
-            "DXF dosyasında tanımlı ama yerleştirilmemiş bir şekli ayrı bir inceleme dosyası olarak hazırlar.",
+        all.Add(D("exchange.block-copy", GExchange, "DXF'teki hazır şekilden kopya çıkar…",
+            "DXF dosyasında tanımlı ama sayfaya yerleştirilmemiş bir şekli ayrı bir inceleme dosyası olarak hazırlar.",
             "DXF blok tanımından kopya…", None,
             ["blok", "blok tanımı", "tanımdan kopya"]));
         all.Add(D("exchange.selected-dxf", GExchange, "Seçilen parçaları DXF yap…",
@@ -230,11 +230,11 @@ internal static class CommandCatalogueData
             "Seçilen parçalar · işaretli inceleme DXF…", None,
             ["işaretli dxf", "köşe işareti", "çentik"]));
         all.Add(D("exchange.export-all", GExchange, "Hepsini dışa aktar…",
-            "Projedeki bütün parçaları DXF, SVG, HPGL ya da PDF inceleme dosyasına yazar; üretim onayı değildir.",
+            "Projedeki bütün parçaları DXF, SVG, HPGL ya da PDF biçiminde inceleme dosyası olarak yazar; üretim onayı değildir.",
             "Tümünü dışa aktar…", ["dışa aktar", "pdf yap", "plotter dosyası hazırla", "kesime gönder", "plotterdan çıkar"],
             ["dışa ver", "hepsini çıkar", "plotter"]));
         all.Add(D("exchange.grain-review", GExchange, "İplik işaretli inceleme DXF…",
-            "İplik yönü çizgilerini işaretleyerek inceleme DXF'i yazar. İşaret çizgileri başka programda kesim yolu sanılabilir.",
+            "İplik yönü çizgilerini işaretleyerek inceleme DXF'i yazar. Üretim dosyası değildir; işaretler başka programda kesim çizgisi sanılabilir.",
             "İplik işaretli DXF inceleme dosyası…", None,
             ["iplikli dxf", "iplik dxf"]));
         all.Add(D("exchange.notch-review", GExchange, "Köşe işaretli inceleme DXF…",
@@ -244,7 +244,7 @@ internal static class CommandCatalogueData
         all.Add(D("exchange.a4", GExchange, "Seçili parçayı A4 PDF yap…",
             "Seçili parçayı gerçek boyutuyla A4 sayfalara PDF olarak yazar; yazıcıya göndermez.",
             "Seçili parçayı A4 PDF çıkar…", ["a4 çıktı", "a4 pdf yap", "seçili parçayı yazdır"],
-            ["a4", "gerçek boyut", "yazıcı çıktısı"]));
+            ["a4", "gerçek boyut", "yazıcı çıktısı", "yazdır"]));
 
         // ---- Görünüm ----
         all.Add(D("view.fit-all", GView, "Tümünü ekrana sığdır",
@@ -288,7 +288,7 @@ internal static class CommandCatalogueData
         all.Add(D("view.undo", GView, "Son işlemi geri al",
             "Yaptığınız son değişikliği geri alır.",
             "↶", ["geri al", "son işlemi geri al", "3 adım geri"],
-            ["geri", "yanlış yaptım", "geri dön"],
+            ["geri al", "geri", "yanlış yaptım", "geri dön", "vazgeç"],
             "Geri al"));
         all.Add(D("view.redo", GView, "Geri alınanı yeniden yap",
             "Az önce geri aldığınız değişikliği yeniden uygular.",
@@ -342,13 +342,13 @@ internal static class CommandCatalogueData
             "Kilitli", null,
             "kilitle", "kilit", "korumaya al"));
         all.Add(X("layer.snap", GLayer, "Izgaraya yapışmayı aç ya da kapat",
-            "Açıkken fare her 1 mm'de bir noktaya yapışır; kapalıyken noktayı serbest koyarsınız.",
+            "Açıkken fare görünmez 1 mm'lik noktalara yapışıp düzgün çizmenizi sağlar; kapalıyken noktayı serbestçe koyarsınız.",
             "1 mm ızgaraya yakala", null,
             "ızgara", "yakalama", "adım adım çiz"));
         all.Add(X("list.search", GLayer, "Parçayı adıyla bul",
-            "Parça listesini ad ya da kimlikle süzmek için arama kutusuna gider.",
+            "Arama kutusuna gider; parça listesini ad ya da kimlikle daraltırsınız.",
             "Parça ara", "Parça ara",
-            "ara", "süz", "listede ara"));
+            "ara", "arama", "süz", "listede ara"));
         all.Add(X("list.search-clear", GLayer, "Aramayı temizle",
             "Arama kutusunu boşaltır; liste yeniden bütün parçaları gösterir.",
             "Temizle", "Temizle",
