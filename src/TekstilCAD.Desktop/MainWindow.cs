@@ -17,7 +17,7 @@ using Geometry = TekstilCAD.Core.Geometry;
 
 namespace TekstilCAD.Desktop;
 
-public class MainWindow : Window
+public partial class MainWindow : Window
 {
     private readonly DocumentSession session;
     // DocumentSession clones on every commit; this token changes only when the
@@ -423,19 +423,14 @@ public class MainWindow : Window
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
-        var rotateCounterclockwise=AddButton(transforms, "90° sola", () => TransformWithGrading((points,center) => Geometry.Rotate(points,-90,center),OrthogonalGradingTransform.RotateRight), "Parçayı merkezinden saat yönünün tersine döndür");
-        AutomationProperties.SetName(rotateCounterclockwise,"Parçayı saat yönünün tersine 90 derece döndür");
-        selectionCommands.Add(rotateCounterclockwise);
-        var rotateClockwise=AddButton(transforms, "90° sağa", () => TransformWithGrading((points,center) => Geometry.Rotate(points,90,center),OrthogonalGradingTransform.RotateLeft), "Parçayı merkezinden saat yönünde 90 derece döndür");
-        AutomationProperties.SetName(rotateClockwise,"Parçayı saat yönünde 90 derece döndür");
-        selectionCommands.Add(rotateClockwise);
-        selectionCommands.Add(AddButton(transforms, "Aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,true,center.X),OrthogonalGradingTransform.MirrorVertical), "Parçayı merkezinden geçen dikey eksene göre aynala"));
+        // The five orthogonal transforms come from one table (OrthogonalOps) that the
+        // command executor also reads, so a button and a typed command cannot disagree.
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateCounterclockwise));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateClockwise));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.MirrorVertical));
         selectionCommands.Add(AddButton(transforms,"Yanına aynalı parça…",OpenMirrorCopy,"Kaynağı koruyarak sağ veya sola boşluklu aynalı karşı parça oluşturur; önce önizleme sunar."));
-        var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,false,center.Y),OrthogonalGradingTransform.MirrorHorizontal), "Parçayı merkezinden geçen yatay eksene göre aynala");
-        AutomationProperties.SetName(mirrorHorizontal,"Parçayı yatay eksene göre aynala");
-        selectionCommands.Add(mirrorHorizontal);
-        var rotateHalf=AddButton(transforms,"180° döndür",()=>TransformWithGrading((points,center)=>Geometry.Rotate(points,180,center),OrthogonalGradingTransform.RotateHalf),"Parçayı merkezinden 180 derece tek işlemde döndür");
-        AutomationProperties.SetName(rotateHalf,"Parçayı merkezinden 180 derece döndür");selectionCommands.Add(rotateHalf);
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.MirrorHorizontal));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateHalf));
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
         inspector.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(5), Padding = new Thickness(12), Margin = new Thickness(3, 14, 3, 14), Child = metrics });
         snap.Margin = new Thickness(4, 4, 0, 14); inspector.Children.Add(snap);
@@ -1617,29 +1612,21 @@ public class MainWindow : Window
         {
             var piece=document.Pieces.First(p=>p.Id==change.Id);var bounds=Geometry.Bounds(piece.Points);
             var dx=change.X-bounds.MinX;var dy=change.Y-bounds.MinY;
-            List<Point2>? translated;
-            Grainline? translatedGrain;
-            List<NotchMark>? translatedNotches=null;
-            try
-            {
-                translated=null;
-                if(dx!=0 || dy!=0) (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
-                translatedGrain=translated is null ? piece.Grainline?.Clone()
-                    : GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
-            }
+            PieceTranslation moved;
+            try { moved=TranslatePiece(piece,dx,dy); }
             catch(ArgumentException ex)
             {
                 throw new InvalidDataException($"“{SafePieceName(piece.Name)} (kimlik: {piece.Id:D})” konumu güvenle uygulanamadı. Taslak korunuyor. {ex.Message}",ex);
             }
+            var translated=moved.Points;
             if(translated is not null)
             {
                 var actual=Geometry.Bounds(translated);
                 if(!TargetPositionMatches(actual.MinX,change.X) || !TargetPositionMatches(actual.MinY,change.Y))
                     throw new InvalidDataException($"“{SafePieceName(piece.Name)} (kimlik: {piece.Id:D})” için istenen konum sayısal hassasiyetle yeterince temsil edilemiyor. Taslak korunuyor; daha küçük koordinatlar kullanın.");
             }
-            var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
-            var movedRule=rule?.TranslatedFor(piece,translated!,dx,dy);
-            prepared.Add((piece,change.Name,translated,translatedNotches,translatedGrain,rule,movedRule));
+            var (rule,movedRule)=TranslateGradingRule(document,piece,translated,dx,dy);
+            prepared.Add((piece,change.Name,translated,moved.Notches,moved.Grainline,rule,movedRule));
         }
         foreach(var item in prepared)
         {
@@ -1647,6 +1634,28 @@ public class MainWindow : Window
             if(item.MovedRule is not null)document.GradingRules[document.GradingRules.IndexOf(item.Rule!)]=item.MovedRule;
             item.Piece.Name=item.Name;
         }
+    }
+    /// <summary>Piece geometry after a translation. <c>Points</c> is null when nothing moves (dx and dy both zero).</summary>
+    internal readonly record struct PieceTranslation(List<Point2>? Points,List<NotchMark>? Notches,Grainline? Grainline);
+    /// <summary>
+    /// Shared translation of one piece: contour, notch marks and grainline move together.
+    /// Used by the position-draft path (<see cref="ApplyDraftChanges"/>) and by command edits.
+    /// <see cref="ArgumentException"/> from the numeric-precision checks propagates; callers word it.
+    /// </summary>
+    internal static PieceTranslation TranslatePiece(PatternPiece piece,double dx,double dy)
+    {
+        List<Point2>? translated=null;
+        List<NotchMark>? translatedNotches=null;
+        if(dx!=0 || dy!=0) (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
+        var translatedGrain=translated is null ? piece.Grainline?.Clone()
+            : GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
+        return new(translated,translatedNotches,translatedGrain);
+    }
+    /// <summary>The grading rule that follows a moved piece (null rule or null moved rule when none applies or it became stale).</summary>
+    internal static (GradingRuleSet? Rule,GradingRuleSet? MovedRule) TranslateGradingRule(ProjectDocument document,PatternPiece piece,List<Point2>? translated,double dx,double dy)
+    {
+        var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
+        return (rule,rule?.TranslatedFor(piece,translated!,dx,dy));
     }
     // An eight-ULP bound is a representation check around the requested double,
     // not a manufacturing tolerance. In particular, signed zero only matches
@@ -3409,6 +3418,24 @@ public class MainWindow : Window
         if(BlockForDxfImport())return;
         EnsurePropertyDraftsApplied();
         new TextileToolsWindow(this).ShowDialog();
+    }
+    /// <summary>
+    /// Opens the textile tools on a given tab (0 grading, 1 contour editing, 2 basic nesting) with an
+    /// optional one-time value for that tab's main input. Same guards as <see cref="OpenTextileTools"/>,
+    /// and they stay first so the guard-prefix inspection of that method still describes this one.
+    /// </summary>
+    internal void OpenTextileToolsAt(int tab,string? value)
+    {
+        if(BlockForDxfImport())return;
+        EnsurePropertyDraftsApplied();
+        CreateTextileToolsAt(tab,value).ShowDialog();
+    }
+    // Built without showing so the tab and the one-time value can be checked headlessly.
+    internal TextileToolsWindow CreateTextileToolsAt(int tab,string? value)
+    {
+        var window=new TextileToolsWindow(this);
+        window.ApplyOpeningRequest(tab,value);
+        return window;
     }
     internal Func<string,bool>? ConfirmMachineLossForVerification { get; set; }
     internal Action<SimulationQueue>? OpenMachineCenterForVerification { get; set; }
