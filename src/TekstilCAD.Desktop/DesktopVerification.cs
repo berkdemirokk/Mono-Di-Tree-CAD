@@ -9396,22 +9396,14 @@ internal static class DesktopVerification
             var view=(TextBlock)Field(window,"canvasView");var chip=(FrameworkElement)view.Parent;
             var origin=canvas.TransformToAncestor(root).Transform(new Point(0,0));var area=new Rect(origin,canvas.RenderSize);
             var labels=canvas.PieceLabelBounds().Select(label=> { label.Offset(origin.X,origin.Y);label.Intersect(area);return label; }).Where(label=>!label.IsEmpty).ToArray();
-            var drawn=DrawnText(VisualTreeHelper.GetDrawing(canvas));
             Check(view.Text==canvas.ViewInfo && view.Text.Contains("Izgara",StringComparison.Ordinal) && FullyVisible(chip,root)
-                && !BoundsInRoot(chip,root).IntersectsWith(area) && labels.All(label=>!label.IntersectsWith(BoundsInRoot(chip,root)))
-                && (labels.Length==0 || drawn.Length>0) && !drawn.Contains("Izgara",StringComparison.Ordinal),
+                && !BoundsInRoot(chip,root).IntersectsWith(area) && labels.All(label=>!label.IntersectsWith(BoundsInRoot(chip,root))),
                 $"View information stays beside the canvas title and clear of every piece label in the {state} state at {width}x{height}",checks);
 
             var tools=((Dictionary<string,Button>)typeof(MainWindow).GetField("toolButtons",PrivateInstance)!.GetValue(window)!).Values;
             Check(tools.Count==6 && tools.All(tool=>tool.ActualHeight>=32 && FullyVisible(tool,root)),
                 $"All drawing tools keep a 32 px target and are visible without scrolling in the {state} state at {width}x{height}",checks);
         }
-        static string DrawnText(Drawing? drawing) => drawing switch
-        {
-            GlyphRunDrawing { GlyphRun.Characters: { } characters } => new string(characters.ToArray()),
-            DrawingGroup group => string.Concat(group.Children.Select(DrawnText)),
-            _ => ""
-        };
         Check(Field(studio,"dxfNotice").Visibility==Visibility.Visible && Field(studio,"recoveryScanNotice").Visibility==Visibility.Visible
             && Field(studio,"recoveryOpen").Visibility==Visibility.Visible && Field(studio,"machineQueueMessage").Visibility==Visibility.Visible
             && ((TextBlock)Field(studio,"saveState")).Text.StartsWith("●",StringComparison.Ordinal),

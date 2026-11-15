@@ -231,7 +231,7 @@ public class MainWindow : Window
         titleRow.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         titleRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         titleRow.Children.Add(projectTitle);
-        saveState.FontSize = 11; saveState.Margin = new Thickness(14, 0, 0, 2); saveState.VerticalAlignment = VerticalAlignment.Bottom;
+        saveState.FontSize = 11; saveState.Margin = new Thickness(14, 0, 0, 1); saveState.VerticalAlignment = VerticalAlignment.Bottom;
         Grid.SetColumn(saveState, 1); titleRow.Children.Add(saveState);
         project.Children.Add(titleRow);
         // This format does not retain import provenance. Keep the limitation visible
