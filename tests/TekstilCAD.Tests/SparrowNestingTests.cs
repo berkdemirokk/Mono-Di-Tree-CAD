@@ -110,6 +110,17 @@ public class SparrowNestingTests
             SparrowNesting.ReadSolution(Solution((0, 0, 0, 40, false), (1, 0, 0, secondV, false)), Request([Rectangle(40, 30), Rectangle(40, 30)])));
 
     [Theory]
+    [InlineData(79.9997, false)] // touching, 0.0003 mm float noise from sparrow's 32-bit output
+    [InlineData(79.9, true)]     // a real 0.1 mm overlap
+    public void ZeroGapToleratesFloatNoiseButNotOverlap(double secondV, bool rejected)
+    {
+        var request = Request([Rectangle(40, 30), Rectangle(40, 30)], gap: 0);
+        string solution = Solution((0, 0, 0, 40, false), (1, 0, 0, secondV, false));
+        if (rejected) Assert.Throws<SparrowResultRejectedException>(() => SparrowNesting.ReadSolution(solution, request));
+        else Assert.Equal(2, SparrowNesting.ReadSolution(solution, request).Placements.Count);
+    }
+
+    [Theory]
     [InlineData(0, 39.0)]   // right edge at 101 mm
     [InlineData(0, 101.0)]  // left edge below 0
     [InlineData(-1, 40.0)]  // behind the marker start
