@@ -139,6 +139,37 @@ final class CADStorageTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url), originalBytes)
     }
 
+    func testUnreadableDraftIsSetAsideWithItsBytesAndReadableDraftStays() throws {
+        let folder = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let draft = folder.appendingPathComponent("current-draft.json")
+        let aside = folder.appendingPathComponent("Unreadable", isDirectory: true)
+
+        // No draft: nothing to move.
+        XCTAssertNil(try CADLocalDraftStore.setAsideUnreadableDraft(at: draft, into: aside))
+
+        // A draft that can be read is never moved.
+        let readable = DraftProject.example
+        try CADLocalDraftStore.write(readable, to: draft)
+        XCTAssertNil(try CADLocalDraftStore.setAsideUnreadableDraft(at: draft, into: aside))
+        XCTAssertEqual(try CADLocalDraftStore.read(draft), readable)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: aside.path))
+
+        // An unreadable one is moved with its exact bytes, so a new drawing can start.
+        let damaged = Data("{\"version\":99}".utf8)
+        try damaged.write(to: draft)
+        XCTAssertThrowsError(try CADLocalDraftStore.read(draft))
+        let moved = try XCTUnwrap(try CADLocalDraftStore.setAsideUnreadableDraft(at: draft, into: aside))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: draft.path))
+        XCTAssertEqual(try Data(contentsOf: moved), damaged)
+        XCTAssertEqual(moved.deletingLastPathComponent().lastPathComponent, "Unreadable")
+
+        // The emptied slot accepts a new draft.
+        try CADLocalDraftStore.save(readable, replacing: nil, to: draft)
+        XCTAssertEqual(try CADLocalDraftStore.read(draft), readable)
+    }
+
     func testConcurrentDraftWritesRejectOneStaleSession() throws {
         let url = temporaryFile()
         defer {

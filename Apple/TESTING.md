@@ -173,6 +173,20 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 - `CADStorageTests`, aynı UUID'ye sahip eski kayıt sürümü, yanlış UUID ve idempotent yeniden kaydetme senaryolarını çalıştırır.
 - Taslak ve kütüphane kayıtlarında, uygulamanın kendi yazıcıları arasında `.json.lock` yan dosyasıyla işlem/kontrol/kayıt bir dosya kilidi altında tutulur; mevcut taslağın arşivlenmesi ve silinmesi de aynı kilitle yapılır. Yan kilit dosyaları başka açık süreçlerin kilidini geçersiz kılmamak için silinmez. Eşzamanlı eski-sürüm yazımlarını reddeden bir regresyon testi bulunur. Kilidi kullanmayan harici yazıcılar, farklı dosya alias'ları ve fiziksel cihaz testi bu garantinin dışındadır.
 
+## Devam edilen taslağı projeye kaydetme
+
+- **Son çizime devam et** ile açılan taslak, aynı proje kimliğiyle daha önce kaydedilmiş sürümden yeniyse **Projeyi kaydet** artık o kayıtlı sürümün yerine yazar. Önceden bu durumda kayıt her zaman "başka bir çalışma tarafından değiştirildi" hatasıyla reddediliyordu ve yalnız **Farklı kopya kaydet** çalışıyordu.
+- Gerekçe: başka bir projeye geçilirken geçerli taslak önce arşivlendiği için, geçerli taslak ile aynı kimlikli kayıtlı proje her zaman aynı çalışmanın devamıdır. Atölye açıldıktan sonra kayıtlı sürüm değişirse kayıt yine reddedilir.
+- Son projelerden ya da dosyadan açılan belgelerde kural değişmedi: kayıtlı sürüm yalnız açılan belgeyle birebir aynıysa yerine yazılabilir.
+- `ViewerUITests.testResumedDraftNewerThanSavedProjectCanBeSavedAgain` bu akışı simülatörde sınar. Gerçek cihazda ve iPad'de iki pencereyle ayrıca denenmelidir.
+
+## Okunamayan taslak
+
+- Cihazdaki otomatik taslak bozuksa ya da bu sürümün okuyamadığı bir biçimdeyse açılışta uyarı gösterilir. Yeni proje, örnek, son proje ya da kopya açılmak istendiğinde uygulama **Önceki taslak okunamıyor** sorusunu sorar; **Taslağı ayır ve devam et** seçilirse dosya silinmez, uygulama verileri içindeki `Unreadable` klasörüne aynı baytlarla taşınır ve yeni çalışma açılır. **Vazgeç** hiçbir şeyi değiştirmez.
+- Önceden bu durumda hiçbir çalışma açılamıyordu ve tek çıkış uygulamayı silip yeniden kurmaktı.
+- Okunabilen bir taslak bu yolla asla taşınmaz. Ayrılan dosyayı uygulama içinden geri açmanın bir yolu yoktur; bu ayrıca tasarlanmalıdır.
+- `CADStorageTests.testUnreadableDraftIsSetAsideWithItsBytesAndReadableDraftStays` taşıma kuralını, `ViewerUITests.testUnreadableDraftCanBeSetAsideInsteadOfBlockingNewWork` akışı simülatörde sınar.
+
 ## Sürüm 9 parametrik WPF çizimleri
 
 - Windows WPF Bézier/Yay aracı analitik kontrol noktaları ve örneklenmiş kontur önizlemesini ayrı tutar. Parametrik geometri içeren dosya `.tcad` v9 olarak kaydedilir. Önceki sürümlerin noktaları varsayılan olarak değiştirilmez.

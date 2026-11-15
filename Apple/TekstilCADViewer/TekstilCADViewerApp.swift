@@ -28,6 +28,7 @@ private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
     @State private var editorRoute: EditorRoute?
+    @State private var blockedRoute: EditorRoute?
     @State private var hasLocalDraft = false
     @State private var recentProjects: [CADProjectLibrary.Entry] = []
     @State private var didStart = false
@@ -35,7 +36,10 @@ private struct ContentView: View {
 
     private func refreshProjects() {
         do { hasLocalDraft = try CADLocalDraftStore.restore() != nil }
-        catch { self.error = "Taslak okunamadı. \(error.localizedDescription)" }
+        catch {
+            hasLocalDraft = false
+            self.error = "Taslak okunamadı. \(error.localizedDescription) Yeni bir çalışma başlatırken bu taslağı ayırabilirsiniz."
+        }
         recentRefresh = UUID()
     }
 
@@ -65,7 +69,26 @@ private struct ContentView: View {
             try CADLocalDraftStore.archiveBeforeSwitch()
             editorRoute = route
         } catch {
-            self.error = "Önceki taslak korunamadığı için yeni çalışma açılmadı. \(error.localizedDescription)"
+            if CADLocalDraftStore.hasUnreadableDraft() {
+                // A damaged or incompatible draft must not block every new drawing.
+                // Ask before moving it aside; nothing is deleted.
+                blockedRoute = route
+            } else {
+                self.error = "Önceki taslak korunamadığı için yeni çalışma açılmadı. \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func setAsideUnreadableDraftAndContinue() {
+        guard let route = blockedRoute else { return }
+        blockedRoute = nil
+        do {
+            _ = try CADLocalDraftStore.setAsideUnreadableDraft()
+            try CADLocalDraftStore.archiveBeforeSwitch()
+            hasLocalDraft = false
+            editorRoute = route
+        } catch {
+            self.error = "Okunamayan taslak ayrılamadı; yeni çalışma açılmadı. \(error.localizedDescription)"
         }
     }
 
@@ -196,6 +219,9 @@ private struct ContentView: View {
                 CADLocalDraftStore.discard()
                 CADProjectLibrary.resetTestLibrary()
             }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-unreadable-draft") {
+                CADLocalDraftStore.writeUnreadableDraftForTesting()
+            }
             #endif
             refreshProjects()
             #if DEBUG && targetEnvironment(simulator)
@@ -220,6 +246,13 @@ private struct ContentView: View {
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
+        .alert("Önceki taslak okunamıyor", isPresented: Binding(
+            get: { blockedRoute != nil }, set: { if !$0 { blockedRoute = nil } })) {
+            Button("Taslağı ayır ve devam et") { setAsideUnreadableDraftAndContinue() }
+            Button("Vazgeç", role: .cancel) { blockedRoute = nil }
+        } message: {
+            Text("Cihazdaki otomatik taslak bozuk ya da bu sürümle uyumsuz. Dosya silinmez; ayrı bir klasöre taşınır ve yeni çalışma açılır.")
+        }
     }
 
     private var resumeButton: some View {
