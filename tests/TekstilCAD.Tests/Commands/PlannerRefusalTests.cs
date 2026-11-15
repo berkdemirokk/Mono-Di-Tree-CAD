@@ -245,7 +245,7 @@ public class PlannerRefusalTests
     {
         var doc = B1();
         Assert.Equal("R24", Refused(Plan(new RenameCommand("   "), doc, Sel(doc))).Code);
-        Assert.Equal("R24", Refused(Plan(new RenameCommand(new string('a', 129)), doc, Sel(doc))).Code);
+        Assert.Equal("R28a", Refused(Plan(new RenameCommand(new string('a', 129)), doc, Sel(doc))).Code);
     }
 
     [Fact]

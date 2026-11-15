@@ -15,6 +15,9 @@ internal static class CommandPlannerText
         return text == "-0" ? "0" : text;
     }
 
+    /// <summary>Round-trip text of a number, independent of the culture (for seeds and digests).</summary>
+    internal static string Inv(double value) => value.ToString("R", CultureInfo.InvariantCulture);
+
     /// <summary>"25 mm".</summary>
     internal static string Mm(double mm) => N(mm) + " mm";
 
@@ -47,7 +50,7 @@ internal static class CommandPlannerText
 
     /// <summary>The text with its first letter in lower case (tr-TR), for a label placed after a colon.</summary>
     internal static string LowerFirst(string text) =>
-        text.Length == 0 ? text : char.ToLower(text[0], CultureInfo.GetCultureInfo("tr-TR")) + text[1..];
+        text.Length == 0 || (text.Length > 1 && char.IsUpper(text[1])) ? text : char.ToLower(text[0], CultureInfo.GetCultureInfo("tr-TR")) + text[1..];
 
     /// <summary>The sentence appended to a preview whose number had no unit.</summary>
     internal const string UnitAssumedSentence = "Birim yazmadınız; milimetre sayıldı.";

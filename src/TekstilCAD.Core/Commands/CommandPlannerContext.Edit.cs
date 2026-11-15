@@ -16,7 +16,7 @@ internal sealed partial class PlannerContext
         var dy = c.DownMm;
         if (!double.IsFinite(dx) || !double.IsFinite(dy)) return Refuse(Refusals.NumberMissingFor(Refusals.MoveExample));
         var before = BoundsOf(piece);
-        if (dx == 0 && dy == 0) return Refuse(Custom(Refusals.NoChange, $"Parça zaten burada: {Position(before.MinX, before.MinY)}. Değişiklik yok."));
+        if (Math.Round(Math.Abs(dx), 6) == 0 && Math.Round(Math.Abs(dy), 6) == 0) return Refuse(Custom(Refusals.NoChange, $"Parça zaten burada: {Position(before.MinX, before.MinY)}. Değişiklik yok."));
         var result = PieceOperations.MoveBy(Doc, piece.Id, dx, dy);
         if (!result.Succeeded) return Refuse(MapFailure(result));
         var moved = result.Piece!;
@@ -24,8 +24,8 @@ internal sealed partial class PlannerContext
 
         var cmParts = new List<string>(2);
         var mmOnly = new List<string>(2);
-        if (dx != 0) { cmParts.Add($"{N(Math.Abs(dx) / 10)} cm {(dx > 0 ? "sağa" : "sola")}"); mmOnly.Add($"{Mm(Math.Abs(dx))} {(dx > 0 ? "sağa" : "sola")}"); }
-        if (dy != 0) { cmParts.Add($"{N(Math.Abs(dy) / 10)} cm {(dy > 0 ? "aşağı" : "yukarı")}"); mmOnly.Add($"{Mm(Math.Abs(dy))} {(dy > 0 ? "aşağı" : "yukarı")}"); }
+        if (Math.Round(Math.Abs(dx), 6) != 0) { cmParts.Add($"{N(Math.Abs(dx) / 10)} cm {(dx > 0 ? "sağa" : "sola")}"); mmOnly.Add($"{Mm(Math.Abs(dx))} {(dx > 0 ? "sağa" : "sola")}"); }
+        if (Math.Round(Math.Abs(dy), 6) != 0) { cmParts.Add($"{N(Math.Abs(dy) / 10)} cm {(dy > 0 ? "aşağı" : "yukarı")}"); mmOnly.Add($"{Mm(Math.Abs(dy))} {(dy > 0 ? "aşağı" : "yukarı")}"); }
         summary = string.Join(" ve ", mmOnly);
         // One axis: "25 mm sağa taşınacak (2,5 cm)"; two axes: "20 mm sağa ve 10 mm yukarı taşınacak (2 cm sağa ve 1 cm yukarı)".
         var cmText = mmOnly.Count == 1 ? $"({N(Math.Max(Math.Abs(dx), Math.Abs(dy)) / 10)} cm)" : $"({string.Join(" ve ", cmParts)})";
@@ -36,8 +36,8 @@ internal sealed partial class PlannerContext
         if (unitAssumed)
         {
             var cm = new List<string>(2);
-            if (dx != 0) cm.Add($"{N(Math.Abs(dx))} cm {(dx > 0 ? "sağa" : "sola")}");
-            if (dy != 0) cm.Add($"{N(Math.Abs(dy))} cm {(dy > 0 ? "aşağı" : "yukarı")}");
+            if (Math.Round(Math.Abs(dx), 6) != 0) cm.Add($"{N(Math.Abs(dx))} cm {(dx > 0 ? "sağa" : "sola")}");
+            if (Math.Round(Math.Abs(dy), 6) != 0) cm.Add($"{N(Math.Abs(dy))} cm {(dy > 0 ? "aşağı" : "yukarı")}");
             alternatives.Add(new RefusalButton(string.Join(" ", cm) + (cm.Count == 1 ? " taşı" : "")));
         }
         var plan = new Plan(PlanKind.MovePiece, PlanClass.Geometry, c, preview,
@@ -93,6 +93,7 @@ internal sealed partial class PlannerContext
         var turn = c.Degrees == 180 ? 180 : (c.Degrees == 90) == clockwise ? 90 : -90; // clockwise degrees: 90, -90 or 180
         var result = PieceOperations.Rotate(Doc, piece.Id, turn);
         if (!result.Succeeded) return Refuse(MapFailure(result));
+        if (!result.ChangesDocument) return Refuse(Custom(Refusals.NoChange, "Parça zaten böyle duruyor. Değişiklik yok."));
         var rotated = result.Piece!;
         var before = BoundsOf(piece);
         var after = BoundsOf(rotated);
@@ -135,6 +136,7 @@ internal sealed partial class PlannerContext
         var vertical = c.Axis == MirrorAxis.Vertical;
         var result = vertical ? PieceOperations.MirrorVertical(Doc, piece.Id) : PieceOperations.MirrorHorizontal(Doc, piece.Id);
         if (!result.Succeeded) return Refuse(MapFailure(result));
+        if (!result.ChangesDocument) return Refuse(Custom(Refusals.NoChange, "Parça zaten simetrik; aynalamak bir şeyi değiştirmez. Değişiklik yok."));
         var mirrored = result.Piece!;
         var way = vertical ? "sağ-sol" : "alt-üst";
         var line = vertical ? "dikey" : "yatay";
@@ -215,8 +217,7 @@ internal sealed partial class PlannerContext
         if (string.Equals(newName, piece.Name, StringComparison.Ordinal))
             return Refuse(Custom(Refusals.NoChange, $"Ad zaten {QuoteFull(newName)}. Değişiklik yok."));
         var result = PieceOperations.Rename(Doc, piece.Id, newName);
-        if (!result.Succeeded)
-            return Refuse(result.ErrorCode == PieceOperationError.InvalidValue ? Custom(Refusals.EmptyName, result.Error ?? "") : MapFailure(result));
+        if (!result.Succeeded) return Refuse(MapFailure(result));
         var renamed = result.Piece!;
         var plan = new Plan(PlanKind.RenamePiece, PlanClass.Geometry, c,
             $"{Quote(piece.Name)} adı {QuoteFull(renamed.Name)} olacak.",
@@ -253,15 +254,15 @@ internal sealed partial class PlannerContext
     {
         var result = PieceOperations.Delete(Doc, piece.Id);
         if (!result.Succeeded) return Refuse(MapFailure(result));
-        var bounds = piece.Points is { Count: > 0 } ? BoundsOf(piece) : new Bounds2(0, 0, 0, 0);
+        var safe = SafeBounds(piece);
         var caveats = new List<string>();
         var rules = Doc.GradingRules.Count(r => r.SourcePieceId == piece.Id);
         if (rules > 0) caveats.Add($"Parçaya bağlı {rules} serileme kuralı da silinir.");
-        var ghost = piece.Points is { Count: > 0 }
+        var ghost = safe is { } bounds
             ? Scene(GhostStyle.Danger, [Outline(piece)], [new GhostLabel(bounds.Center, "silinecek", GhostLabelPlacement.Center)])
             : GhostScene.Empty;
         var plan = new Plan(PlanKind.DeletePiece, PlanClass.Dangerous, command,
-            $"{Quote(piece.Name)} silinecek ({SizeMm(bounds.Width, bounds.Height)}). Geri alabilirsiniz.",
+            safe is { } b ? $"{Quote(piece.Name)} silinecek ({SizeMm(b.Width, b.Height)}). Geri alabilirsiniz." : $"{Quote(piece.Name)} silinecek. Geri alabilirsiniz.",
             PieceStamp.Capture(view, selection, piece.Id, StampScope.Document), Doc.Clone(), result.Document)
         {
             Ghost = ghost,
@@ -279,21 +280,24 @@ internal sealed partial class PlannerContext
         if (!TryEditTarget(out var piece, out var refusal)) return refusal;
         var result = PieceOperations.Duplicate(Doc, piece.Id, offsetX, offsetY);
         if (!result.Succeeded) return Refuse(MapFailure(result));
-        var copy = result.Piece!;
+        var edited = result.Document!.Clone();
+        var stamp = PieceStamp.Capture(view, selection, piece.Id, StampScope.Document);
+        var newId = Reid(edited, result.PieceId!.Value, $"{stamp.ContentDigest}|dup|{Inv(offsetX)}|{Inv(offsetY)}");
+        var copy = edited.Pieces.First(p => p.Id == newId);
         var where = new List<string>(2);
         if (offsetX != 0) where.Add($"{MmCm(Math.Abs(offsetX))} {(offsetX > 0 ? "sağa" : "sola")}");
         if (offsetY != 0) where.Add($"{MmCm(Math.Abs(offsetY))} {(offsetY > 0 ? "aşağı" : "yukarı")}");
         var shift = where.Count == 0 ? "aynı konumda" : string.Join(" ve ", where) + " kaydırılarak";
         var plan = new Plan(PlanKind.DuplicatePiece, PlanClass.Geometry, new HandoffCommand(HandoffTarget.Duplicate),
             $"{Quote(piece.Name)} çoğaltılacak: {Quote(copy.Name)} adlı kopya {shift} eklenecek.",
-            PieceStamp.Capture(view, selection, piece.Id, StampScope.Document), Doc.Clone(), result.Document)
+            stamp, Doc.Clone(), edited)
         {
             Ghost = Scene(GhostStyle.Preview, [Outline(copy)], Array.Empty<GhostLabel>()),
             Caveats = result.Warnings.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray(),
             ResultText = $"{Quote(piece.Name)} çoğaltıldı: {Quote(copy.Name)}.",
             ActionName = "Çoğaltma",
             TargetPieceId = piece.Id,
-            CreatedPieceId = copy.Id,
+            CreatedPieceId = newId,
             NeedsSelectedPiece = true,
             AddsPiece = true,
         };
@@ -343,14 +347,14 @@ internal sealed partial class PlannerContext
                     break;
                 }
         }
-        var bounds = piece.Points is { Count: > 0 } ? BoundsOf(piece) : (Bounds2?)null;
+        var hasOutline = piece.Points is { Count: > 0 };
         var plan = new Plan(PlanKind.SelectPiece, PlanClass.NoChange, c, $"{Quote(piece.Name)} seçilecek.",
             PieceStamp.Capture(view, selection, piece.Id, c.Target is PieceTarget.Next or PieceTarget.Previous ? StampScope.Document : StampScope.Piece))
         {
             ResultText = $"{Quote(piece.Name)} seçildi.",
             ActionName = "Seçim",
             TargetPieceId = piece.Id,
-            Ghost = bounds is null ? GhostScene.Empty : Scene(GhostStyle.Preview, [Outline(piece)], Array.Empty<GhostLabel>()),
+            Ghost = hasOutline ? Scene(GhostStyle.Preview, [Outline(piece)], Array.Empty<GhostLabel>()) : GhostScene.Empty,
         };
         return Of(plan);
     }
@@ -383,17 +387,21 @@ internal sealed partial class PlannerContext
         var names = Doc.Pieces.Take(3).Select(p => p.Name ?? "").ToList();
         if (found.Count == 0)
         {
-            refusal = Refuse(Refusals.NameNotFoundFor(string.IsNullOrWhiteSpace(query) ? "" : query, names, verb));
+            var typedShown = TurkishText.ContainsForbiddenWord(query) ? "…" : query;
+            var examples = names.Where(n => !TurkishText.ContainsForbiddenWord(n)).ToList();
+            refusal = Refuse(Refusals.NameNotFoundFor(typedShown, examples, verb));
             return false;
         }
         var buttons = found.Take(3).Select(m =>
         {
             var piece = Doc.Pieces[m.Index];
-            var size = piece.Points is { Count: > 0 } ? " · " + SizeMm(BoundsOf(piece).Width, BoundsOf(piece).Height) : "";
+            var size = SafeBounds(piece) is { } sb ? " · " + SizeMm(sb.Width, sb.Height) : "";
             return new RefusalButton(m.Name + size, m.Name + " " + verb);
         }).ToArray();
+        var sameNames = found.Select(m => PieceNameSearch.Fold(m.Name.Trim())).Distinct().Count() < found.Count;
+        var hint = sameNames ? " Aynı adlı parçalar var; birini fareyle seçin." : "";
         refusal = Refuse(new Refusal(Refusals.NameAmbiguous,
-            Refusals.TemplateNameAmbiguous.Replace("{n}", found.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal), buttons));
+            Refusals.TemplateNameAmbiguous.Replace("{n}", found.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal) + hint, buttons));
         return false;
     }
 }

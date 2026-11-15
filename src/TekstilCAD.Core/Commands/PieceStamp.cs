@@ -64,7 +64,7 @@ public sealed class PieceStamp
     public string ContentDigest { get; }
 
     /// <summary>The selected piece ids at planning time.</summary>
-    public IReadOnlyList<Guid> SelectedIds => selection;
+    public IReadOnlyList<Guid> SelectedIds => Array.AsReadOnly(selection);
 
     /// <summary>True when <paramref name="other"/> is the document object this stamp was taken from.</summary>
     public bool IsSameDocument(ProjectDocument other) => ReferenceEquals(document, other);
@@ -100,7 +100,7 @@ public sealed class PieceStamp
 
     // Facts outside the document that a preview sentence states: the undo and redo depth, the file name, the unsaved flag and the pending drawing.
     private static string Facts(DocumentView v) =>
-        string.Join("|", v.UndoCount, v.RedoCount, v.FileName ?? "", v.HasUnsavedChanges, v.DrawingInProgress, v.DrawingPointCount);
+        string.Join("|", v.UndoCount, v.RedoCount, v.LastUndoLabel ?? "", v.FileName ?? "", v.HasUnsavedChanges, v.DrawingInProgress, v.DrawingPointCount, v.NewPieceLayerId?.ToString() ?? "");
 
     private static Guid[] SelectedOf(Selection? selection) =>
         selection?.PieceIds is { Count: > 0 } ids ? ids.ToArray() : Array.Empty<Guid>();
