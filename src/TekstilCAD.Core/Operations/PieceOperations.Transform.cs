@@ -67,7 +67,7 @@ public static partial class PieceOperations
     }
 
     private static PieceOperationResult CurvesWithNotches(PatternPiece piece) => Fail(PieceOperationError.Unsupported,
-        $"{Quote(piece.Name)} hem yay/eğri hem çentik işareti içeriyor; işaretlerin yerinde kalacağı garanti edilemediği için taşıma uygulanmadı.");
+        $"{Quote(piece.Name)} hem yay/eğri hem çentik işareti içeriyor; işaretlerin yerinde kalacağı garanti edilemediği için taşıma veya çoğaltma uygulanmadı.");
 
     /// <summary>A detached translated copy (same id), or null for a piece with both curves and notch marks.</summary>
     private static PatternPiece? Translated(PatternPiece piece, double dx, double dy)

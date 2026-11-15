@@ -69,7 +69,7 @@ public static partial class PieceOperations
         {
             if (!TryDefaultOrigin(document, out at))
                 return Fail(PieceOperationError.InvalidShape, "Mevcut parçaların konumu okunamadı; yeni parça yerleştirilemedi. Konumu kendiniz belirtin.");
-            if (at.X + width > Geometry.MaxCoordinate)
+            if (document.Pieces.Count > 0 && (!InRange(at) || at.X + width > Geometry.MaxCoordinate))
                 return Fail(PieceOperationError.OutOfRange,
                     "Mevcut parçaların sağında yeni parça için yer kalmadı (çalışma alanı sınırı ±100.000.000 mm). Konumu kendiniz belirtin.");
         }
@@ -127,7 +127,7 @@ public static partial class PieceOperations
             { found = true; bestMaxX = b.MaxX; bestMinY = b.MinY; }
         }
         if (found) origin = new Point2(bestMaxX + DefaultGapMm, bestMinY);
-        return InRange(origin);
+        return true;
     }
 
     /// <summary>
@@ -159,8 +159,17 @@ public static partial class PieceOperations
             var edited = document.Clone();
             edited.Pieces.Add(copy);
             return PieceOperationResult.Success(document, edited, copy.Id,
-                $"{Quote(piece.Name)} çoğaltıldı: {Quote(copy.Name)} ({Mm(offsetX)} sağa, {Mm(offsetY)} aşağı kaydırıldı).", warnings);
+                $"{Quote(piece.Name)} çoğaltıldı: {Quote(copy.Name)}, {OffsetText(offsetX, offsetY)}.", warnings);
         });
+    }
+
+    private static string OffsetText(double dx, double dy)
+    {
+        if (dx == 0 && dy == 0) return "aynı konumda";
+        var parts = new List<string>(2);
+        if (dx != 0) parts.Add($"{Mm(Math.Abs(dx))} {(dx > 0 ? "sağa" : "sola")}");
+        if (dy != 0) parts.Add($"{Mm(Math.Abs(dy))} {(dy > 0 ? "aşağı" : "yukarı")}");
+        return string.Join(", ", parts) + " kaydırıldı";
     }
 
     private static string CopyName(string name)
