@@ -79,8 +79,9 @@ private struct ContentView: View {
         }
     }
 
-    private func setAsideUnreadableDraftAndContinue() {
-        guard let route = blockedRoute else { return }
+    // The route is passed in by the alert, so this does not depend on whether SwiftUI clears
+    // `blockedRoute` before or after it runs the button action.
+    private func setAsideUnreadableDraftAndContinue(_ route: EditorRoute) {
         blockedRoute = nil
         do {
             _ = try CADLocalDraftStore.setAsideUnreadableDraft()
@@ -247,10 +248,10 @@ private struct ContentView: View {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
         .alert("Önceki taslak okunamıyor", isPresented: Binding(
-            get: { blockedRoute != nil }, set: { if !$0 { blockedRoute = nil } })) {
-            Button("Taslağı ayır ve devam et") { setAsideUnreadableDraftAndContinue() }
+            get: { blockedRoute != nil }, set: { if !$0 { blockedRoute = nil } }), presenting: blockedRoute) { route in
+            Button("Taslağı ayır ve devam et") { setAsideUnreadableDraftAndContinue(route) }
             Button("Vazgeç", role: .cancel) { blockedRoute = nil }
-        } message: {
+        } message: { _ in
             Text("Cihazdaki otomatik taslak bozuk ya da bu sürümle uyumsuz. Dosya silinmez; ayrı bir klasöre taşınır ve yeni çalışma açılır.")
         }
     }

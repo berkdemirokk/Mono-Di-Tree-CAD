@@ -200,10 +200,28 @@ enum CADLocalDraftStore {
         }
     }
 
+    /// True when the file is there but its content is not a draft this version can read.
+    /// A failure to read the file at all (an I/O error on a possibly good draft) does not count:
+    /// such a draft must not be offered for moving aside.
+    static func hasUnreadableContent(_ url: URL) -> Bool {
+        do {
+            _ = try read(url)
+            return false
+        } catch is SketchStoreError {
+            return true
+        } catch is DecodingError {
+            return true
+        } catch {
+            // 3840 is what JSONSerialization reports for bytes that are not JSON.
+            let failure = error as NSError
+            return failure.domain == NSCocoaErrorDomain && failure.code == 3840
+        }
+    }
+
     /// True when a current draft file exists but cannot be read as a draft.
     static func hasUnreadableDraft() -> Bool {
         guard FileManager.default.fileExists(atPath: current.path) else { return false }
-        return (try? read(current)) == nil
+        return hasUnreadableContent(current)
     }
 
     /// Moves an unreadable current draft aside so that a new drawing can start.
@@ -219,7 +237,7 @@ enum CADLocalDraftStore {
     static func setAsideUnreadableDraft(at url: URL, into folder: URL) throws -> URL? {
         return try CADFileIO.withExclusiveLock(for: url) { () throws -> URL? in
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-            if (try? read(url)) != nil { return nil }
+            guard hasUnreadableContent(url) else { return nil }
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let destination = folder.appendingPathComponent("draft-\(UUID().uuidString).json")
             try FileManager.default.moveItem(at: url, to: destination)

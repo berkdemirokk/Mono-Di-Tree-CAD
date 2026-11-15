@@ -168,6 +168,16 @@ final class CADStorageTests: XCTestCase {
         // The emptied slot accepts a new draft.
         try CADLocalDraftStore.save(readable, replacing: nil, to: draft)
         XCTAssertEqual(try CADLocalDraftStore.read(draft), readable)
+        XCTAssertFalse(CADLocalDraftStore.hasUnreadableContent(draft))
+
+        // Bytes that are not JSON at all count as unreadable content too.
+        try Data("taslak değil".utf8).write(to: draft)
+        XCTAssertTrue(CADLocalDraftStore.hasUnreadableContent(draft))
+        XCTAssertNotNil(try CADLocalDraftStore.setAsideUnreadableDraft(at: draft, into: aside))
+
+        // A file that cannot be read at all is not treated as unreadable content: a transient
+        // I/O failure on a good draft must not offer to move it away.
+        XCTAssertFalse(CADLocalDraftStore.hasUnreadableContent(folder.appendingPathComponent("yok.json")))
     }
 
     func testConcurrentDraftWritesRejectOneStaleSession() throws {
