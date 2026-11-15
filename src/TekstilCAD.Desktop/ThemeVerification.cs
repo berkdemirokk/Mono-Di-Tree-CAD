@@ -2,7 +2,11 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Text;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Interop;
+using TekstilCAD.MachineGateway;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using TekstilCAD.Core.Theme;
@@ -34,7 +38,7 @@ internal static class ThemeVerification
     /// <summary>A palette that differs from Dark in every token, used to prove that styles and templates follow a switch.</summary>
     private static readonly ThemePalette Probe = new("Probe", ThemePalette.Tokens.ToDictionary(token => token, token => Invert(ThemePalette.Dark[token])));
 
-    internal static void Run(MainWindow studio, string reportPath, List<string> checks)
+    internal static void Run(MainWindow studio, string work, string reportPath, List<string> checks)
     {
         try
         {
@@ -42,6 +46,7 @@ internal static class ThemeVerification
             VerifyDrawingKeepsTokensUnfrozen(studio, checks);
             VerifyPaletteSwitch(studio, checks);
             VerifySourceLiterals(reportPath, checks);
+            VerifyLightPalette(studio, work, reportPath, checks);
         }
         finally { StudioTheme.Use(ThemePalette.Dark); }
         Check(ReferenceEquals(StudioTheme.Current, ThemePalette.Dark) && StudioTheme.Matches(ThemePalette.Dark), "Theme verification leaves the default dark palette applied", checks);
@@ -149,6 +154,199 @@ internal static class ThemeVerification
         Check(!Regex.IsMatch(canvas, "\"#[0-9A-Fa-f]{3,8}\"|BrushConverter"), "CadCanvas draws only with theme tokens", checks);
         Check(!File.ReadAllText(Path.Combine(directory, "MainWindow.cs")).Contains("ThemeSettings", StringComparison.Ordinal),
             "The MainWindow constructor path never reads a saved theme preference", checks);
+    }
+
+    private static MethodInfo Verification(string name) => typeof(DesktopVerification).GetMethod(name, PrivateStatic)!;
+    private static bool FullyVisible(FrameworkElement element, FrameworkElement root) => (bool)Verification("FullyVisible").Invoke(null, [element, root])!;
+    private static T Field<T>(MainWindow window, string name) where T : class => (T)typeof(MainWindow).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
+    private static void StopTimer(MainWindow window) => (typeof(MainWindow).GetField("autosaveTimer", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(window) as System.Windows.Threading.DispatcherTimer)?.Stop();
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) yield return match;
+            foreach (var nested in Descendants<T>(child)) yield return nested;
+        }
+    }
+
+    private static double MeanLuminance(Pixels image)
+    {
+        static double Channel(byte value) { var c = value / 255.0; return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4); }
+        double sum = 0; var samples = 0;
+        for (var i = 0; i < image.Data.Length; i += 16) { sum += 0.2126 * Channel(image.Data[i + 2]) + 0.7152 * Channel(image.Data[i + 1]) + 0.0722 * Channel(image.Data[i]); samples++; }
+        return sum / Math.Max(1, samples);
+    }
+
+    private static void VerifyLightPalette(MainWindow studio, string work, string reportPath, List<string> checks)
+    {
+        var failures = ThemeContrastRules.Failures(ThemePalette.Light);
+        Check(failures.Count == 0, $"Light palette meets WCAG contrast for all {ThemeContrastRules.All.Count} text and control rules" + (failures.Count == 0 ? "" : ": " + string.Join("; ", failures)), checks);
+        Check(ThemePalette.Dark.Hex.Keys.OrderBy(k => k, StringComparer.Ordinal).SequenceEqual(ThemePalette.Light.Hex.Keys.OrderBy(k => k, StringComparer.Ordinal)), "Both palettes define the same tokens", checks);
+
+        VerifyFocusRing(checks);
+        VerifyPreferences(studio, checks);
+        VerifyLiveLightSwitch(studio, checks);
+
+        StudioTheme.Use(ThemePalette.Light);
+        var queue = new SimulationQueue(Path.Combine(work, "theme-spool"));
+        var windows = new List<(string Name, Window Window)>
+        {
+            ("main", studio),
+            ("textile-tools", new TextileToolsWindow(studio)),
+            ("machine-center", new MachineCenterWindow(studio, queue)),
+            ("about", new AboutWindow(studio)),
+            ("design-request", new DesignRequestWindow(studio)),
+            ("production-nesting", new ProductionNestingWindow(studio, studio)),
+        };
+        var sweep = new StringBuilder();
+        var below = 0;
+        try
+        {
+            foreach (var (name, window) in windows)
+            {
+                foreach (var (width, height) in new[] { (1024, 640), (1440, 900) })
+                {
+                    Verification("Render").Invoke(null, [window, Path.ChangeExtension(reportPath, $".light-{name}-{width}x{height}.png"), width, height]);
+                    var luminance = MeanLuminance(RenderPixels(window, width, height));
+                    Check(luminance > 0.5, $"The {name} window renders as a light surface in the light palette at {width}x{height} (mean luminance {luminance:0.00})", checks);
+                    if (ReferenceEquals(window, studio)) VerifyDetailedWindowInLight(studio, width, height, checks);
+                }
+                below += SweepText(name, window, sweep);
+            }
+            File.WriteAllText(Path.ChangeExtension(reportPath, ".light-text-sweep.txt"), sweep.ToString());
+            checks.Add($"Light text sweep over the main and tool windows lists {below} text blocks below 4.5:1 in the light-text-sweep file");
+            VerifyCleanWindowInLight(checks);
+            Verification("VerifyExpanderHeaderContrast").Invoke(null, [(FrameworkElement)studio.Content, "Main window in the light palette", checks]);
+        }
+        finally
+        {
+            StudioTheme.Use(ThemePalette.Dark);
+            foreach (var (_, window) in windows) if (!ReferenceEquals(window, studio)) window.Close();
+        }
+    }
+
+    private static void VerifyDetailedWindowInLight(MainWindow studio, int width, int height, List<string> checks)
+    {
+        var root = (FrameworkElement)studio.Content;
+        var design = Descendants<Button>(root).Single(b => Equals(b.Content, "Kalıp isteği hazırla…"));
+        var about = Descendants<Button>(root).Single(b => Equals(b.Content, "Hakkında"));
+        var groups = Descendants<Expander>(root).Where(e => AutomationProperties.GetName(e) is "Dosya aktarımı" or "Tekstil ve makine").ToArray();
+        var tools = Field<Dictionary<string, Button>>(studio, "toolButtons").Values.ToArray();
+        Check(FullyVisible(design, root) && FullyVisible(about, root) && groups.Length == 2 && groups.All(g => FullyVisible(g, root)) && tools.Length == 6 && tools.All(t => FullyVisible(t, root) && t.ActualHeight >= 32),
+            $"Detailed window renders without clipping in the light palette at {width}x{height}", checks);
+        var canvas = Field<CadCanvas>(studio, "canvas");
+        var floor = width == 1024 ? 340 : 600;
+        Check(canvas.ActualHeight >= floor, $"Detailed window keeps its canvas floors in the light palette at {width}x{height} (busy state, {canvas.ActualHeight:0} px, floor {floor})", checks);
+        var notices = new[] { "saveState", "sourceHistoryNotice", "nestingHistoryNotice", "exportNotice", "dxfNotice", "recoveryNotice", "recoveryScanNotice", "machineQueueMessage" };
+        var incomplete = notices.Select(name => (name, element: Field<FrameworkElement>(studio, name))).Where(item => item.element.Visibility == Visibility.Visible && !FullyVisible(item.element, root)).Select(item => item.name).ToArray();
+        Check(incomplete.Length == 0, $"Every visible header notice is complete in the light palette at {width}x{height}: " + string.Join(", ", incomplete), checks);
+    }
+
+    private static void VerifyCleanWindowInLight(List<string> checks)
+    {
+        var fresh = new MainWindow(); StopTimer(fresh); var closed = false; fresh.Closed += (_, _) => closed = true;
+        try
+        {
+            _ = new WindowInteropHelper(fresh).EnsureHandle();
+            foreach (var (width, height, floor) in new[] { (1024, 640, 411), (1440, 900, 671) })
+            {
+                Verification("Render").Invoke(null, [fresh, Path.Combine(Path.GetTempPath(), "tekstilcad-theme-clean.png"), width, height]);
+                var canvas = Field<CadCanvas>(fresh, "canvas");
+                Check(canvas.ActualHeight >= floor, $"Detailed window keeps its canvas floors in the light palette at {width}x{height} (clean state, {canvas.ActualHeight:0} px, floor {floor})", checks);
+            }
+        }
+        finally
+        {
+            StopTimer(fresh); fresh.Close();
+            Verification("PumpUntil").Invoke(null, [new Func<bool>(() => closed)]);
+        }
+    }
+
+    private static void VerifyFocusRing(List<string> checks)
+    {
+        var style = (Style)Application.Current.Resources["Studio.KeyboardFocus"];
+        var template = (ControlTemplate)style.Setters.OfType<Setter>().Single(s => s.Property == Control.TemplateProperty).Value;
+        var ring = (System.Windows.Shapes.Rectangle)template.LoadContent();
+        Check(ring.StrokeThickness == 2 && (ring.StrokeDashArray is null || ring.StrokeDashArray.Count == 0) && ring.Margin.Left <= -4,
+            "Keyboard focus ring is two pixels solid in both palettes", checks);
+    }
+
+    private static void VerifyPreferences(MainWindow studio, List<string> checks)
+    {
+        var about = new AboutWindow(studio);
+        try
+        {
+            Check(AppPaths.UiPreferencesPath.StartsWith(AppPaths.DataDirectory, StringComparison.OrdinalIgnoreCase) && Path.GetFileName(AppPaths.UiPreferencesPath) == "ui.json",
+                "Interface preferences live in ui.json inside the application data folder", checks);
+            about.ThemeToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Check(ReferenceEquals(StudioTheme.Current, ThemePalette.Light) && Equals(about.ThemeToggle.Content, "Görünüm: Açık") && UiPreferences.Load(AppPaths.UiPreferencesPath).Theme == "Light"
+                && about.Status.Text.Contains("Açık görünüm", StringComparison.Ordinal), "The About window toggle switches to light, saves it in ui.json and announces it", checks);
+            Check(AutomationProperties.GetHelpText(about.ThemeToggle).Length > 0 && about.ThemeToggle.Focusable && AutomationProperties.GetName(about.ThemeToggle) == "Görünüm: Açık",
+                "The theme toggle is keyboard-focusable and named for assistive technology", checks);
+            about.ThemeToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Check(ReferenceEquals(StudioTheme.Current, ThemePalette.Dark) && Equals(about.ThemeToggle.Content, "Görünüm: Koyu") && UiPreferences.Load(AppPaths.UiPreferencesPath).Theme == "Dark",
+                "The About window toggle returns to dark and saves it", checks);
+        }
+        finally { StudioTheme.Use(ThemePalette.Dark); about.Close(); }
+        var root = (string)Verification("RepositoryRoot").Invoke(null, [Path.Combine(AppPaths.DataDirectory, "x.json")])!;
+        var directory = Path.Combine(root, "src", "TekstilCAD.Desktop");
+        var app = File.ReadAllText(Path.Combine(directory, "App.xaml.cs"));
+        var verifyBranch = app.IndexOf("\"--verify\"", StringComparison.Ordinal);
+        Check(verifyBranch >= 0 && app.IndexOf("UiPreferences", StringComparison.Ordinal) > verifyBranch && !File.ReadAllText(Path.Combine(directory, "MainWindow.cs")).Contains("UiPreferences", StringComparison.Ordinal),
+            "Interface preferences are read only in the interactive start-up branch", checks);
+    }
+
+    private static void VerifyLiveLightSwitch(MainWindow studio, List<string> checks)
+    {
+        var about = new AboutWindow(studio);
+        try
+        {
+            _ = (FrameworkElement)about.Content;
+            Check(ReferenceEquals(StudioTheme.Current, ThemePalette.Dark), "Light-palette checks start from the dark default", checks);
+            StudioTheme.Use(ThemePalette.Light);
+            Check(StudioTheme.Matches(ThemePalette.Light) && ColorOf(about.DataPath.Background) == StudioTheme.ParseColor(ThemePalette.Light["Input"]) && ColorOf(about.Background) == StudioTheme.ParseColor(ThemePalette.Light["Background"])
+                && ColorOf(about.OpenData.Background) == StudioTheme.ParseColor(ThemePalette.Light["Raised"]) && about.Status.Foreground == StudioTheme.Muted,
+                "A window that is already open takes the light palette without being rebuilt", checks);
+        }
+        finally { StudioTheme.Use(ThemePalette.Dark); about.Close(); }
+    }
+
+    /// <summary>Lists visible text blocks whose solid foreground is below 4.5:1 against the nearest opaque background above them.</summary>
+    private static int SweepText(string name, Window window, StringBuilder report)
+    {
+        var count = 0;
+        var root = (FrameworkElement)window.Content;
+        foreach (var text in Descendants<TextBlock>(root))
+        {
+            if (string.IsNullOrWhiteSpace(text.Text) || !Shown(text) || text.Foreground is not SolidColorBrush foreground || foreground.Color.A != 255) continue;
+            var background = NearestBackground(text, window);
+            var ratio = Contrast.Ratio(Hex(foreground.Color), Hex(background));
+            if (ratio >= 4.5) continue;
+            count++;
+            report.AppendLine($"{name}\t{ratio:0.00}\tfg {foreground.Color}\tbg {background}\t{text.Text.Replace('\n', ' ')[..Math.Min(60, text.Text.Length)]}");
+        }
+        return count;
+    }
+
+    private static string Hex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static bool Shown(FrameworkElement element)
+    {
+        for (DependencyObject? current = element; current is not null; current = VisualTreeHelper.GetParent(current))
+            if (current is UIElement ui && (ui.Visibility != Visibility.Visible || ui.Opacity < 0.5)) return false;
+        return true;
+    }
+
+    private static Color NearestBackground(DependencyObject start, Window window)
+    {
+        for (var current = VisualTreeHelper.GetParent(start); current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            Brush? brush = current switch { Border border => border.Background, Panel panel => panel.Background, Control control => control.Background, _ => null };
+            if (brush is SolidColorBrush solid && solid.Color.A == 255 && solid.Opacity >= 1) return solid.Color;
+        }
+        return ColorOf(window.Background);
     }
 
     private sealed record Pixels(byte[] Data, int Width, FrameworkElement Root);

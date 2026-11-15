@@ -4,7 +4,7 @@
  <Application.Resources>
   <Style x:Key="Studio.KeyboardFocus">
    <Setter Property="Control.Template">
-    <Setter.Value><ControlTemplate><Rectangle Margin="-3" Stroke="{DynamicResource Studio.Accent}" StrokeThickness="1" StrokeDashArray="2 2" RadiusX="7" RadiusY="7"/></ControlTemplate></Setter.Value>
+    <Setter.Value><ControlTemplate><Rectangle Margin="-4" Stroke="{DynamicResource Studio.Focus}" StrokeThickness="2" RadiusX="8" RadiusY="8"/></ControlTemplate></Setter.Value>
    </Setter>
   </Style>
   <Style TargetType="TextBlock"/>
