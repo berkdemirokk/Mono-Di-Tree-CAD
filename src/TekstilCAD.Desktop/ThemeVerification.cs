@@ -279,7 +279,7 @@ internal static class ThemeVerification
             && !danger.Contains("Studio.PressedFill", StringComparison.Ordinal), "The destructive button uses its own hover and pressed fills, never the generic grey ones", checks);
         Check(danger.Contains("Opacity\" Value=\"0.45\"", StringComparison.Ordinal) && generic.Contains("Opacity\" Value=\"0.45\"", StringComparison.Ordinal), "Disabled buttons are dimmed to 0.45 opacity (exempt from contrast)", checks);
         var button = new Button { Content = "Evet, parçayı sil", Style = (Style)Application.Current.Resources["Studio.DangerButton"], Width = 200 };
-        var window = new Window { Content = new StackPanel { Margin = new Thickness(10), Children = { button } }, Width = 260, Height = 120 };
+        var window = new Window { Content = new StackPanel { Children = { button } }, Width = 260, Height = 120 };
         StudioTheme.Apply(window);
         StudioTheme.Use(ThemePalette.Light);
         try
