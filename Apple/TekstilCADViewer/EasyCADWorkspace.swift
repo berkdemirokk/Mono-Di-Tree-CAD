@@ -41,6 +41,8 @@ struct EasyCADWorkspace: View {
     @State private var savedLibrarySnapshot: DraftProject?
     // The pinned drawing gives way to the keyboard so the focused field stays reachable.
     @State private var keyboardVisible = false
+    // The zoom buttons grow with the text size and never drop below the 44 pt touch target.
+    @ScaledMetric(relativeTo: .body) private var zoomButtonBase: CGFloat = 44
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -76,6 +78,9 @@ struct EasyCADWorkspace: View {
             pieceWidth != DraftPiece.display(piece.lineLength) ||
             pieceHeight != DraftPiece.display(piece.maxY - piece.minY)
     }
+    /// True only when the saved library copy equals the drawing and nothing typed is still pending.
+    private var isSavedToLibrary: Bool { savedLibrarySnapshot == document && !hasPendingDetails }
+
     private func select(_ piece: DraftPiece?) {
         selectedID = piece?.id
         pieceName = piece?.name ?? ""
@@ -138,12 +143,12 @@ struct EasyCADWorkspace: View {
     private func addTouchContour(_ piece: DraftPiece) {
         guard document.pieces.count < 250,
               document.pieces.reduce(0, { $0 + $1.points.count }) + piece.points.count <= 20_000 else {
-            problem = "Çizim sınırı doldu. Yeni kontur eklenemedi."
+            problem = "Çizim sınırı doldu. Yeni şekil eklenemedi."
             return
         }
         var updated = document
         updated.pieces.append(piece)
-        guard commit(updated, notice: "Parmakla çizdiğiniz \(piece.points.count) noktalı kontur eklendi.") else { return }
+        guard commit(updated, notice: "Parmakla çizdiğiniz \(piece.points.count) noktalı şekil eklendi.") else { return }
         select(piece)
     }
 
@@ -163,8 +168,12 @@ struct EasyCADWorkspace: View {
     @discardableResult
     private func saveDetails() -> Bool {
         let name = projectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 128 else {
-            problem = "Proje adı 1–128 karakter arasında olmalı."
+        guard !name.isEmpty else {
+            problem = "Proje adı boş olamaz."
+            return false
+        }
+        guard name.count <= 128 else {
+            problem = "Proje adı en fazla 128 karakter olabilir (şu an \(name.count))."
             return false
         }
         var updated = document
@@ -172,10 +181,13 @@ struct EasyCADWorkspace: View {
         if let index = selectedIndex {
             let selectedName = pieceName.trimmingCharacters(in: .whitespacesAndNewlines)
             let piece = updated.pieces[index]
-            guard !selectedName.isEmpty, selectedName.count <= 128,
-                  let resized = piece.applyingDimensions(x: pieceX, y: pieceY,
+            if let message = detailsProblem(for: piece, name: selectedName) {
+                problem = message
+                return false
+            }
+            guard let resized = piece.applyingDimensions(x: pieceX, y: pieceY,
                                                          width: pieceWidth, height: pieceHeight) else {
-                problem = "Parça adını, konumunu ve milimetre ölçülerini kontrol edin."
+                problem = dimensionProblem(for: piece)
                 return false
             }
             updated.pieces[index].points = resized
@@ -185,6 +197,111 @@ struct EasyCADWorkspace: View {
         projectName = updated.name
         if let index = selectedIndex { select(updated.pieces[index]) }
         return true
+    }
+
+    // MARK: Field messages
+    // Each message names the box and the reason, so nobody has to guess which one is wrong.
+    // They follow the checks of DraftPiece.applyingDimensions without changing its behaviour.
+
+    /// Reads a box the way applyingDimensions does: untouched text keeps the exact stored value.
+    private func parsedMillimetres(_ text: String, original: Double) -> Double? {
+        text == DraftPiece.display(original) ? original : DraftContourGeometry.coordinate(text)
+    }
+
+    private func fieldProblem(_ title: String, text: String, original: Double,
+                              mustBePositive: Bool) -> String? {
+        if text == DraftPiece.display(original) { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "\(title): boş bırakılamaz. Milimetre cinsinden bir sayı yazın." }
+        guard let value = DraftContourGeometry.coordinate(text) else {
+            let separators = trimmed.filter { $0 == "," || $0 == "." }.count
+            if separators > 1 {
+                return "\(title): birden çok virgül ya da nokta var. Ondalık için tek virgül kullanın."
+            }
+            if let number = Double(trimmed.replacingOccurrences(of: ",", with: ".")), number.isFinite {
+                return "\(title): değer çalışma alanı sınırını aşıyor (en çok 100 000 000 mm)."
+            }
+            return "\(title): sayı değil. Yalnız rakam, eksi işareti ve ondalık için virgül yazın; birim yazmayın."
+        }
+        if mustBePositive && value <= 0 {
+            return "\(title): 0'dan büyük olmalı (sıfır ve eksi değer olmaz)."
+        }
+        return nil
+    }
+
+    /// The first problem in the name or in the four boxes, or nil when each of them reads fine.
+    private func detailsProblem(for piece: DraftPiece, name: String) -> String? {
+        if name.isEmpty { return "Parça adı boş olamaz." }
+        if name.count > 128 { return "Parça adı en fazla 128 karakter olabilir (şu an \(name.count))." }
+        struct Box {
+            let title: String
+            let text: String
+            let original: Double
+            let positive: Bool
+        }
+        var boxes = [
+            Box(title: "X (soldan uzaklık)", text: pieceX, original: piece.minX, positive: false),
+            Box(title: "Y (alttan uzaklık)", text: pieceY, original: piece.minY, positive: false),
+            Box(title: piece.closed ? "En" : "Uzunluk", text: pieceWidth,
+                original: piece.lineLength, positive: true)
+        ]
+        if piece.closed {
+            boxes.append(Box(title: "Boy", text: pieceHeight,
+                             original: piece.maxY - piece.minY, positive: true))
+        }
+        for box in boxes {
+            if let message = fieldProblem(box.title, text: box.text, original: box.original,
+                                          mustBePositive: box.positive) { return message }
+        }
+        return nil
+    }
+
+    /// Why applyingDimensions refused values that each read fine on their own.
+    private func dimensionProblem(for piece: DraftPiece) -> String {
+        let generic = "Parça adını, konumunu ve milimetre ölçülerini kontrol edin."
+        let left = piece.minX, bottom = piece.minY
+        let oldWidth = piece.lineLength, oldHeight = piece.maxY - bottom
+        guard let x = parsedMillimetres(pieceX, original: left),
+              let y = parsedMillimetres(pieceY, original: bottom),
+              let width = parsedMillimetres(pieceWidth, original: oldWidth),
+              let height = parsedMillimetres(pieceHeight, original: oldHeight) else { return generic }
+        guard oldWidth > 0, !piece.closed || oldHeight > 0 else {
+            return "Bu şeklin eni ya da boyu sıfır olduğu için ölçüleri yazarak değiştirilemez."
+        }
+        let sx = width / oldWidth
+        let sy = piece.closed ? height / oldHeight : sx
+        let moved: [DraftPoint] = piece.points.map { p in
+            DraftPoint(x: sx == 1 ? p.x + (x - left) : x + (p.x - left) * sx,
+                       y: sy == 1 ? p.y + (y - bottom) : y + (p.y - bottom) * sy)
+        }
+        let limit = DraftContourGeometry.coordinateLimit
+        guard moved.allSatisfy({ abs($0.x) <= limit && abs($0.y) <= limit }) else {
+            return "Yeni ölçüler ya da konum çalışma alanı sınırını (100 000 000 mm) aşıyor."
+        }
+        if moved.count <= DraftContourGeometry.pointLimit,
+           let reason = DraftContourGeometry.validationError(points: moved, closed: piece.closed) {
+            return "Bu ölçülerle şekil geçersiz olur. " + reason
+        }
+        return generic
+    }
+
+    /// A hint shown beside a box while its text is easy to misread. It never changes the value.
+    private func separatorNotice(for text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let separators = trimmed.filter { $0 == "," || $0 == "." }.count
+        if separators > 1 {
+            return "Birden çok nokta veya virgül var. Ondalık için tek virgül kullanın."
+        }
+        guard separators == 1,
+              let separator = trimmed.firstIndex(where: { $0 == "," || $0 == "." }) else { return nil }
+        let whole = String(trimmed[..<separator]).replacingOccurrences(of: "-", with: "")
+        let fraction = String(trimmed[trimmed.index(after: separator)...])
+        // Like 1.250: three digits after the only separator. It is read as 1,25, not as 1250.
+        guard !whole.isEmpty, whole.count <= 3, whole.first != "0",
+              whole.allSatisfy({ $0.isASCII && $0.isNumber }),
+              fraction.count == 3, fraction.allSatisfy({ $0.isASCII && $0.isNumber }),
+              let value = DraftContourGeometry.coordinate(trimmed) else { return nil }
+        return "\(trimmed) sayısı \(DraftPiece.display(value)) olarak okunur. Nokta ve virgül ondalık ayraçtır, binlik ayraç değildir."
     }
 
     private func move(dx: Double, dy: Double) {
@@ -378,7 +495,8 @@ struct EasyCADWorkspace: View {
         }
     }
 
-    private func millimetreField(_ title: String, label: String, text: Binding<String>) -> some View {
+    private func millimetreField(_ title: String, label: String, text: Binding<String>,
+                                 current: String) -> some View {
         VStack(alignment: .leading) {
             Text(label).font(.caption)
             TextField(title, text: text)
@@ -388,13 +506,32 @@ struct EasyCADWorkspace: View {
                 // Digits, minus, comma and point without switching keyboards.
                 .keyboardType(.numbersAndPunctuation)
                 #endif
+            if text.wrappedValue != current, let notice = separatorNotice(for: text.wrappedValue) {
+                Text(notice)
+                    .font(.caption).foregroundStyle(AppTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
     @ViewBuilder
-    private var moveButtons: some View {
+    private var horizontalMoveButtons: some View {
         Button("← 10 mm") { move(dx: -10, dy: 0) }
+            .accessibilityHint("Seçili parçayı 10 milimetre sola taşır")
         Button("10 mm →") { move(dx: 10, dy: 0) }
+            .accessibilityHint("Seçili parçayı 10 milimetre sağa taşır")
+    }
+
+    // CAD Y grows upwards, so "up" adds to Y.
+    @ViewBuilder
+    private var verticalMoveButtons: some View {
+        Button("↑ 10 mm") { move(dx: 0, dy: 10) }
+            .accessibilityHint("Seçili parçayı 10 milimetre yukarı taşır")
+        Button("↓ 10 mm") { move(dx: 0, dy: -10) }
+            .accessibilityHint("Seçili parçayı 10 milimetre aşağı taşır")
+    }
+
+    private var rotateButton: some View {
         Button("90° döndür") { rotateSelected() }
     }
 
@@ -413,16 +550,22 @@ struct EasyCADWorkspace: View {
             .focused($pieceNameFocused)
             .onSubmit { pieceNameFocused = false }
         HStack {
-            millimetreField("X", label: "Soldan uzaklık (mm)", text: $pieceX)
-            millimetreField("Y", label: "Alttan uzaklık (mm)", text: $pieceY)
+            millimetreField("X", label: "Soldan uzaklık (mm)", text: $pieceX,
+                            current: DraftPiece.display(document.pieces[index].minX))
+            millimetreField("Y", label: "Alttan uzaklık (mm)", text: $pieceY,
+                            current: DraftPiece.display(document.pieces[index].minY))
         }
         if document.pieces[index].closed {
             HStack {
-                millimetreField("En", label: "En (mm)", text: $pieceWidth)
-                millimetreField("Boy", label: "Boy (mm)", text: $pieceHeight)
+                millimetreField("En", label: "En (mm)", text: $pieceWidth,
+                                current: DraftPiece.display(document.pieces[index].lineLength))
+                millimetreField("Boy", label: "Boy (mm)", text: $pieceHeight,
+                                current: DraftPiece.display(document.pieces[index].maxY
+                                                            - document.pieces[index].minY))
             }
         } else {
-            millimetreField("Uzunluk", label: "Toplam çizgi uzunluğu (mm)", text: $pieceWidth)
+            millimetreField("Uzunluk", label: "Toplam çizgi uzunluğu (mm)", text: $pieceWidth,
+                            current: DraftPiece.display(document.pieces[index].lineLength))
         }
         Button("Ölçüleri, konumu ve adı uygula") { _ = saveDetails() }
             .buttonStyle(.appPrimary)
@@ -432,12 +575,34 @@ struct EasyCADWorkspace: View {
             }
             .buttonStyle(.appSecondary)
         } else {
-            Text("Nokta düzenleme en fazla 250 noktalı konturlarda kullanılabilir.")
+            Text("Nokta düzenleme en fazla 250 noktalı şekillerde kullanılabilir.")
                 .font(.caption)
         }
+        // One row when everything fits; otherwise the rotate button wraps first, then the
+        // vertical pair, and finally every button gets its own line.
         ViewThatFits(in: .horizontal) {
-            HStack { moveButtons }
-            VStack(alignment: .leading) { moveButtons }
+            HStack {
+                horizontalMoveButtons
+                verticalMoveButtons
+                rotateButton
+            }
+            VStack(alignment: .leading) {
+                HStack {
+                    horizontalMoveButtons
+                    verticalMoveButtons
+                }
+                rotateButton
+            }
+            VStack(alignment: .leading) {
+                HStack { horizontalMoveButtons }
+                HStack { verticalMoveButtons }
+                rotateButton
+            }
+            VStack(alignment: .leading) {
+                horizontalMoveButtons
+                verticalMoveButtons
+                rotateButton
+            }
         }
         .buttonStyle(.appSecondary)
         .font(.caption)
@@ -491,6 +656,13 @@ struct EasyCADWorkspace: View {
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.appPrimary)
+            // Words and an icon, not a colour, tell whether the saved copy is current.
+            HStack(spacing: 6) {
+                Image(systemName: isSavedToLibrary ? "checkmark.circle" : "circle.dashed")
+                    .accessibilityHidden(true)
+                Text(isSavedToLibrary ? "Kaydedildi" : "Henüz kaydedilmedi")
+            }
+            .font(.caption).foregroundStyle(AppTheme.muted)
             Button {
                 guard saveDetails() else { return }
                 var copy = document
@@ -616,11 +788,20 @@ struct EasyCADWorkspace: View {
                 }
             }
             .sheet(item: $editingPoints) { piece in
-                ContourPointEditor(piece: piece) { edited in
-                    guard let index = document.pieces.firstIndex(where: { $0.id == edited.id }) else { return }
+                ContourPointEditor(piece: piece) { edited -> String? in
+                    guard let index = document.pieces.firstIndex(where: { $0.id == edited.id }) else {
+                        return "Şekil artık çizimde yok."
+                    }
                     var updated = document
                     updated.pieces[index] = edited
-                    if commit(updated, notice: "Kontur noktaları güncellendi.") { select(edited) }
+                    guard commit(updated, notice: "Şekil noktaları güncellendi.") else {
+                        // The editor shows the reason itself; the drawing's own alert would sit behind it.
+                        let reason = problem ?? "Değişiklik kaydedilemedi."
+                        problem = nil
+                        return reason
+                    }
+                    select(edited)
+                    return nil
                 }
             }
             .sheet(isPresented: $showingTouchComposer) {
@@ -906,6 +1087,7 @@ struct EasyCADWorkspace: View {
             if !viewport.isFit {
                 zoomButton("Ekrana sığdır", systemImage: "arrow.up.left.and.down.right.magnifyingglass",
                            id: "zoom-fit", enabled: true) { viewport = DraftViewport() }
+                    .keyboardShortcut("0", modifiers: .command)
             }
             if !viewport.isFit && selectedIndex != nil {
                 zoomButton("Seçili parçayı göster", systemImage: "scope",
@@ -915,20 +1097,25 @@ struct EasyCADWorkspace: View {
                        id: "zoom-out", enabled: viewport.canZoomOut) {
                 viewport = viewport.zoomed(by: 1 / DraftViewport.step)
             }
+            .keyboardShortcut("-", modifiers: .command)
             zoomButton("Yakınlaştır", systemImage: "plus.magnifyingglass",
                        id: "zoom-in", enabled: viewport.canZoomIn) {
                 viewport = viewport.zoomed(by: DraftViewport.step)
             }
+            .keyboardShortcut("+", modifiers: .command)
         }
         .padding(6)
     }
+
+    /// 44 pt at the default text size, larger with big text, capped so four buttons still fit.
+    private var zoomButtonSide: CGFloat { min(56, max(44, zoomButtonBase)) }
 
     private func zoomButton(_ title: String, systemImage: String, id: String, enabled: Bool,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.body.weight(.semibold))
-                .frame(width: 44, height: 44)
+                .frame(width: zoomButtonSide, height: zoomButtonSide)
                 .background(.thinMaterial, in: Circle())
         }
         .buttonStyle(.plain)

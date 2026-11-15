@@ -19,7 +19,7 @@ struct DraftProject: Equatable, Codable {
 }
 
 enum SketchStoreError: LocalizedError {
-    case invalid, oversized, identity, changed
+    case invalid, oversized, identity, changed, name, missing
 
     var errorDescription: String? {
         switch self {
@@ -27,6 +27,8 @@ enum SketchStoreError: LocalizedError {
         case .oversized: return "Dosya izin verilen boyutu aşıyor."
         case .identity: return "Dosyanın proje kimliği kayıtla eşleşmiyor."
         case .changed: return "Kayıt başka bir çalışma tarafından değiştirildi. Çalışmanı kaybetmemek için «Farklı kopya kaydet»i kullan ya da projeyi yeniden aç."
+        case .name: return "Proje adı 1 ile 120 karakter arasında olmalı."
+        case .missing: return "Proje artık bulunamıyor."
         }
     }
 }
@@ -260,7 +262,12 @@ enum CADProjectLibrary {
         let id: UUID
         let name: String
         let modified: Date
+        /// False when the file exists but cannot be read as a project. Such an
+        /// entry can still be removed, but not renamed or opened.
+        var readable = true
     }
+
+    static let nameLimit = 120
 
     private static var folder: URL { CADLocalDraftStore.directory.appendingPathComponent("Projects", isDirectory: true) }
     static func url(_ id: UUID) -> URL { folder.appendingPathComponent(id.uuidString + ".json") }
@@ -301,12 +308,83 @@ enum CADProjectLibrary {
         guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
         let keys: Set<URLResourceKey> = [.contentModificationDateKey]
         let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(keys))
-        return try files.compactMap { file -> Entry? in
+        return files.compactMap { file -> Entry? in
             guard file.pathExtension == "json", let id = UUID(uuidString: file.deletingPathExtension().lastPathComponent) else { return nil }
-            let modified = try file.resourceValues(forKeys: keys).contentModificationDate ?? .distantPast
-            let name = (try? open(id).name) ?? "Okunamayan proje"
-            return Entry(id: id, name: name, modified: modified)
+            // A project deleted while the list is being read is skipped, not an error for the whole list.
+            guard let values = try? file.resourceValues(forKeys: keys) else { return nil }
+            let modified = values.contentModificationDate ?? .distantPast
+            let stored = try? open(id)
+            return Entry(id: id, name: stored?.name ?? "Okunamayan proje", modified: modified,
+                         readable: stored != nil)
         }.sorted { $0.modified > $1.modified }
+    }
+
+    /// Trimmed project name, or nil when it is empty or longer than `nameLimit`.
+    static func validatedName(_ proposed: String) -> String? {
+        let name = proposed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= nameLimit else { return nil }
+        return name
+    }
+
+    static func rename(_ id: UUID, to proposed: String) throws {
+        try CADFileIO.withExclusiveLock(for: CADLocalDraftStore.current) { () throws -> Void in
+            let file = url(id)
+            let before = try? CADLocalDraftStore.read(file)
+            try rename(id, to: proposed, at: file)
+            // An untouched autosave of this project would otherwise differ from the renamed saved
+            // copy and be archived as a second "(taslak)" project. A draft with edits is left alone.
+            guard let before = before, let name = validatedName(proposed),
+                  var draft = try? CADLocalDraftStore.read(CADLocalDraftStore.current),
+                  draft == before else { return }
+            draft.name = name
+            try CADLocalDraftStore.write(draft, to: CADLocalDraftStore.current)
+        }
+    }
+
+    /// Changes only the name of a readable project. The compare-and-write runs under the
+    /// project's lock sidecar, on the bytes read inside the lock, so a concurrent editor
+    /// save cannot be overwritten with an older copy. Path-injectable for tests.
+    static func rename(_ id: UUID, to proposed: String, at file: URL) throws {
+        guard let name = validatedName(proposed) else { throw SketchStoreError.name }
+        try CADFileIO.withExclusiveLock(for: file) {
+            guard FileManager.default.fileExists(atPath: file.path) else { throw SketchStoreError.missing }
+            var stored = try CADLocalDraftStore.read(file)
+            guard stored.id == id else { throw SketchStoreError.identity }
+            if stored.name == name { return }
+            stored.name = name
+            try CADLocalDraftStore.write(stored, to: file)
+        }
+    }
+
+    private static func itemType(_ file: URL) -> FileAttributeType? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path) else { return nil }
+        return attributes[.type] as? FileAttributeType
+    }
+
+    /// Removes one saved project file, readable or not. A project that is already gone
+    /// is not an error. Other projects and the current draft are never touched, and the
+    /// lock sidecar stays in place (see `CADFileIO.withExclusiveLock`).
+    static func delete(_ id: UUID) throws {
+        // The autosaved draft of this project would otherwise be archived back into the library by
+        // the next `archiveBeforeSwitch`, silently undoing the delete. Same lock order as there.
+        try CADFileIO.withExclusiveLock(for: CADLocalDraftStore.current) { () throws -> Void in
+            try delete(at: url(id))
+            if let draft = try? CADLocalDraftStore.read(CADLocalDraftStore.current), draft.id == id {
+                try FileManager.default.removeItem(at: CADLocalDraftStore.current)
+            }
+        }
+    }
+
+    // Path-injectable for deterministic tests; production always uses url(id).
+    static func delete(at file: URL) throws {
+        guard file.pathExtension == "json" else { throw SketchStoreError.invalid }
+        // Do not create the folder or a lock sidecar for a project that does not exist.
+        guard itemType(file) != nil else { return }
+        try CADFileIO.withExclusiveLock(for: file) {
+            guard let type = itemType(file) else { return }
+            guard type != .typeDirectory else { throw SketchStoreError.invalid }
+            try FileManager.default.removeItem(at: file)
+        }
     }
 
     #if DEBUG && targetEnvironment(simulator)

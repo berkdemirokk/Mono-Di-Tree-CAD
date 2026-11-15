@@ -8,7 +8,8 @@ Ana ekranda **Yeni proje oluştur** ve **Örnekle dene** düğmeleri bulunur. Bu
 
 - Yeni dikdörtgen veya çizgi ekle; parçayı seç ve değiştir.
 - Dikdörtgenin en ve boyunu, çizginin uzunluğunu ve parçanın X/Y konumunu milimetre cinsinden düzenle.
-- Parçayı 10 mm sağa/sola taşı, 90 derece döndür, çoğalt veya sil.
+- Parçayı 10 mm sağa/sola/yukarı/aşağı taşı, 90 derece döndür, çoğalt veya sil. Köşe noktalarını düzenlerken "Uygula" sayfayı kapatmaz ve sıradaki noktaya geçer; "Bitti" ile kapanır.
+- Ana ekranda Son projeler: bir projeyi silmek (onay ister; o projenin otomatik taslağı da silinir) ya da adını değiştirmek için satırdaki "…" menüsünü kullan. Listede en çok 10 proje görünür.
 - Son 50 değişiklik için geri al/ileri al.
 - `.tcad` dosyası hazırla; sistem Paylaş menüsünden Dosyalara Kaydet, AirDrop veya diğer seçeneği kullan.
 - Çizimi yakınlaştır ve kaydır; seçili parçanın ölçüsünü çizimin üstünde oku (aşağıda "Çizimi yakınlaştırma, kaydırma ve ölçü etiketleri").

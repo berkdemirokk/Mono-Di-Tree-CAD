@@ -33,6 +33,38 @@ private struct ContentView: View {
     @State private var recentProjects: [CADProjectLibrary.Entry] = []
     @State private var didStart = false
     @State private var recentRefresh = UUID()
+    @State private var showAllRecent = false
+    @State private var pendingDelete: CADProjectLibrary.Entry?
+    @State private var renameTarget: CADProjectLibrary.Entry?
+    @State private var renameText = ""
+
+    private static let recentLimit = 10
+
+    private var visibleRecentProjects: [CADProjectLibrary.Entry] {
+        showAllRecent ? recentProjects : Array(recentProjects.prefix(Self.recentLimit))
+    }
+
+    private var deleteTitle: String {
+        pendingDelete.map { "\($0.name) silinsin mi?" } ?? "Proje silinsin mi?"
+    }
+
+    private func deleteProject(_ entry: CADProjectLibrary.Entry) {
+        pendingDelete = nil
+        do {
+            try CADProjectLibrary.delete(entry.id)
+            recentProjects.removeAll { $0.id == entry.id }
+        } catch {
+            self.error = "Proje silinemedi. \(error.localizedDescription)"
+        }
+        refreshProjects()
+    }
+
+    private func renameProject(_ entry: CADProjectLibrary.Entry, to name: String) {
+        renameTarget = nil
+        do { try CADProjectLibrary.rename(entry.id, to: name) }
+        catch { self.error = "Ad değiştirilemedi. \(error.localizedDescription)" }
+        refreshProjects()
+    }
 
     private func refreshProjects() {
         do { hasLocalDraft = try CADLocalDraftStore.restore() != nil }
@@ -255,6 +287,40 @@ private struct ContentView: View {
         } message: { _ in
             Text("Cihazdaki otomatik taslak bozuk ya da bu sürümle uyumsuz. Dosya silinmez; ayrı bir klasöre taşınır ve yeni çalışma açılır.")
         }
+        .confirmationDialog(deleteTitle, isPresented: Binding(
+            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible, presenting: pendingDelete) { entry in
+            Button("Sil", role: .destructive) { deleteProject(entry) }
+            Button("Vazgeç", role: .cancel) { }
+        } message: { _ in
+            Text("Bu geri alınamaz. Bu projenin otomatik kaydedilen son çizimi de silinir.")
+        }
+        .alert("Adı değiştir", isPresented: Binding(
+            get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } }),
+            presenting: renameTarget) { entry in
+            TextField("Yeni ad", text: $renameText)
+            Button("Kaydet") { renameProject(entry, to: renameText) }
+            Button("Vazgeç", role: .cancel) { }
+        } message: { _ in
+            Text("Ad 1 ile 120 karakter arasında olmalı.")
+        }
+    }
+
+    @ViewBuilder
+    private func recentActions(_ entry: CADProjectLibrary.Entry) -> some View {
+        if entry.readable {
+            Button {
+                renameText = entry.name
+                renameTarget = entry
+            } label: {
+                Label("Adı değiştir", systemImage: "pencil")
+            }
+        }
+        Button(role: .destructive) {
+            pendingDelete = entry
+        } label: {
+            Label("Sil", systemImage: "trash")
+        }
     }
 
     private var resumeButton: some View {
@@ -319,30 +385,55 @@ private struct ContentView: View {
                         Text("Kaydettiğin projeler burada görünür.")
                             .font(.subheadline).foregroundStyle(AppTheme.muted)
                     }
-                    ForEach(recentProjects) { entry in
-                        Button {
-                            do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
-                            catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "doc.text")
-                                    .foregroundStyle(AppTheme.accent)
-                                    .frame(width: 36, height: 36)
-                                    .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(entry.name).foregroundStyle(AppTheme.ink)
-                                    Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
-                                        .font(.caption).foregroundStyle(AppTheme.muted)
+                    ForEach(visibleRecentProjects) { entry in
+                        HStack(spacing: 4) {
+                            Button {
+                                do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
+                                catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "doc.text")
+                                        .foregroundStyle(AppTheme.accent)
+                                        .frame(width: 36, height: 36)
+                                        .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(entry.name).foregroundStyle(AppTheme.ink)
+                                        Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
+                                            .font(.caption).foregroundStyle(AppTheme.muted)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.forward").font(.caption)
+                                        .foregroundStyle(AppTheme.muted)
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.forward").font(.caption)
-                                    .foregroundStyle(AppTheme.muted)
+                                .frame(minHeight: 48)
+                                .contentShape(Rectangle())
                             }
-                            .frame(minHeight: 48)
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                            Menu {
+                                recentActions(entry)
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .font(.title3)
+                                    .foregroundStyle(AppTheme.muted)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("\(entry.name) için işlemler")
+                            .accessibilityIdentifier("project-actions-\(entry.id.uuidString)")
+                        }
+                        .contextMenu { recentActions(entry) }
+                    }
+                    if recentProjects.count > Self.recentLimit {
+                        Button { showAllRecent.toggle() } label: {
+                            Text(showAllRecent ? "Daha az göster" : "Tümünü göster (\(recentProjects.count))")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(AppTheme.accent)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+                        .accessibilityIdentifier("show-all-projects")
                     }
                 }
                 .appCard()

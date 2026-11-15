@@ -349,4 +349,62 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(picker.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
     }
+
+    func testVerticalMoveButtonsShiftThePieceAndUndoRestoresIt() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+
+        let yField = app.textFields["Y"]
+        func expectY(_ value: String, file: StaticString = #filePath, line: UInt = #line) {
+            let expectation = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value == %@", value), object: yField)
+            XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed,
+                           "Y should read \(value)", file: file, line: line)
+        }
+        expectY("0")
+
+        // CAD Y grows upwards: the up button adds 10 mm, the down button takes it back.
+        let up = app.buttons["↑ 10 mm"]
+        let down = app.buttons["↓ 10 mm"]
+        tapBelow(up, in: app)
+        expectY("10")
+        tapBelow(down, in: app)
+        expectY("0")
+
+        let undo = app.buttons["Geri al"]
+        XCTAssertTrue(undo.isEnabled)
+        undo.tap()
+        expectY("10")
+        XCTAssertTrue(app.buttons["İleri al"].isEnabled)
+    }
+
+    func testInvalidDimensionNamesTheFieldInTheAlert() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+
+        let width = app.textFields["En"]
+        tapBelow(width, in: app)
+        // Two separators can be typed without leaving the numbers keyboard page.
+        width.typeText(",,")
+        let done = app.keyboards.buttons["Done"]
+        if done.exists { done.tap() }
+        tapBelow(app.buttons["Ölçüleri, konumu ve adı uygula"], in: app)
+
+        let alert = app.alerts["İşlem tamamlanamadı"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        let reason = alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "birden çok")).firstMatch
+        XCTAssertTrue(reason.exists, "The alert should say which box is wrong and why")
+        alert.buttons["Tamam"].tap()
+        // The alert fades out; wait for it instead of checking at once.
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: alert)
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed)
+        // Nothing was applied: the drawing still has its one piece.
+        XCTAssertTrue(countLabel(1, in: app).exists)
+    }
 }

@@ -218,3 +218,14 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 4. Zoom açıkken parça seçiliyse **Seçili parçayı göster** parçayı çizim alanının ortasına getirmeli (sürükleme gerekmeden).
 
 Bu adımlar yalnız koddan çıkarıldı; simülatör testi yoktur ve gerçek cihazda denenmedi.
+
+## Taşıma, kayıt durumu, nokta düzenleme ve proje yönetimi
+
+1. Bir parça seçiliyken **↑ 10 mm** ve **↓ 10 mm** parçayı yukarı/aşağı taşımalı (Y alanı 10 artıp azalmalı); Geri al ikisini de geri almalı.
+2. **Projeyi kaydet**'in altındaki satır, kaydedilmemiş değişiklikte "Henüz kaydedilmedi", kayıttan sonra "Kaydedildi" demeli.
+3. Bir en/boy alanına geçersiz değer ("100,,") yazıp uygula: uyarı hangi alanın neden reddedildiğini söylemeli.
+4. **Köşe noktalarını düzenle**: bir noktayı değiştirip **Nokta konumunu uygula**'ya bas; sayfa kapanmamalı, sıradaki nokta seçilmeli ve çizim hemen değişmeli. **Bitti** kapatmalı. Yazılıp uygulanmamış değer varken sayfayı aşağı çekmek kapatmamalı.
+5. Ana ekranda bir projenin "…" menüsünden **Adı değiştir** (1–120 karakter) ve **Sil** (onay ister) dene. Sildikten sonra yeni proje açınca silinen projenin geri **gelmediğini** doğrula. Adı değiştirdikten sonra yeni proje açınca "(taslak)" adlı ikinci bir proje **oluşmadığını** doğrula.
+6. 10'dan fazla proje varken **Tümünü göster (N)** görünmeli.
+
+Bu adımlar yalnız koddan çıkarıldı; simülatör testi yalnız 1. ve 3. adımı (taşıma ve hatalı değer) kapsar; gerçek cihazda denenmedi. 5. adımın birim testi yalnız yol-enjekte edilebilir silme/ad değiştirmeyi kapsar, taslakla etkileşimi kapsamaz.
