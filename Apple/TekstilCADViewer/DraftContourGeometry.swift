@@ -83,6 +83,43 @@ enum DraftContourGeometry {
     }
 }
 
+/// Zoom and pan of the drawing, relative to the fit-to-screen view. Zoom is about the centre of the
+/// drawing area; pan is a screen-space offset in points. Kept as plain values so it can be tested
+/// without a view.
+struct DraftViewport: Equatable {
+    static let minZoom = 1.0
+    static let maxZoom = 24.0
+    static let step = 1.6
+
+    var zoom = 1.0
+    var pan = CGSize.zero
+
+    var isFit: Bool { zoom <= Self.minZoom + 1e-9 && pan == .zero }
+    var canZoomIn: Bool { zoom < Self.maxZoom - 1e-9 }
+    var canZoomOut: Bool { zoom > Self.minZoom + 1e-9 }
+
+    /// Multiplies the zoom by `factor`, clamped. The point under the centre stays there, so the
+    /// pan scales with the zoom. Returning to fit also clears the pan.
+    func zoomed(by factor: Double) -> DraftViewport {
+        guard factor.isFinite, factor > 0 else { return self }
+        let next = min(Self.maxZoom, max(Self.minZoom, zoom * factor))
+        if next <= Self.minZoom + 1e-9 { return DraftViewport() }
+        let ratio = next / zoom
+        return DraftViewport(zoom: next,
+                             pan: CGSize(width: pan.width * ratio, height: pan.height * ratio))
+    }
+
+    /// Adds `delta` to the pan. The drawing may not be moved further than half of its zoomed
+    /// extent from the centre, so some of it always stays in view.
+    func panned(by delta: CGSize, in size: CGSize) -> DraftViewport {
+        guard delta.width.isFinite, delta.height.isFinite, zoom > Self.minZoom + 1e-9 else { return self }
+        let limitX = Double(size.width) * zoom / 2, limitY = Double(size.height) * zoom / 2
+        return DraftViewport(zoom: zoom, pan: CGSize(
+            width: min(limitX, max(-limitX, Double(pan.width + delta.width))),
+            height: min(limitY, max(-limitY, Double(pan.height + delta.height)))))
+    }
+}
+
 /// A centered aspect-fit map shared by drawing and picking. CAD Y increases upwards.
 struct DraftCanvasMap {
     private let scale: Double
@@ -90,6 +127,25 @@ struct DraftCanvasMap {
     private let bottom: Double
     private let minX: Double
     private let minY: Double
+
+    private init(scale: Double, left: Double, bottom: Double, minX: Double, minY: Double) {
+        self.scale = scale
+        self.left = left
+        self.bottom = bottom
+        self.minX = minX
+        self.minY = minY
+    }
+
+    /// The same map seen through a zoom and pan. Distances measured on screen are divided by the
+    /// zoomed scale, so dragging and picking keep working while zoomed in.
+    func viewed(_ viewport: DraftViewport, in size: CGSize) -> DraftCanvasMap {
+        let cx = Double(size.width) / 2, cy = Double(size.height) / 2
+        let z = viewport.zoom
+        return DraftCanvasMap(scale: scale * z,
+                              left: cx + (left - cx) * z + Double(viewport.pan.width),
+                              bottom: cy + (bottom - cy) * z + Double(viewport.pan.height),
+                              minX: minX, minY: minY)
+    }
 
     init?(size: CGSize, minX: Double, maxX: Double, minY: Double, maxY: Double, inset: Double) {
         let width = Double(size.width), height = Double(size.height)

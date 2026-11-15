@@ -73,4 +73,61 @@ final class DraftContourGeometryTests: XCTestCase {
             XCTAssertNil(DraftContourGeometry.coordinate(bad))
         }
     }
+
+    func testViewportZoomIsClampedAndFitClearsPan() {
+        var view = DraftViewport()
+        XCTAssertTrue(view.isFit)
+        view = view.zoomed(by: 1e9)
+        XCTAssertEqual(view.zoom, DraftViewport.maxZoom)
+        XCTAssertFalse(view.canZoomIn)
+        view = view.panned(by: CGSize(width: 40, height: -20), in: CGSize(width: 300, height: 200))
+        XCTAssertEqual(view.pan, CGSize(width: 40, height: -20))
+        view = view.zoomed(by: 1e-9)
+        XCTAssertTrue(view.isFit, "zooming back out to fit must also clear the pan")
+        XCTAssertEqual(view.pan, .zero)
+        XCTAssertEqual(DraftViewport().zoomed(by: .nan), DraftViewport())
+        XCTAssertEqual(DraftViewport().zoomed(by: 0), DraftViewport())
+        XCTAssertEqual(DraftViewport().zoomed(by: -2), DraftViewport())
+    }
+
+    func testViewportPanIsBoundedAndIgnoredAtFit() {
+        let size = CGSize(width: 300, height: 200)
+        XCTAssertEqual(DraftViewport().panned(by: CGSize(width: 50, height: 50), in: size), DraftViewport())
+        let zoomed = DraftViewport().zoomed(by: 2)
+        let far = zoomed.panned(by: CGSize(width: 1e9, height: -1e9), in: size)
+        XCTAssertEqual(far.pan.width, 300, accuracy: 1e-9)   // size * zoom / 2
+        XCTAssertEqual(far.pan.height, -200, accuracy: 1e-9)
+        XCTAssertEqual(zoomed.panned(by: CGSize(width: .infinity, height: 0), in: size), zoomed)
+    }
+
+    func testZoomedMapKeepsTheCentreAndStaysInvertible() throws {
+        let size = CGSize(width: 400, height: 240)
+        let fit = try XCTUnwrap(DraftCanvasMap(size: size, minX: 0, maxX: 200, minY: 0, maxY: 100, inset: 16))
+        let centre = fit.model(at: CGPoint(x: 200, y: 120))
+        let zoomed = fit.viewed(DraftViewport().zoomed(by: 4), in: size)
+        let after = zoomed.model(at: CGPoint(x: 200, y: 120))
+        XCTAssertEqual(after.x, centre.x, accuracy: 1e-9)
+        XCTAssertEqual(after.y, centre.y, accuracy: 1e-9)
+        // A fit viewport changes nothing.
+        let same = fit.viewed(DraftViewport(), in: size)
+        XCTAssertEqual(same.screen(p(37, 11)).x, fit.screen(p(37, 11)).x, accuracy: 1e-9)
+        // Panning moves the drawing by exactly the pan, and the round trip still holds.
+        let panned = fit.viewed(DraftViewport().zoomed(by: 3).panned(by: CGSize(width: 25, height: -10), in: size), in: size)
+        let base = fit.viewed(DraftViewport().zoomed(by: 3), in: size)
+        XCTAssertEqual(panned.screen(p(80, 40)).x - base.screen(p(80, 40)).x, 25, accuracy: 1e-9)
+        XCTAssertEqual(panned.screen(p(80, 40)).y - base.screen(p(80, 40)).y, -10, accuracy: 1e-9)
+        let back = panned.model(at: panned.screen(p(80, 40)))
+        XCTAssertEqual(back.x, 80, accuracy: 1e-9)
+        XCTAssertEqual(back.y, 40, accuracy: 1e-9)
+    }
+
+    func testDragDistanceShrinksWithZoomSoPiecesMoveByTheSameAmountOnScreen() throws {
+        let size = CGSize(width: 400, height: 240)
+        let piece = DraftPiece(name: "t", closed: true, points: [p(0, 0), p(10, 0), p(10, 10), p(0, 10)])
+        let fit = try XCTUnwrap(DraftCanvasMap(size: size, minX: 0, maxX: 200, minY: 0, maxY: 100, inset: 16))
+        let zoomed = fit.viewed(DraftViewport().zoomed(by: 4), in: size)
+        let a = fit.translation(CGSize(width: 40, height: 0), for: piece, snap: false)
+        let b = zoomed.translation(CGSize(width: 40, height: 0), for: piece, snap: false)
+        XCTAssertEqual(a.x / b.x, 4, accuracy: 1e-9)
+    }
 }

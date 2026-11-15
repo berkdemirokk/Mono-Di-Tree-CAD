@@ -24,6 +24,11 @@ struct EasyCADWorkspace: View {
     @State private var dragStarted = false
     @State private var draggedPieceID: UUID?
     @State private var currentDrag = CGSize.zero
+    // Zoom and pan of the drawing. The live values follow a gesture that is still in progress.
+    @State private var viewport = DraftViewport()
+    @State private var liveZoom = 1.0
+    @State private var livePan = CGSize.zero
+    @State private var panning = false
     @State private var editingPoints: DraftPiece?
     @State private var showingTouchComposer = false
     @State private var shouldStoreImportedSeed = false
@@ -291,7 +296,9 @@ struct EasyCADWorkspace: View {
             preview
             // This panel does not scroll, so its text is limited: it must not push the tools away.
             if !document.pieces.isEmpty {
-                Text("\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır")
+                Text(viewport.isFit
+                     ? "\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır"
+                     : "\(document.pieces.count) parça • \(String(format: "%.1f", viewport.zoom))× yakınlaştırıldı")
                     .font(.caption).foregroundStyle(.secondary)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
             }
@@ -519,6 +526,9 @@ struct EasyCADWorkspace: View {
                 dragStarted = false
                 draggedPieceID = nil
                 currentDrag = .zero
+                panning = false
+                livePan = .zero
+                liveZoom = 1
             }
             .modifier(KeyboardVisibility(visible: $keyboardVisible))
             #if os(iOS)
@@ -611,7 +621,10 @@ struct EasyCADWorkspace: View {
                 minY = min(minY, p.y); maxY = max(maxY, p.y)
             }
         }
-        return DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 16)
+        guard let fit = DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 16)
+        else { return nil }
+        let live = viewport.zoomed(by: liveZoom).panned(by: livePan, in: size)
+        return fit.viewed(live, in: size)
     }
 
     private func segmentDistance(_ p: CGPoint, _ a: CGPoint, _ b: CGPoint) -> Double {
@@ -698,13 +711,31 @@ struct EasyCADWorkspace: View {
                         let piece = hitPiece(value.startLocation, size: geometry.size)
                         if let piece, selectFromCanvasOrMenu(piece.id),
                            !hasPendingDetails || saveDetails() { draggedPieceID = piece.id }
+                        // Dragging empty paper moves the view instead of a piece.
+                        panning = piece == nil && !viewport.isFit
                     }
                     if draggedPieceID != nil { currentDrag = value.translation }
+                    else if panning { livePan = value.translation }
                 }
                 .onEnded { value in
+                    if panning {
+                        viewport = viewport.panned(by: value.translation, in: geometry.size)
+                        panning = false
+                        livePan = .zero
+                    }
                     finishDrag(value.translation, size: geometry.size)
                 })
+            .simultaneousGesture(MagnificationGesture()
+                .onChanged { value in
+                    // A piece that is being dragged keeps its scale until it is dropped.
+                    if draggedPieceID == nil { liveZoom = Double(value) }
+                }
+                .onEnded { value in
+                    if draggedPieceID == nil { viewport = viewport.zoomed(by: Double(value)) }
+                    liveZoom = 1
+                })
         }
+        .clipped()
         .frame(height: canvasHeight)
         .frame(maxWidth: .infinity)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
@@ -722,6 +753,43 @@ struct EasyCADWorkspace: View {
                 .allowsHitTesting(false)
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if !document.pieces.isEmpty && !keyboardVisible { zoomControls }
+        }
+    }
+
+    // Buttons for the same zoom the pinch gesture gives, so nothing depends on two fingers.
+    private var zoomControls: some View {
+        HStack(spacing: 6) {
+            if !viewport.isFit {
+                zoomButton("Ekrana sığdır", systemImage: "arrow.up.left.and.down.right.magnifyingglass",
+                           id: "zoom-fit", enabled: true) { viewport = DraftViewport() }
+            }
+            zoomButton("Uzaklaştır", systemImage: "minus.magnifyingglass",
+                       id: "zoom-out", enabled: viewport.canZoomOut) {
+                viewport = viewport.zoomed(by: 1 / DraftViewport.step)
+            }
+            zoomButton("Yakınlaştır", systemImage: "plus.magnifyingglass",
+                       id: "zoom-in", enabled: viewport.canZoomIn) {
+                viewport = viewport.zoomed(by: DraftViewport.step)
+            }
+        }
+        .padding(6)
+    }
+
+    private func zoomButton(_ title: String, systemImage: String, id: String, enabled: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .background(.thinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+        .accessibilityLabel(title)
+        .accessibilityIdentifier(id)
     }
 }
 
