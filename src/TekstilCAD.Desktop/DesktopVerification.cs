@@ -9360,9 +9360,9 @@ internal static class DesktopVerification
         // The header, its notices and the command bar must leave the window height to the canvas.
         // "busy" is the state the preceding checks leave behind: unsaved changes, a DXF notice, a recovery
         // notice with its action and the machine-history message. "clean" is a newly constructed window.
-        // Canvas height before the compact layout: busy 179 px at 1024x640 and 468 px at 1440x900, clean
-        // 318 px at 1024x640. The floors are the required gains over those (+80, +60, 360 px, and 360 px
-        // plus the 260 px taller window). Never lower a floor just to pass.
+        // Measured canvas heights: busy 350 px at 1024x640 and 610 px at 1440x900, clean 421 px and 681 px
+        // (before the compact layout: 179, 468, 318 and 607 px). Each floor is the measured value minus
+        // 10 px. Never lower a floor just to pass.
         static FrameworkElement Field(MainWindow window,string name)=>(FrameworkElement)typeof(MainWindow).GetField(name,PrivateInstance)!.GetValue(window)!;
         var notices=new (string Text,string[] Actions)[]
         {
@@ -9408,8 +9408,8 @@ internal static class DesktopVerification
             && Field(studio,"recoveryOpen").Visibility==Visibility.Visible && Field(studio,"machineQueueMessage").Visibility==Visibility.Visible
             && ((TextBlock)Field(studio,"saveState")).Text.StartsWith("●",StringComparison.Ordinal),
             "Busy workspace state shows unsaved work with DXF, recovery and machine-history notices together",checks);
-        Verify(studio,"busy",1024,640,259);
-        Verify(studio,"busy",1440,900,528);
+        Verify(studio,"busy",1024,640,340);
+        Verify(studio,"busy",1440,900,600);
 
         var fresh=new MainWindow();StopTimer(fresh);var closed=false;fresh.Closed+=(_,_)=>closed=true;
         try
@@ -9419,14 +9419,14 @@ internal static class DesktopVerification
             Check(notices.SelectMany(notice=>notice.Actions.Prepend(notice.Text)).Where(name=>Field(fresh,name).Visibility==Visibility.Visible)
                 .SequenceEqual(["saveState","sourceHistoryNotice","sourceHistoryDetails"]),
                 "Clean workspace state shows only the save state and the permanent source notice",checks);
-            Verify(fresh,"clean",1024,640,360);
+            Verify(fresh,"clean",1024,640,411);
             // Both collapsed groups stay on the row of the primary action at the minimum window width.
             var primary=Descendants<Button>(root).Single(b=>Equals(b.Content,"Kalıp isteği hazırla…"));
             var groups=Descendants<Expander>(root).Where(e=>AutomationProperties.GetName(e) is "Dosya aktarımı" or "Tekstil ve makine").ToArray();
             Check(groups.Length==2 && groups.All(group=>FullyVisible(group,root) && BoundsInRoot(group,root).Top<BoundsInRoot(primary,root).Bottom
                 && BoundsInRoot(group,root).Bottom>BoundsInRoot(primary,root).Top),
                 "Command groups fit on one row at 1024x640",checks);
-            Verify(fresh,"clean",1440,900,620);
+            Verify(fresh,"clean",1440,900,671);
         }
         finally { StopTimer(fresh);fresh.Close();PumpUntil(()=>closed); }
     }

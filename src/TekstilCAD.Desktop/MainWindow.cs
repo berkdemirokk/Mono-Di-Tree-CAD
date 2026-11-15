@@ -222,7 +222,12 @@ public class MainWindow : Window
         about.Padding = new Thickness(9, 3, 9, 3); about.MinHeight = 26; about.FontSize = 11;
         brandLine.Children.Add(new TextBlock { Text = "STUDIO  /  KALIP TASARIMI", Foreground = Muted, FontSize = 9, Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         header.Children.Add(brand);
-        var project = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        // The notice column stops growing on wide windows, so that an action stays near its text. The empty
+        // element makes the column exactly that wide (or as wide as the window allows) whatever the notices
+        // say, which keeps the actions in one place while texts change.
+        const double noticeColumnWidth = 780;
+        var project = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = noticeColumnWidth };
+        project.Children.Add(new FrameworkElement { Width = noticeColumnWidth });
         projectTitle.FontSize = 15; projectTitle.FontWeight = FontWeights.SemiBold; projectTitle.TextTrimming = TextTrimming.CharacterEllipsis;
         projectTitle.TextWrapping = TextWrapping.NoWrap; projectTitle.MaxHeight = 24;
         // Title and save state share one row. The row is only as wide as its content, so the
