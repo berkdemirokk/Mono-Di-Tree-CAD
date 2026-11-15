@@ -24,6 +24,7 @@ public partial class App : Application
             return;
         }
         // Interactive runs only: verification modes keep their own failure reporting and data directory.
+        StudioTheme.Use(TekstilCAD.Core.Theme.UiPreferences.Load(AppPaths.UiPreferencesPath).Palette);
         CrashReporter.Attach();
         CrashReporter.ShowPendingNotice();
         new MainWindow().Show();
