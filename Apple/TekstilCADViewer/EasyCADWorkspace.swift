@@ -151,12 +151,13 @@ struct EasyCADWorkspace: View {
         select(piece)
     }
 
-    @discardableResult
-    private func saveDetails() -> Bool {
+    /// The document with the text fields' values applied, without committing or reporting anything.
+    /// The command field plans against this, so a command never silently depends on a field that
+    /// holds an invalid value.
+    private func pendingDraft() -> (project: DraftProject?, problem: String?) {
         let name = projectName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= 128 else {
-            problem = "Proje adı 1–128 karakter arasında olmalı."
-            return false
+            return (nil, "Proje adı 1–128 karakter arasında olmalı.")
         }
         var updated = document
         updated.name = name
@@ -166,16 +167,112 @@ struct EasyCADWorkspace: View {
             guard !selectedName.isEmpty, selectedName.count <= 128,
                   let resized = piece.applyingDimensions(x: pieceX, y: pieceY,
                                                          width: pieceWidth, height: pieceHeight) else {
-                problem = "Parça adını, konumunu ve milimetre ölçülerini kontrol edin."
-                return false
+                return (nil, "Parça adını, konumunu ve milimetre ölçülerini kontrol edin.")
             }
             updated.pieces[index].points = resized
             updated.pieces[index].name = selectedName
+        }
+        return (updated, nil)
+    }
+
+    @discardableResult
+    private func saveDetails() -> Bool {
+        let draft = pendingDraft()
+        guard let updated = draft.project else {
+            problem = draft.problem
+            return false
         }
         guard commit(updated, notice: "Değişiklikler uygulandı.") else { return false }
         projectName = updated.name
         if let index = selectedIndex { select(updated.pieces[index]) }
         return true
+    }
+
+    @discardableResult
+    private func saveProjectToLibrary() -> Bool {
+        guard saveDetails() else { return false }
+        do {
+            try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
+            savedLibrarySnapshot = document
+            success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
+            return true
+        } catch {
+            problem = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    private func saveSeparateCopy() -> Bool {
+        guard saveDetails() else { return false }
+        var copy = document
+        copy.id = UUID()
+        copy.name = String(document.name.prefix(120)) + " (kopya)"
+        do {
+            try CADProjectLibrary.save(copy)
+            success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
+            return true
+        } catch {
+            problem = "Kopya kaydedilemedi. " + error.localizedDescription
+            return false
+        }
+    }
+
+    // MARK: Command field
+    // The command field plans and confirms in `CommandBar`; this view only describes the drawing
+    // to it and applies a confirmed plan through the same `commit` path as every button. Text-field
+    // values that were typed but not applied yet are applied by the command itself, in the same
+    // single undo step; when they are invalid the command is refused with that reason.
+
+    private func commandContext() -> CommandContext {
+        let draft: (project: DraftProject?, problem: String?)
+        if hasPendingDetails { draft = pendingDraft() } else { draft = (document, nil) }
+        return CommandContext(document: document, base: draft.project, baseProblem: draft.problem,
+                              selectedID: selectedID, undoCount: undoStack.count, redoCount: redoStack.count)
+    }
+
+    /// Applies a confirmed plan. Returns the result line, or nil when nothing was applied.
+    private func applyCommand(_ plan: CommandPlan) -> String? {
+        switch plan.effect {
+        case .edit(let updated, let selection):
+            let appliedFields = plan.base != document
+            guard commit(updated, notice: plan.notice) else { return nil }
+            if appliedFields { projectName = document.name }
+            if case .piece(let id) = selection {
+                select(document.pieces.first(where: { $0.id == id }))
+            }
+            return plan.notice
+        case .select(let id):
+            if plan.base != document {
+                guard commit(plan.base, notice: "Değişiklikler uygulandı.") else { return nil }
+                projectName = document.name
+            }
+            select(document.pieces.first(where: { $0.id == id }))
+            success = plan.notice
+            return plan.notice
+        case .undo(let steps):
+            var done = 0
+            for _ in 0..<steps {
+                let before = undoStack.count
+                undo()
+                if undoStack.count == before { break }
+                done += 1
+            }
+            guard done > 0 else { return nil }
+            let notice = done == 1 ? "Son işlem geri alındı." : "Son \(done) işlem geri alındı."
+            success = notice
+            return notice
+        case .redo:
+            let before = redoStack.count
+            redo()
+            return redoStack.count < before ? plan.notice : nil
+        case .saveProject:
+            return saveProjectToLibrary() ? "Proje kaydedildi." : nil
+        case .saveCopy:
+            return saveSeparateCopy() ? "Bağımsız kopya kaydedildi." : nil
+        case .info:
+            return nil
+        }
     }
 
     private func move(dx: Double, dy: Double) {
@@ -447,26 +544,14 @@ struct EasyCADWorkspace: View {
             Button("Proje adını uygula") { _ = saveDetails() }
                 .buttonStyle(.bordered)
             Button {
-                guard saveDetails() else { return }
-                do {
-                    try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
-                    savedLibrarySnapshot = document
-                    success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
-                } catch { problem = error.localizedDescription }
+                saveProjectToLibrary()
             } label: {
                 Label("Projeyi kaydet", systemImage: "tray.and.arrow.down")
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.borderedProminent)
             Button {
-                guard saveDetails() else { return }
-                var copy = document
-                copy.id = UUID()
-                copy.name = String(document.name.prefix(120)) + " (kopya)"
-                do {
-                    try CADProjectLibrary.save(copy)
-                    success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
-                } catch { problem = "Kopya kaydedilemedi. " + error.localizedDescription }
+                saveSeparateCopy()
             } label: {
                 Label("Farklı kopya kaydet", systemImage: "doc.on.doc")
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -498,6 +583,8 @@ struct EasyCADWorkspace: View {
                     canvasPanel
                     Divider()
                 }
+                CommandBar(context: commandContext(), keyboardVisible: keyboardVisible,
+                           apply: { applyCommand($0) }, undoLast: { undo() })
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         Text("Ölçüler milimetredir. Çizimler cihazda otomatik saklanır • Üretim/kesim onayı değildir.")
