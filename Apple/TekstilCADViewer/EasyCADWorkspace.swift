@@ -807,6 +807,9 @@ struct EasyCADWorkspace: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("workshop-tools")
+                // At very large text a command card gets the whole room below the bar.
+                .frame(maxHeight: dynamicTypeSize.isAccessibilitySize && commandHasOutput ? 0 : .infinity)
+                .accessibilityHidden(dynamicTypeSize.isAccessibilitySize && commandHasOutput)
             }
             .background(AppTheme.page.ignoresSafeArea())
             .animation(reduceMotion ? nil : .default, value: keyboardVisible)

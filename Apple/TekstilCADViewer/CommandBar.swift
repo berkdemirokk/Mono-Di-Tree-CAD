@@ -72,7 +72,7 @@ struct CommandBar: View {
                 if dynamicTypeSize.isAccessibilitySize {
                     // At very large text a card is taller than the screen: it scrolls inside the bar
                     // instead of pushing the bar under the navigation bar.
-                    ScrollView { outputs }.frame(maxHeight: 300)
+                    ScrollView { outputs }
                 } else {
                     outputs
                 }
