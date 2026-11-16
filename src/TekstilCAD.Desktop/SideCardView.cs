@@ -63,8 +63,8 @@ internal sealed class SideCardView : Border
         AutomationProperties.SetName(dismiss, "İlk adımlar listesini gizle");
         dismiss.Click += (_, _) => this.dismissFirstSteps();
         stepsPanel.Children.Add(dismiss);
-        stack.Children.Add(stepsPanel);
-
+        // The first steps list is a separate element: the window puts it below the warning cluster, so it can never push a
+        // permanent warning out of view.
         Margin = new Thickness(0, 0, 0, 12); Child = stack;
         AutomationProperties.SetName(this, "Sıradaki adım ve seçili parça");
     }
@@ -75,6 +75,7 @@ internal sealed class SideCardView : Border
         HorizontalAlignment = HorizontalAlignment.Stretch, Cursor = Cursors.Hand,
     };
 
+    internal FrameworkElement FirstStepsPanel => stepsPanel;
     internal string NextStepText => nextStep.Text;
     internal IReadOnlyList<Button> TaskButtons => startPanel.Children.OfType<Button>().ToList();
     internal bool StartTasksVisible => startPanel.Visibility == Visibility.Visible;

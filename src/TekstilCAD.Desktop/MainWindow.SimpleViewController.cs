@@ -320,6 +320,7 @@ public partial class MainWindow
                 r.Set(child, UIElement.VisibilityProperty, Visibility.Collapsed);
             }
             r.Add(w.inspectorPanel, card!, 0);
+            r.Add(w.inspectorPanel, card!.FirstStepsPanel);
             foreach (var warning in new TextBlock[] { w.gradingGeometryNotice, w.pieceLimits, w.grainlineStatus })
                 r.Set(warning, TextBlock.FontSizeProperty, 12d);
             r.Set(w.propertyDraftConflict, Control.FontSizeProperty, 12d);
