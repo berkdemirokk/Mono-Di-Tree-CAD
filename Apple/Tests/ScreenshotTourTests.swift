@@ -168,7 +168,7 @@ final class ScreenshotTourTests: XCTestCase {
 
         app.buttons["Arka Beden"].tap()
         let details = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS %@", "İplik yönü")).firstMatch
+            .matching(NSPredicate(format: "label CONTAINS %@", "Kumaş yönü")).firstMatch
         _ = details.waitForExistence(timeout: 10)
         snap("14-viewer-piece-selected")
 

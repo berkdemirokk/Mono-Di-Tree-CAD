@@ -565,7 +565,7 @@ private struct ContentView: View {
                     Text("Nasıl çalışır?").font(.headline).foregroundStyle(AppTheme.ink)
                         .accessibilityAddTraits(.isHeader)
                     StepBadge(number: 1, title: "Şekil ekle",
-                              detail: "Dikdörtgen ya da çizgi seç; ekranda hemen görünür.")
+                              detail: "Dikdörtgen, çizgi, daire ya da üçgen seç; ekranda hemen görünür.")
                     StepBadge(number: 2, title: "Ölçüyü yaz",
                               detail: "En ve boyu milimetre olarak yaz ya da parçayı parmağınla sürükle.")
                     StepBadge(number: 3, title: "Kaydet ve paylaş",
@@ -598,6 +598,9 @@ private struct ContentView: View {
                     }
                 }
                 .appCard()
+
+                // Light is the default; dark and follow-the-phone are opt-in.
+                AppearancePicker()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -680,7 +683,7 @@ private struct ContentView: View {
         }
     }
 
-    private static let warning = Color(red: 0.60, green: 0.30, blue: 0.0)
+    private static let warning = AppTheme.warning
 
     private func viewerFooter(_ project: Drawing) -> some View {
         Text("\(project.pieces.count) parça • Ekrana sığdırıldı; kesim için kullanmayın")

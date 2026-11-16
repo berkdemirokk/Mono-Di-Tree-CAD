@@ -9,7 +9,7 @@ Kodda doğrulananlar / Verified in the code:
 - Ağ yok: `URLSession`, `URLRequest`, `Network`, web görünümü ya da başka bir ağ API'si yok. / No networking API or web view.
 - Analiz, izleme, reklam, hesap, giriş yok; üçüncü taraf kitaplık yok (`project.yml` içinde paket bağımlılığı yok). / No analytics, tracking, ads, accounts or third-party libraries.
 - Konum, kamera, mikrofon, fotoğraflar, kişiler, takvim, sağlık verisi istenmez; `Info.plist` içinde hiçbir kullanım açıklaması (`NS…UsageDescription`) yok. / No permission prompts of any kind.
-- `UserDefaults`/`@AppStorage` kullanılmaz. / No `UserDefaults`.
+- `@AppStorage` (UserDefaults) yalnız iki görünüm tercihi için kullanılır: görünüm seçimi (`appearance`) ve atölyedeki kaydırma ipucunun gösterilip gösterilmediği. Cihazdan çıkmaz; manifestte CA92.1. / `@AppStorage` (UserDefaults) holds only two display preferences (appearance choice, whether the pan hint was shown); it never leaves the device; declared as CA92.1.
 - Veriler uygulamanın kendi kapsayıcısında, `Application Support/MonoDiTreeCAD/` altında JSON dosyası olarak durur; paylaşım için hazırlanan `.tcad` dosyası geçici klasöre yazılır. / Data lives as JSON files in the app's own container; a file prepared for sharing is written to the temporary folder.
 
 ---
@@ -28,7 +28,8 @@ Mono Di Tree CAD hiçbir kişisel veri toplamaz. Uygulamada hesap yoktur, intern
 
 - **Çizimler ve projeler.** Oluşturduğunuz çizimler, kaydettiğiniz projeler ve otomatik kaydedilen son taslak, uygulamanın cihazdaki kendi klasöründe saklanır. Bu bilgiler bize ya da başka birine gönderilmez.
 - **Proje tarihleri.** Son projeler listesinde her projenin son değiştirilme tarihi gösterilir. Bu tarih, cihazdaki dosyadan okunur ve yalnız ekranda gösterilir.
-- **Paylaşım için hazırlanan dosya.** "Dosyayı hazırla (.tcad)" dediğinizde dosya cihazın geçici klasörüne yazılır; sistem bu klasörü zamanla temizler.
+- **Paylaşım için hazırlanan dosya.** "Paylaş veya Dosyalara kaydet" dediğinizde dosya cihazın geçici klasörüne yazılır; sistem bu klasörü zamanla temizler.
+- **Görünüm tercihleri.** Seçtiğiniz görünüm (Açık, Koyu, Telefona uy) ve bir ipucunun gösterilip gösterilmediği cihazda saklanır.
 
 ### Açtığınız dosyalar
 
@@ -78,7 +79,8 @@ Mono Di Tree CAD does not collect any personal data. There is no account and the
 
 - **Drawings and projects.** The drawings you make, the projects you save and the automatically saved latest draft are kept in the app's own folder on your device. They are not sent to us or to anyone else.
 - **Project dates.** The recent projects list shows when each project was last changed. The date is read from the file on your device and is only shown on screen.
-- **Files prepared for sharing.** When you prepare a .tcad file, it is written to the device's temporary folder, which the system clears over time.
+- **Files prepared for sharing.** When you share a .tcad file, it is written to the device's temporary folder, which the system clears over time.
+- **Display preferences.** Your appearance choice (light, dark, follow the phone) and whether a hint was already shown are stored on the device.
 
 ### Files you open
 

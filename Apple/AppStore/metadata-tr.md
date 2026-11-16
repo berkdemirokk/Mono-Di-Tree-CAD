@@ -27,19 +27,20 @@ Tanıtım metni sürüm göndermeden değiştirilebilir; arama dizinine girmez.
 Dikdörtgen, çizgi ya da parmakla dokunarak şekil ekle; ölçüleri milimetreyle yaz. Hesap yok, internet yok: projelerin yalnız bu cihazda saklanır.
 ```
 
-### Açıklama (1980/4000)
+### Açıklama (2075/4000)
 
 ```text
 Mono Di Tree CAD, basit tekstil kalıp parçalarını telefonda ya da tablette hızlıca çizmek için yapılmış küçük bir çizim atölyesidir. Bir şekil ekle, ölçüsünü milimetre olarak yaz, projeni kaydet ve istersen dosya olarak paylaş.
 
 ÇİZ
-• Dikdörtgen ya da çizgi ekle.
-• Parmakla şekil çiz: 300 × 300 mm'lik alanda köşelere sırayla dokun; şekli kapalı ya da açık bırak. İstersen noktalar 5 mm'lik adımlara oturur.
+• Dikdörtgen, çizgi, daire ya da üçgen ekle.
+• Parmakla şekil çiz: 100, 300 ya da 1000 mm'lik alanda köşelere sırayla dokun; şekli kapalı ya da açık bırak. İstersen noktalar 5 mm'lik adımlara oturur.
+• Milimetre ızgarası ve (0, 0) noktası ölçüyü ve konumu gösterir.
 • Hazır iki parçalı örnekle uygulamayı hemen dene.
 
 DÜZENLE
 • Dikdörtgenin enini ve boyunu, çizginin uzunluğunu, parçanın X/Y konumunu ve adını milimetre cinsinden yaz.
-• Köşe noktalarının koordinatlarını tek tek düzenle.
+• Köşe noktalarını tek tek düzenle, nokta ekle ya da sil.
 • Parçayı sürükleyerek taşı (isteğe bağlı 5 mm adım) ya da 10 mm'lik düğmelerle sağa, sola, yukarı, aşağı kaydır.
 • 90 derece döndür, kopyala, sil.
 • Son 50 değişikliği geri al ya da ileri al.
