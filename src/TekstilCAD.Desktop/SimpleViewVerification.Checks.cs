@@ -139,7 +139,7 @@ internal static partial class SimpleViewVerification
                 var bounds = BoundsInRoot(w, root);
                 var visible = FullyVisible(w, root) && (w is not TextBlock t || t.ActualHeight >= t.DesiredSize.Height - .5) && (w is not TextBox box || box.ExtentHeight <= box.ViewportHeight + .5);
                 var below = bounds.Top >= cardBounds.Bottom - .5;
-                if (!visible || !below) { ok = false; reasons.Add($"{state} {width}x{height} {w.GetType().Name}: fullyVisible={visible} below={below} top={bounds.Top:0} cardBottom={cardBounds.Bottom:0} h={bounds.Height:0}"); }
+                if (!visible || !below) { ok = false; reasons.Add($"{state} {width}x{height} {w.GetType().Name}: fullyVisible={visible} below={below} bounds={bounds} visible={VisibleBoundsInRoot(w, root)} cardBottom={cardBounds.Bottom:0} viewport={Viewport(w, root)} desired={w.DesiredSize} vis={w.Visibility} wrap={(w as TextBlock)?.TextWrapping}"); }
             }
             return ok;
         }
@@ -150,6 +150,13 @@ internal static partial class SimpleViewVerification
         var all = Under("all", 1440, 900, () => Show(true, true, true), grading, limits, conflict);
         Check(one && all, "Simple view keeps the grading, piece limit and draft conflict warnings visible under the piece card" + (one && all ? "" : " [" + string.Join("; ", reasons) + "]"), checks);
     });
+
+    private static string Viewport(FrameworkElement element, FrameworkElement root)
+    {
+        for (DependencyObject? parent = System.Windows.Media.VisualTreeHelper.GetParent(element); parent is not null; parent = System.Windows.Media.VisualTreeHelper.GetParent(parent))
+            if (parent is ScrollViewer viewer) return BoundsInRoot(viewer, root) + " scrollable=" + viewer.ScrollableHeight.ToString("0");
+        return "none";
+    }
 
     private static void VerifyFloors(string reportPath, List<string> checks)
     {

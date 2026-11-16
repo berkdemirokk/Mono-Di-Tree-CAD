@@ -213,7 +213,7 @@ public partial class MainWindow
             r.Add(w.rootPanel, commandRegion!, 1);
 
             // Workspace columns.
-            r.Set(w.workspaceGrid.ColumnDefinitions[0], ColumnDefinition.WidthProperty, new GridLength(160));
+            r.Set(w.workspaceGrid.ColumnDefinitions[0], ColumnDefinition.WidthProperty, new GridLength(176));
             r.Set(w.workspaceGrid.ColumnDefinitions[2], ColumnDefinition.WidthProperty, new GridLength(InspectorWidth(w.rootPanel.ActualWidth)));
             SizeChangedEventHandler resized = (_, e) => w.workspaceGrid.ColumnDefinitions[2].Width = new GridLength(InspectorWidth(e.NewSize.Width));
             r.Do(() => w.rootPanel.SizeChanged += resized, () => w.rootPanel.SizeChanged -= resized);
@@ -303,7 +303,7 @@ public partial class MainWindow
                     var glyph = (TextBlock)item.Children[0]; var text = (TextBlock)item.Children[1]; var key = (TextBlock)item.Children[2];
                     r.Set(glyph, UIElement.VisibilityProperty, Visibility.Collapsed);
                     r.Set(text, TextBlock.TextProperty, label);
-                    r.Set(text, TextBlock.FontSizeProperty, 14d);
+                    r.Set(text, TextBlock.FontSizeProperty, 13d);
                     r.Set(key, TextBlock.FontSizeProperty, 12d);
                     r.Set(key, UIElement.OpacityProperty, 0.8);
                     r.Add(item, DrawnIcon(tool, button));
