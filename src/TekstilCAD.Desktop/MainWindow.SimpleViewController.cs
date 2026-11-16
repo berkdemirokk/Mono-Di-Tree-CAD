@@ -359,7 +359,7 @@ public partial class MainWindow
             r.Set(w.status, AutomationProperties.LiveSettingProperty, AutomationLiveSetting.Off);
             r.Set(w.unitsText, TextBlock.FontSizeProperty, 12d);
             r.Set(w.unitsText, TextBlock.TextWrappingProperty, TextWrapping.Wrap);
-            r.Set(w.unitsText, FrameworkElement.MaxWidthProperty, 330d);
+            r.Set(w.unitsText, FrameworkElement.MaxWidthProperty, 352d);
             r.Set(w.unitsText, UIElement.FocusableProperty, true);
             r.Add(w.footerPanel, footerNote!, 1);
         }
