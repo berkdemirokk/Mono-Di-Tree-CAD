@@ -1171,6 +1171,7 @@ internal static class DesktopVerification
             VerifyToolGuidance(studio,checks);
             VerifyMainCommandGroups(studio,reportPath,checks);
             VerifyAboutAndCrashLog(studio,work,reportPath,checks);
+            VerifyCompactWorkspace(studio,reportPath,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
@@ -9336,7 +9337,7 @@ internal static class DesktopVerification
             Render(studio,Path.ChangeExtension(reportPath,$".about-entry-{width}x{height}.png"),width,height);
             Check(about.IsEnabled && FullyVisible(about,root),$"About entry is fully visible in the header at {width}x{height}",checks);
         }
-        var compact=new[] { ("Koordinat gir…","Koordinatla nokta gir…"),("A4 PDF çıkar…","Seçili parçayı A4 PDF çıkar…"),("Seçiliyi göster","Seçili parçayı göster"),("Poliline dönüştür…","Parametrik konturu poliline dönüştür…") };
+        var compact=new[] { ("Koordinat gir…","Koordinatla nokta gir…"),("A4 PDF çıkar…","Seçili parçayı A4 PDF çıkar…"),("Seçiliyi göster","Seçili parçayı göster"),("Poliline dönüştür…","Parametrik konturu poliline dönüştür…"),("Güvenli kopya…","Yeni dosya olarak güvenli kopya…") };
         Check(compact.All(pair=>Descendants<Button>(root).Count(b=>Equals(b.Content,pair.Item1) && AutomationProperties.GetName(b)==pair.Item2 &&
             b.ToolTip is string tip && tip.StartsWith(pair.Item2+"\n",StringComparison.Ordinal) &&
             // The help text is the hint alone, so a screen reader does not say the name twice.
@@ -9415,6 +9416,119 @@ internal static class DesktopVerification
             }
         }
         finally { window.Close(); }
+    }
+    private static void VerifyCompactWorkspace(MainWindow studio,string reportPath,List<string> checks)
+    {
+        // The header, its notices and the command bar must leave the window height to the canvas.
+        // "busy" is the state the preceding checks leave behind: unsaved changes, a DXF notice, a recovery
+        // notice with its action and the machine-history message. "clean" is a newly constructed window that
+        // was never shown: after a real launch the recovery-scan notice adds one more row, so users see a
+        // little less than the clean figures.
+        // Measured canvas heights: busy 350 px at 1024x640 and 610 px at 1440x900, clean 421 px and 681 px
+        // (before the compact layout: 179, 468, 318 and 607 px). Each floor is the measured value minus
+        // 10 px. Never lower a floor just to pass.
+        static FrameworkElement Field(MainWindow window,string name)=>(FrameworkElement)typeof(MainWindow).GetField(name,PrivateInstance)!.GetValue(window)!;
+        var notices=new (string Text,string[] Actions)[]
+        {
+            ("saveState",[]),("sourceHistoryNotice",["sourceHistoryDetails"]),("nestingHistoryNotice",["nestingHistoryDetails"]),
+            ("exportNotice",["exportCancel"]),("dxfNotice",["dxfCancel","dxfReview"]),("recoveryNotice",["recoveryDetails"]),
+            ("recoveryScanNotice",["recoveryScanDetails","recoveryOpen"]),("machineQueueMessage",[])
+        };
+        void Verify(MainWindow window,string state,int width,int height,double floor)
+        {
+            var root=(FrameworkElement)window.Content;
+            Render(window,Path.ChangeExtension(reportPath,$".compact-workspace-{state}-{width}x{height}.png"),width,height);
+            var canvas=(CadCanvas)Field(window,"canvas");
+            Check(canvas.ActualHeight>=floor,$"Canvas keeps at least {floor} px of height in the {state} state at {width}x{height}",checks);
+
+            var complete=true;
+            foreach(var (name,actions) in notices)
+            {
+                var text=Field(window,name);var shown=text.Visibility==Visibility.Visible;
+                if(shown)complete&=FullyVisible(text,root) && text.ActualHeight+text.Margin.Top+text.Margin.Bottom>=text.DesiredSize.Height-.5
+                    && (text is not TextBox box || box.ExtentHeight<=box.ViewportHeight+.5);
+                foreach(var action in actions.Select(action=>Field(window,action)).Where(action=>action.Visibility==Visibility.Visible))
+                {
+                    var bounds=BoundsInRoot(action,root);
+                    complete&=FullyVisible(action,root) && bounds.Height>=26;
+                    // An action sits on its notice's row, to the right of the text.
+                    if(shown) { var beside=BoundsInRoot(text,root);complete&=bounds.Left>=beside.Right-.5 && bounds.Top<beside.Bottom && bounds.Bottom>beside.Top; }
+                }
+            }
+            Check(complete,$"Every visible header notice is complete with its actions beside it in the {state} state at {width}x{height}",checks);
+
+            var view=(TextBlock)Field(window,"canvasView");var chip=(FrameworkElement)view.Parent;
+            var origin=canvas.TransformToAncestor(root).Transform(new Point(0,0));var area=new Rect(origin,canvas.RenderSize);
+            var labels=canvas.PieceLabelBounds().Select(label=> { label.Offset(origin.X,origin.Y);label.Intersect(area);return label; }).Where(label=>!label.IsEmpty).ToArray();
+            // The chip sits outside the canvas, so it cannot cover a label drawn inside it; at least one label
+            // must actually be reported there for that to mean anything.
+            Check(view.Text==canvas.ViewInfo && view.Text.Contains("Izgara",StringComparison.Ordinal) && FullyVisible(chip,root)
+                && !BoundsInRoot(chip,root).IntersectsWith(area) && labels.Length>0 && labels.All(label=>!label.IntersectsWith(BoundsInRoot(chip,root))),
+                $"View information stays beside the canvas title and clear of every piece label in the {state} state at {width}x{height}",checks);
+            // Render() fits the view, which refreshes the chip by itself. Zooming like the mouse wheel does
+            // must refresh it too.
+            var fitted=view.Text;canvas.ZoomAt(new Point(canvas.ActualWidth/2,canvas.ActualHeight/2),-120);
+            var zoomed=view.Text;var expected=canvas.ViewInfo;window.FitView();
+            Check(zoomed==expected && zoomed!=fitted && view.Text==canvas.ViewInfo,
+                $"View information follows a wheel zoom in the {state} state at {width}x{height}",checks);
+
+            var tools=((Dictionary<string,Button>)typeof(MainWindow).GetField("toolButtons",PrivateInstance)!.GetValue(window)!).Values;
+            Check(tools.Count==6 && tools.All(tool=>tool.ActualHeight>=32 && FullyVisible(tool,root)),
+                $"All drawing tools keep a 32 px target and are visible without scrolling in the {state} state at {width}x{height}",checks);
+        }
+        Check(Field(studio,"dxfNotice").Visibility==Visibility.Visible && Field(studio,"recoveryScanNotice").Visibility==Visibility.Visible
+            && Field(studio,"recoveryOpen").Visibility==Visibility.Visible && Field(studio,"machineQueueMessage").Visibility==Visibility.Visible
+            && ((TextBlock)Field(studio,"saveState")).Text.StartsWith("●",StringComparison.Ordinal),
+            "Busy workspace state shows unsaved work with DXF, recovery and machine-history notices together",checks);
+        Verify(studio,"busy",1024,640,340);
+        Verify(studio,"busy",1440,900,600);
+
+        var fresh=new MainWindow();StopTimer(fresh);var closed=false;fresh.Closed+=(_,_)=>closed=true;
+        try
+        {
+            _=new WindowInteropHelper(fresh).EnsureHandle();
+            var root=(FrameworkElement)fresh.Content;
+            Check(notices.SelectMany(notice=>notice.Actions.Prepend(notice.Text)).Where(name=>Field(fresh,name).Visibility==Visibility.Visible)
+                .SequenceEqual(["saveState","sourceHistoryNotice","sourceHistoryDetails"]),
+                "Clean workspace state shows only the save state and the permanent source notice",checks);
+            Verify(fresh,"clean",1024,640,411);
+            // Both collapsed groups stay on the row of the primary action at the minimum window width.
+            var primary=Descendants<Button>(root).Single(b=>Equals(b.Content,"Kalıp isteği hazırla…"));
+            var groups=Descendants<Expander>(root).Where(e=>AutomationProperties.GetName(e) is "Dosya aktarımı" or "Tekstil ve makine").ToArray();
+            Check(groups.Length==2 && groups.All(group=>FullyVisible(group,root) && BoundsInRoot(group,root).Top<BoundsInRoot(primary,root).Bottom
+                && BoundsInRoot(group,root).Bottom>BoundsInRoot(primary,root).Top),
+                "Command groups fit on one row at 1024x640",checks);
+            Verify(fresh,"clean",1440,900,671);
+
+            // Opening one command group makes the row taller; the other, still collapsed, header must stay
+            // on the line of the command buttons instead of dropping to the bottom of that row. Measured
+            // at 1440 px, where both groups stay on the button row. At 1024 px an open group is too wide
+            // for that row and the two groups wrap to the next line together, which is expected.
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-groups-collapsed-1440x900.png"),1440,900);
+            var restingTop=BoundsInRoot(groups[1],root).Top;
+            groups[0].IsExpanded=true;
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-group-open-1440x900.png"),1440,900);
+            var openedHeight=BoundsInRoot(groups[0],root).Height;var movedTop=BoundsInRoot(groups[1],root).Top;
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-group-open-1024x640.png"),1024,640);
+            groups[0].IsExpanded=false;
+            Check(openedHeight>60 && Math.Abs(movedTop-restingTop)<=.5,
+                $"A collapsed command group keeps its place while the other group is open at 1440x900 (moved {movedTop-restingTop:0.#} px)",checks);
+
+            // A long file name in the save state must leave the project title readable.
+            var title=(TextBlock)Field(fresh,"projectTitle");var saved=(TextBlock)Field(fresh,"saveState");
+            var (titleText,savedText)=(title.Text,saved.Text);
+            try
+            {
+                title.Text="Uzun dosya adı denemesi";saved.Text="✓ Kaydedildi · "+new string('a',140)+".tcad";
+                Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-long-save-state-1024x640.png"),1024,640);
+                var titleBounds=BoundsInRoot(title,root);var savedBounds=BoundsInRoot(saved,root);
+                Check(title.ActualWidth>=title.DesiredSize.Width-.5 && title.ActualWidth>=120 && FullyVisible(title,root) && FullyVisible(saved,root)
+                    && savedBounds.Left>=titleBounds.Right-.5 && savedBounds.Width>=160,
+                    $"A long saved file name is trimmed and leaves the project title whole (title {title.ActualWidth:0} px, state {savedBounds.Width:0} px)",checks);
+            }
+            finally { title.Text=titleText;saved.Text=savedText; }
+        }
+        finally { StopTimer(fresh);fresh.Close();PumpUntil(()=>closed); }
     }
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
