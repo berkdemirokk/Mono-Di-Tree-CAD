@@ -53,7 +53,7 @@ public partial class MainWindow
         private TextBox? search;
         private TextBlock? emptyResult, resultCount;
         private string spoken = "";
-        private readonly List<(UIElement Element, KeyboardNavigationMode Mode)> blocked = [];
+        private readonly List<(UIElement Element, KeyboardNavigationMode Tab, KeyboardNavigationMode Directional)> blocked = [];
         private Grid? body;
         private ScrollViewer? scroller;
         private readonly Dictionary<string, Button> rows = [];
@@ -280,7 +280,7 @@ public partial class MainWindow
             // The page hides the rail and the canvas; Tab and the arrow keys must not wander into them.
             foreach (UIElement under in new UIElement[] { w.railScroller, w.canvasShellBorder })
             {
-                blocked.Add((under, KeyboardNavigation.GetTabNavigation(under)));
+                blocked.Add((under, KeyboardNavigation.GetTabNavigation(under), KeyboardNavigation.GetDirectionalNavigation(under)));
                 KeyboardNavigation.SetTabNavigation(under, KeyboardNavigationMode.None);
                 KeyboardNavigation.SetDirectionalNavigation(under, KeyboardNavigationMode.None);
             }
@@ -294,7 +294,7 @@ public partial class MainWindow
             if (root is null || !w.workspaceGrid.Children.Contains(root)) return;
             var hadFocus = root.IsKeyboardFocusWithin;
             w.workspaceGrid.Children.Remove(root);
-            foreach (var (under, mode) in blocked) { KeyboardNavigation.SetTabNavigation(under, mode); KeyboardNavigation.SetDirectionalNavigation(under, mode); }
+            foreach (var (under, tab, directional) in blocked) { KeyboardNavigation.SetTabNavigation(under, tab); KeyboardNavigation.SetDirectionalNavigation(under, directional); }
             blocked.Clear();
             foreach (var row in rows.Values) (row.Parent as System.Windows.Controls.Panel)?.Children.Remove(row);
             rows.Clear();
