@@ -215,6 +215,10 @@ public class MainWindow : Window
         var brand = new StackPanel { Margin = new Thickness(0, 0, 28, 0) };
         brand.Children.Add(new TextBlock { Text = "Mono Di Tree CAD", Foreground = StudioTheme.Accent, FontWeight = FontWeights.Bold, FontSize = 22 });
         brand.Children.Add(new TextBlock { Text = "STUDIO  /  KALIP TASARIMI", Foreground = Muted, FontSize = 9, Margin = new Thickness(1, 3, 0, 0) });
+        // Sits in the otherwise empty space under the brand, so the header grows neither wider nor taller.
+        var about = AddButton(brand, "Hakkında", OpenAbout, "Sürüm, veri klasörü ve açık kaynak bildirimleri · F1");
+        about.HorizontalAlignment = HorizontalAlignment.Left; about.Margin = new Thickness(0, 10, 0, 0);
+        about.Padding = new Thickness(9, 3, 9, 3); about.MinHeight = 26; about.FontSize = 11;
         header.Children.Add(brand);
         var project = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         projectTitle.FontSize = 15; projectTitle.FontWeight = FontWeights.SemiBold; projectTitle.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -344,14 +348,14 @@ public class MainWindow : Window
             System.Windows.Automation.AutomationProperties.SetName(button, tool);
             toolButtons[tool] = button;
         }
-        AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin.");
+        CompactLabel(AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin."), "Koordinat gir…");
         AddButton(tools,"Açık çizgiyi bitir",FinishOpenDrawing,"Çoklu çizgiyi en az iki noktayla uçları birleştirmeden bitirir. Tuvalde Shift+Enter kullanılabilir.");
         tools.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 14, 3, 10) });
         selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi ve varsa köşe işaretlerini aynı konumda kopyalar; parça bilgileri, iplik yönü ve uygun serileme kuralı isteğe bağlıdır. Pastal geçmişi kopyalanmaz."));
         selectionCommands.Add(AddButton(tools, "Parçayı sil", DeleteSelectionFromKeyboard, "Seçili parçayı sil · Delete"));
-        selectionCommands.Add(AddButton(tools, "Seçili parçayı A4 PDF çıkar…", ExportSelectedA4, "Yalnız seçili parçayı gerçek boyutlu A4 inceleme sayfalarına aktarır; kaynak proje değişmez."));
+        selectionCommands.Add(CompactLabel(AddButton(tools, "Seçili parçayı A4 PDF çıkar…", ExportSelectedA4, "Yalnız seçili parçayı gerçek boyutlu A4 inceleme sayfalarına aktarır; kaynak proje değişmez."), "A4 PDF çıkar…"));
         tools.Children.Add(Label("GÖRÜNÜM", Muted, 10));
-        selectionCommands.Add(AddButton(tools, "Seçili parçayı göster", () => canvas?.FitSelectedPiece(), "Seçili parçayı çalışma alanına sığdır · G (kalıp alanı odaktayken)"));
+        selectionCommands.Add(CompactLabel(AddButton(tools, "Seçili parçayı göster", () => canvas?.FitSelectedPiece(), "Seçili parçayı çalışma alanına sığdır · G (kalıp alanı odaktayken)"), "Seçiliyi göster"));
         var navigation = new WrapPanel(); tools.Children.Add(navigation);
         void ViewButton(string glyph,string label,Action action,string hint)
         {
@@ -400,8 +404,8 @@ public class MainWindow : Window
         selectionCommands.Add(AddButton(inspector,"İplik yönü…",EditGrainline,"Seçili parçanın iplik yönü çizgisini girin veya kaldırın. SVG çizgiyi görsel olarak içerir; işaretli parçaların DXF ve HPGL çıktısı henüz desteklenmez."));
         selectionCommands.Add(AddButton(inspector, "Parametrik konturu düzenle…", EditParametricContour,
             "Bézier kontrol noktalarını veya yay merkezi/açılarını değiştirir. Kaydedilmiş analitik geometri korunur."));
-        selectionCommands.Add(AddButton(inspector, "Parametrik konturu poliline dönüştür…", FlattenParametricContour,
-            "Bézier/yay parametrelerini onaydan sonra kaldırıp mevcut örneklenmiş noktaları sabit kontur olarak tutar; geri alınabilir."));
+        selectionCommands.Add(CompactLabel(AddButton(inspector, "Parametrik konturu poliline dönüştür…", FlattenParametricContour,
+            "Bézier/yay parametrelerini onaydan sonra kaldırıp mevcut örneklenmiş noktaları sabit kontur olarak tutar; geri alınabilir."), "Poliline dönüştür…"));
         AutomationProperties.SetName(grainlineStatus,"İplik yönü durumu");
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
@@ -663,6 +667,19 @@ public class MainWindow : Window
         public object ConvertBack(object value,Type targetType,object parameter,CultureInfo culture)=>throw new NotSupportedException();
     }
     private static void StyleInput(TextBox box) { box.Padding = new Thickness(8); box.Margin = new Thickness(3); box.MinWidth = 0; }
+    /// <summary>Show a label that fits a narrow panel. The full command name stays the accessible
+    /// name and leads the tooltip, so nothing is lost for screen readers or on hover.</summary>
+    private static Button CompactLabel(Button button, string shortLabel)
+    {
+        var full = (string)button.Content;
+        AutomationProperties.SetName(button, full);
+        // Without an explicit help text WPF reports the tooltip, which now starts with the name; a screen
+        // reader would then say the name twice.
+        if (button.ToolTip is string hint) { AutomationProperties.SetHelpText(button, hint); button.ToolTip = full + "\n" + hint; }
+        else button.ToolTip = full;
+        button.Content = shortLabel;
+        return button;
+    }
     private static StackPanel CommandGroup(System.Windows.Controls.Panel parent, string title)
     {
         var group = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
@@ -4263,11 +4280,16 @@ public class MainWindow : Window
         { SetStatus("Parça silinmedi · Silmek için önce Seç aracını kullanın."); return; }
         DeleteSelection();
     }
+    /// <summary>Read-only product information; no project or setting is changed.</summary>
+    private void OpenAbout() => new AboutWindow(this).ShowDialog();
+
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
         var editing = Keyboard.FocusedElement is TextBoxBase or PasswordBox or ComboBox;
         try
         {
+            if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F1)
+            { OpenAbout(); e.Handled = true; return; }
             if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.S)
             { SaveAs(); e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.Control)

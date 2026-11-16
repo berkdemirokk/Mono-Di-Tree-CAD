@@ -1170,6 +1170,7 @@ internal static class DesktopVerification
             VerifyPendingDrawingFailurePreservesPoints(studio,checks);
             VerifyToolGuidance(studio,checks);
             VerifyMainCommandGroups(studio,reportPath,checks);
+            VerifyAboutAndCrashLog(studio,work,reportPath,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
@@ -9284,6 +9285,95 @@ internal static class DesktopVerification
         }
         foreach(var group in groups) { group.IsExpanded=true;root.UpdateLayout();Check(group.IsExpanded && Descendants<Button>(group).Any(),"Expanded command group exposes its actions: "+AutomationProperties.GetName(group),checks);group.IsExpanded=false; }
 
+    }
+    private static void VerifyAboutAndCrashLog(MainWindow studio,string work,string reportPath,List<string> checks)
+    {
+        var root=(FrameworkElement)studio.Content;
+        var about=Descendants<Button>(root).Single(b=>Equals(b.Content,"Hakkında"));
+        foreach(var (width,height) in new[] { (1024,640),(1440,900) })
+        {
+            Render(studio,Path.ChangeExtension(reportPath,$".about-entry-{width}x{height}.png"),width,height);
+            Check(about.IsEnabled && FullyVisible(about,root),$"About entry is fully visible in the header at {width}x{height}",checks);
+        }
+        var compact=new[] { ("Koordinat gir…","Koordinatla nokta gir…"),("A4 PDF çıkar…","Seçili parçayı A4 PDF çıkar…"),("Seçiliyi göster","Seçili parçayı göster"),("Poliline dönüştür…","Parametrik konturu poliline dönüştür…") };
+        Check(compact.All(pair=>Descendants<Button>(root).Count(b=>Equals(b.Content,pair.Item1) && AutomationProperties.GetName(b)==pair.Item2 &&
+            b.ToolTip is string tip && tip.StartsWith(pair.Item2+"\n",StringComparison.Ordinal) &&
+            // The help text is the hint alone, so a screen reader does not say the name twice.
+            AutomationProperties.GetHelpText(b)==tip[(pair.Item2.Length+1)..])==1),
+            "Compact panel labels keep the full command name for automation and tooltip",checks);
+
+        Check(AppInfo.Parse("0.4.0+F440BD8C59DEE153E2769D",null)==("0.4.0","f440bd8c59de") && AppInfo.Parse("0.4.0",null)==("0.4.0",null) &&
+            AppInfo.Parse("0.4.0+local",null)==("0.4.0",null) && AppInfo.Parse("0.4.0+20261115",null)==("0.4.0",null) &&
+            AppInfo.Parse(null,new Version(1,2,3,4))==("1.2.3",null) && AppInfo.Parse("  ",null)==("bilinmiyor",null),
+            "Version text separates a Git revision and ignores other build metadata",checks);
+
+        var logs=Path.Combine(work,"crash-logs");
+        var failure=new InvalidOperationException("doğrulama hatası İĞÜŞÖÇ",new ArgumentException("iç neden"));
+        var stamp=new DateTimeOffset(2026,11,15,9,30,15,250,TimeSpan.FromHours(3));
+        var log=CrashReporter.TryWriteLog(failure,"Doğrulama",logs,stamp);
+        var text=log is null ? "" : File.ReadAllText(log);
+        Check(log is not null && Path.GetDirectoryName(log)==logs && Path.GetFileName(log).StartsWith("hata-20261115-093015-250-",StringComparison.Ordinal) &&
+            text.Contains("doğrulama hatası İĞÜŞÖÇ",StringComparison.Ordinal) && text.Contains("iç neden",StringComparison.Ordinal) &&
+            text.Contains("Sürüm: "+AppInfo.DisplayVersion,StringComparison.Ordinal) && text.Contains("Kaynak: Doğrulama",StringComparison.Ordinal) &&
+            text.Contains("2026-11-15 09:30:15 +03:00",StringComparison.Ordinal),
+            "Crash log records time, version, source and the full exception chain as readable Turkish text",checks);
+        for(var i=0;i<CrashReporter.MaximumLogFiles+3;i++)CrashReporter.TryWriteLog(failure,"Doğrulama",logs,stamp.AddSeconds(i+1));
+        var kept=Directory.GetFiles(logs,"hata-*.txt").Select(Path.GetFileName).OrderBy(name=>name,StringComparer.Ordinal).ToArray();
+        Check(kept.Length==CrashReporter.MaximumLogFiles && !File.Exists(log!) && kept[^1]!.StartsWith("hata-20261115-093108-250-",StringComparison.Ordinal),
+            "Crash log housekeeping keeps only the newest files",checks);
+        var blocked=Path.Combine(work,"crash-log-blocker");File.WriteAllText(blocked,"dosya");
+        Check(CrashReporter.TryWriteLog(failure,"Doğrulama",Path.Combine(blocked,"logs"),stamp) is null && File.ReadAllText(blocked)=="dosya",
+            "Crash log failure is reported as missing without a second exception",checks);
+
+        // The notice a terminating session leaves is read once at the next start and then gone.
+        var noticeDirectory=Path.Combine(work,"crash-notice");Directory.CreateDirectory(noticeDirectory);
+        var noticeLog=CrashReporter.TryWriteLog(failure,"Doğrulama",noticeDirectory,stamp);
+        var none=CrashReporter.TakePendingNotice(noticeDirectory);
+        CrashReporter.TryLeaveNotice(noticeLog,noticeDirectory);
+        var first=CrashReporter.TakePendingNotice(noticeDirectory);var second=CrashReporter.TakePendingNotice(noticeDirectory);
+        File.WriteAllText(Path.Combine(noticeDirectory,"bekleyen-hata-bildirimi.txt"),@"..\..\AGENTS.md");
+        var forged=CrashReporter.TakePendingNotice(noticeDirectory);
+        CrashReporter.TryLeaveNotice(null,noticeDirectory);var withoutLog=CrashReporter.TakePendingNotice(noticeDirectory);
+        Check(noticeLog is not null && none==(false,null) && first==(true,noticeLog) && second==(false,null) && forged==(true,null) && withoutLog==(true,null) &&
+            CrashReporter.NoticeText(noticeLog).Contains(noticeLog!,StringComparison.Ordinal) && !CrashReporter.NoticeText(null).Contains("hata-",StringComparison.Ordinal),
+            "Crash notice is taken once at the next start and never follows a name it did not write",checks);
+
+        var window=new AboutWindow(studio);
+        try
+        {
+            var opened=new List<string>();string? copied=null;
+            window.OpenFolder=path=> { opened.Add(path);return true; };window.OpenFile=path=> { opened.Add(path);return true; };window.CopyText=value=>copied=value;
+            Check(window.VersionText.Text.Contains(AppInfo.DisplayVersion,StringComparison.Ordinal) && window.DataPath.IsReadOnly &&
+                window.DataPath.Text==AppPaths.DataDirectory,"About window shows the running version and the active data folder",checks);
+            if(Directory.Exists(AppPaths.LogsDirectory))Directory.Delete(AppPaths.LogsDirectory,true);
+            window.OpenLogs.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(opened.Count==0 && window.Status.Text=="Henüz hata günlüğü yok." && !Directory.Exists(AppPaths.LogsDirectory),
+                "About window explains a missing log folder without creating or opening anything",checks);
+            // A file that carries the folder's name is not a folder and must not be opened.
+            Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.LogsDirectory)!);File.WriteAllText(AppPaths.LogsDirectory,"klasör değil");
+            window.OpenLogs.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(opened.Count==0 && window.Status.Text=="Henüz hata günlüğü yok.","About window does not open a file that carries the log folder's name",checks);
+            File.Delete(AppPaths.LogsDirectory);
+            Directory.CreateDirectory(AppPaths.LogsDirectory);
+            window.OpenLogs.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(opened.SequenceEqual([AppPaths.LogsDirectory]) && window.Status.Text=="Windows'ta açıldı.","About window opens only the requested existing folder",checks);
+            window.CopySummary.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(copied==string.Join(Environment.NewLine,AppInfo.ProductName,AboutWindow.VersionLine(),AboutWindow.EnvironmentLine()) &&
+                copied.Contains(AppInfo.DisplayVersion,StringComparison.Ordinal) && window.Status.Text=="Sürüm bilgisi panoya kopyalandı.",
+                "Support summary is exactly the product, version and environment lines",checks);
+            window.CopyText=_=>throw new System.Runtime.InteropServices.ExternalException("pano meşgul");
+            window.CopySummary.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.Status.Text.StartsWith("Pano kullanılamadı",StringComparison.Ordinal),"Clipboard failure is explained instead of thrown",checks);
+            var content=(FrameworkElement)window.Content;
+            foreach(var (width,height,suffix) in new[] { (580,600,".about.png"),(440,380,".about-minimum.png") })
+            {
+                Render(window,Path.ChangeExtension(reportPath,suffix),width,height);
+                var close=Descendants<Button>(content).Single(b=>Equals(b.Content,"Kapat"));
+                Check(close.IsCancel && FullyVisible(close,content) && FullyVisible(window.CopySummary,content),
+                    $"About window keeps its actions visible at {width}x{height}",checks);
+            }
+        }
+        finally { window.Close(); }
     }
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
