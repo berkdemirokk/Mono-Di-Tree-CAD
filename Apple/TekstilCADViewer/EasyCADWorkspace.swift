@@ -31,6 +31,12 @@ struct EasyCADWorkspace: View {
     @State private var panning = false
     @State private var pinching = false
     @State private var canvasSize = CGSize.zero
+    // Where a pinch started (iOS 17 and later); nil zooms about the centre.
+    @State private var pinchAnchor: CGPoint?
+    // The rule for dragging while zoomed is explained once, the first time the view is zoomed.
+    @AppStorage("workshop.panHintSeen") private var panHintSeen = false
+    @State private var showPanHint = false
+    @AccessibilityFocusState private var zoomInFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editingPoints: DraftPiece?
     @State private var showingTouchComposer = false
@@ -857,15 +863,25 @@ struct EasyCADWorkspace: View {
                 minY = min(minY, p.y); maxY = max(maxY, p.y)
             }
         }
-        // The margin leaves room for the measurement tags around the selected piece.
-        return DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 30)
+        // The margin leaves room for the measurement tags around the selected piece; the zoom
+        // buttons' corner is kept free so they never sit on top of the drawing at fit.
+        let corner = keyboardVisible ? CGSize.zero : zoomControlsFitFootprint
+        return DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 30,
+                              keepingClear: corner)
     }
 
     private func transform(_ size: CGSize) -> DraftCanvasMap? {
         guard let fit = fitMap(size) else { return nil }
-        let live = viewport.zoomed(by: liveZoom)
+        let live = liveZoomed(viewport, in: size, content: fit.contentSize)
             .panned(by: livePan, in: size, content: fit.contentSize)
         return fit.viewed(live, in: size)
+    }
+
+    /// `base` with the pinch in progress applied: about where the fingers started when that is
+    /// known, otherwise about the centre.
+    private func liveZoomed(_ base: DraftViewport, in size: CGSize, content: CGSize) -> DraftViewport {
+        guard let anchor = pinchAnchor else { return base.zoomed(by: liveZoom) }
+        return base.zoomed(by: liveZoom, keeping: anchor, in: size, content: content)
     }
 
     /// Brings the selected piece to the middle of the drawing area without any gesture.
@@ -918,6 +934,41 @@ struct EasyCADWorkspace: View {
         return (closest?.distance ?? Double.infinity) <= 24 ? closest?.piece : nil
     }
 
+    /// Screen distance from `point` to the nearest edge of `piece`.
+    private func outlineDistance(_ point: CGPoint, of piece: DraftPiece, on map: DraftCanvasMap) -> Double {
+        let vertices = piece.points.map(map.screen)
+        guard vertices.count >= 2 else {
+            return vertices.first.map { hypot(Double($0.x - point.x), Double($0.y - point.y)) } ?? .infinity
+        }
+        let count = piece.closed ? vertices.count : vertices.count - 1
+        var best = Double.infinity
+        for index in 0..<count {
+            best = min(best, segmentDistance(point, vertices[index], vertices[(index + 1) % vertices.count]))
+        }
+        return best
+    }
+
+    /// Decides what a one-finger drag does. At fit it picks up the piece under the finger, as
+    /// before. Zoomed in, only the outline of the selected piece picks it up; a drag anywhere else
+    /// (empty paper, another piece, the inside of the selected piece) moves the view, so a piece
+    /// that fills the screen can still be panned past.
+    private func beginCanvasDrag(at start: CGPoint, size: CGSize) {
+        panning = false
+        if viewport.isFit {
+            let piece = hitPiece(start, size: size)
+            if let piece, selectFromCanvasOrMenu(piece.id),
+               !hasPendingDetails || saveDetails() { draggedPieceID = piece.id }
+            return
+        }
+        if let index = selectedIndex, let map = transform(size),
+           outlineDistance(start, of: document.pieces[index], on: map) <= 24 {
+            let id = document.pieces[index].id
+            if !hasPendingDetails || saveDetails() { draggedPieceID = id }
+        } else {
+            panning = true
+        }
+    }
+
     private func finishDrag(_ translation: CGSize, size: CGSize) {
         defer { dragStarted = false; draggedPieceID = nil; currentDrag = .zero }
         guard let index = selectedIndex, document.pieces[index].id == draggedPieceID,
@@ -935,8 +986,9 @@ struct EasyCADWorkspace: View {
     }
 
     /// A small white tag with the measurement, kept fully inside the drawing area.
-    private func drawLabel(_ text: String, center: CGPoint, in context: inout GraphicsContext, size: CGSize) {
-        let resolved = context.resolve(Text(text).font(.caption2.weight(.semibold)).foregroundColor(AppTheme.accent))
+    private func drawLabel(_ text: String, center: CGPoint, in context: inout GraphicsContext, size: CGSize,
+                           color: Color = AppTheme.accent) {
+        let resolved = context.resolve(Text(text).font(.caption2.weight(.semibold)).foregroundColor(color))
         let box = resolved.measure(in: CGSize(width: 160, height: 40))
         let w = box.width + 10, h = box.height + 4
         guard size.width > w + 4, size.height > h + 4 else { return }
@@ -944,8 +996,93 @@ struct EasyCADWorkspace: View {
         let cy = min(max(center.y, h / 2 + 2), size.height - h / 2 - 2)
         let tag = Path(roundedRect: CGRect(x: cx - w / 2, y: cy - h / 2, width: w, height: h), cornerRadius: 6)
         context.fill(tag, with: .color(AppTheme.card.opacity(0.92)))
-        context.stroke(tag, with: .color(AppTheme.accent.opacity(0.35)), lineWidth: 1)
+        context.stroke(tag, with: .color(color.opacity(0.35)), lineWidth: 1)
         context.draw(resolved, at: CGPoint(x: cx, y: cy), anchor: .center)
+    }
+
+    /// The grid that matches the current zoom, or nil when there is nothing to measure against.
+    private func grid(for mapper: DraftCanvasMap) -> DraftGrid? {
+        DraftGrid(pointsPerMillimetre: mapper.pointsPerMillimetre)
+    }
+
+    /// Faint millimetre squares and the two axes through (0, 0), drawn under the pieces so the
+    /// X and Y boxes have something visible to refer to.
+    private func drawGrid(_ grid: DraftGrid, mapper: DraftCanvasMap,
+                          in context: inout GraphicsContext, size: CGSize) {
+        let a = mapper.model(at: .zero)
+        let b = mapper.model(at: CGPoint(x: size.width, y: size.height))
+        let x0 = min(a.x, b.x), x1 = max(a.x, b.x), y0 = min(a.y, b.y), y1 = max(a.y, b.y)
+        guard [x0, x1, y0, y1].allSatisfy({ $0.isFinite }) else { return }
+        let first = (x: (x0 / grid.step).rounded(.down), y: (y0 / grid.step).rounded(.down))
+        let last = (x: (x1 / grid.step).rounded(.up), y: (y1 / grid.step).rounded(.up))
+        // The step keeps squares at least 12 pt wide, so this only trips on a broken map.
+        guard last.x - first.x <= 400, last.y - first.y <= 400 else { return }
+        var minor = Path(), major = Path()
+        var i = first.x
+        while i <= last.x {
+            let x = mapper.screen(DraftPoint(x: i * grid.step, y: 0)).x
+            if grid.isMajor(i) {
+                major.move(to: CGPoint(x: x, y: 0)); major.addLine(to: CGPoint(x: x, y: size.height))
+            } else {
+                minor.move(to: CGPoint(x: x, y: 0)); minor.addLine(to: CGPoint(x: x, y: size.height))
+            }
+            i += 1
+        }
+        var j = first.y
+        while j <= last.y {
+            let y = mapper.screen(DraftPoint(x: 0, y: j * grid.step)).y
+            if grid.isMajor(j) {
+                major.move(to: CGPoint(x: 0, y: y)); major.addLine(to: CGPoint(x: size.width, y: y))
+            } else {
+                minor.move(to: CGPoint(x: 0, y: y)); minor.addLine(to: CGPoint(x: size.width, y: y))
+            }
+            j += 1
+        }
+        context.stroke(minor, with: .color(AppTheme.line.opacity(0.7)), lineWidth: 0.5)
+        context.stroke(major, with: .color(AppTheme.line), lineWidth: 1)
+        let origin = mapper.screen(DraftPoint(x: 0, y: 0))
+        var axes = Path()
+        if origin.x >= 0 && origin.x <= size.width {
+            axes.move(to: CGPoint(x: origin.x, y: 0)); axes.addLine(to: CGPoint(x: origin.x, y: size.height))
+        }
+        if origin.y >= 0 && origin.y <= size.height {
+            axes.move(to: CGPoint(x: 0, y: origin.y)); axes.addLine(to: CGPoint(x: size.width, y: origin.y))
+        }
+        context.stroke(axes, with: .color(AppTheme.muted.opacity(0.35)), lineWidth: 1)
+    }
+
+    /// Whether the point (0, 0) is inside the drawing area.
+    private func originVisible(on mapper: DraftCanvasMap, size: CGSize) -> Bool {
+        let origin = mapper.screen(DraftPoint(x: 0, y: 0))
+        return origin.x >= 0 && origin.x <= size.width && origin.y >= 0 && origin.y <= size.height
+    }
+
+    /// A dot at (0, 0) with short arrows towards growing X (right) and growing Y (up). The labels
+    /// sit outside the arrows, so a piece that starts at (0, 0) does not hide them.
+    private func drawOrigin(mapper: DraftCanvasMap, in context: inout GraphicsContext, size: CGSize) {
+        guard originVisible(on: mapper, size: size) else { return }
+        let o = mapper.screen(DraftPoint(x: 0, y: 0))
+        let arm: CGFloat = 22, head: CGFloat = 4
+        var arrows = Path()
+        arrows.move(to: o); arrows.addLine(to: CGPoint(x: o.x + arm, y: o.y))
+        arrows.move(to: CGPoint(x: o.x + arm - head, y: o.y - head))
+        arrows.addLine(to: CGPoint(x: o.x + arm, y: o.y))
+        arrows.addLine(to: CGPoint(x: o.x + arm - head, y: o.y + head))
+        arrows.move(to: o); arrows.addLine(to: CGPoint(x: o.x, y: o.y - arm))
+        arrows.move(to: CGPoint(x: o.x - head, y: o.y - arm + head))
+        arrows.addLine(to: CGPoint(x: o.x, y: o.y - arm))
+        arrows.addLine(to: CGPoint(x: o.x + head, y: o.y - arm + head))
+        let ink = AppTheme.muted
+        context.stroke(arrows, with: .color(ink.opacity(0.8)),
+                       style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round))
+        context.fill(Path(ellipseIn: CGRect(x: o.x - 3, y: o.y - 3, width: 6, height: 6)), with: .color(ink))
+        // Large text would turn these letters into blocks over the small drawing; the spoken value
+        // says the same.
+        guard !dynamicTypeSize.isAccessibilitySize else { return }
+        let font = Font.caption2.weight(.semibold)
+        context.draw(Text("X").font(font).foregroundColor(ink), at: CGPoint(x: o.x + arm, y: o.y + 10), anchor: .center)
+        context.draw(Text("Y").font(font).foregroundColor(ink), at: CGPoint(x: o.x - 10, y: o.y - arm), anchor: .center)
+        context.draw(Text("0").font(font).foregroundColor(ink), at: CGPoint(x: o.x - 8, y: o.y + 9), anchor: .center)
     }
 
     /// Width and height (or length) of the selected piece, written next to it in millimetres.
@@ -972,6 +1109,10 @@ struct EasyCADWorkspace: View {
         GeometryReader { geometry in
             Canvas { context, size in
                 guard let mapper = transform(size) else { return }
+                // Reference under everything else: squares, axes and the origin.
+                let squares = grid(for: mapper)
+                if let squares { drawGrid(squares, mapper: mapper, in: &context, size: size) }
+                drawOrigin(mapper: mapper, in: &context, size: size)
                 for piece in document.pieces {
                     guard let first = piece.points.first else { continue }
                     let delta = piece.id == draggedPieceID ? currentDrag : .zero
@@ -989,9 +1130,14 @@ struct EasyCADWorkspace: View {
                 }
                 // At accessibility text sizes the tags grow until they cover the small drawing; the
                 // same numbers stay in the fields below and in the spoken value.
-                if !dynamicTypeSize.isAccessibilitySize,
-                   let selected = document.pieces.first(where: { $0.id == selectedID }) {
-                    drawMeasurements(of: selected, mapper: mapper, in: &context, size: size)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    if let squares {
+                        drawLabel("Kare: \(DraftPiece.display(squares.step)) mm", center: .zero,
+                                  in: &context, size: size, color: AppTheme.muted)
+                    }
+                    if let selected = document.pieces.first(where: { $0.id == selectedID }) {
+                        drawMeasurements(of: selected, mapper: mapper, in: &context, size: size)
+                    }
                 }
             }
             .contentShape(Rectangle())
@@ -1004,11 +1150,7 @@ struct EasyCADWorkspace: View {
                     if pinching { return }
                     if !dragStarted {
                         dragStarted = true
-                        let piece = hitPiece(value.startLocation, size: geometry.size)
-                        if let piece, selectFromCanvasOrMenu(piece.id),
-                           !hasPendingDetails || saveDetails() { draggedPieceID = piece.id }
-                        // Dragging empty paper moves the view instead of a piece.
-                        panning = piece == nil && !viewport.isFit
+                        beginCanvasDrag(at: value.startLocation, size: geometry.size)
                     }
                     if draggedPieceID != nil { currentDrag = value.translation }
                     else if panning { livePan = value.translation }
@@ -1019,21 +1161,30 @@ struct EasyCADWorkspace: View {
                                                    content: fitMap(geometry.size)?.contentSize ?? .zero)
                         panning = false
                         livePan = .zero
+                        // Panning once shows the rule was understood.
+                        if showPanHint { panHintSeen = true; showPanHint = false }
                     }
                     finishDrag(value.translation, size: geometry.size)
                 })
-            .simultaneousGesture(MagnificationGesture()
-                .onChanged { value in
+            .modifier(PinchZoom(
+                changed: { scale, start in
                     pinching = true
                     // A piece that is being dragged keeps its scale until it is dropped.
-                    if draggedPieceID == nil { liveZoom = Double(value) }
-                }
-                .onEnded { _ in
+                    guard draggedPieceID == nil else { return }
+                    if pinchAnchor == nil, let start, start.x.isFinite, start.y.isFinite {
+                        pinchAnchor = CGPoint(x: min(max(start.x, 0), geometry.size.width),
+                                              y: min(max(start.y, 0), geometry.size.height))
+                    }
+                    liveZoom = scale
+                },
+                ended: {
                     // Commit what was shown; liveZoom is 1 when a piece was being dragged.
-                    viewport = viewport.zoomed(by: liveZoom)
+                    viewport = liveZoomed(viewport, in: geometry.size,
+                                          content: fitMap(geometry.size)?.contentSize ?? .zero)
                     liveZoom = 1
+                    pinchAnchor = nil
                     pinching = false
-                })
+                }))
             .onAppear { canvasSize = geometry.size }
             .onChange(of: geometry.size) { canvasSize = $0 }
         }
@@ -1043,7 +1194,7 @@ struct EasyCADWorkspace: View {
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
         .accessibilityLabel("Dokunarak parça seçebileceğiniz kalıp önizlemesi")
-        .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Yakınlaştırmak için yukarı, uzaklaştırmak için aşağı kaydırın. Alternatif: Parça seç menüsü.")
+        .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Yakınlaştırılmışken sürüklemek görünümü kaydırır; seçili parça kenar çizgisinden tutulunca taşınır. Yakınlaştırmak için yukarı, uzaklaştırmak için aşağı kaydırın. Alternatif: Parça seç menüsü.")
         .accessibilityValue(canvasSpokenValue)
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -1067,6 +1218,59 @@ struct EasyCADWorkspace: View {
         .overlay(alignment: .bottomTrailing) {
             if !document.pieces.isEmpty && !keyboardVisible { zoomControls }
         }
+        .overlay(alignment: .top) {
+            if showPanHint && !viewport.isFit && !keyboardVisible { panHint }
+        }
+        .onChange(of: viewport.isFit) { isFit in
+            if !isFit && !panHintSeen { showPanHint = true }
+        }
+    }
+
+    /// Shown once, the first time the drawing is zoomed: dragging now moves the view.
+    private var panHint: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: "hand.draw")
+                .foregroundStyle(AppTheme.accent)
+                .accessibilityHidden(true)
+            Text("Yakınlaştırınca parmakla sürüklemek görünümü kaydırır. Seçili parçayı taşımak için kenar çizgisinden tutup sürükle.")
+                .font(.caption)
+                .foregroundStyle(AppTheme.ink)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 4)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Anladım") {
+                panHintSeen = true
+                showPanHint = false
+            }
+            .font(.caption.weight(.semibold))
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityIdentifier("canvas-pan-hint-ok")
+        }
+        .padding(.horizontal, 10)
+        .background(AppTheme.card.opacity(0.95), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.line, lineWidth: 1))
+        .padding(6)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("canvas-pan-hint")
+    }
+
+    /// Pinch to zoom. iOS 17 and macOS 14 report where the fingers started, so the drawing grows
+    /// around that point; iOS 16 gives no location and the zoom stays about the centre.
+    private struct PinchZoom: ViewModifier {
+        let changed: (Double, CGPoint?) -> Void
+        let ended: () -> Void
+
+        @ViewBuilder
+        func body(content: Content) -> some View {
+            if #available(iOS 17.0, macOS 14.0, *) {
+                content.simultaneousGesture(MagnifyGesture()
+                    .onChanged { value in changed(Double(value.magnification), value.startLocation) }
+                    .onEnded { _ in ended() })
+            } else {
+                content.simultaneousGesture(MagnificationGesture()
+                    .onChanged { value in changed(Double(value), nil) }
+                    .onEnded { _ in ended() })
+            }
+        }
     }
 
     private var canvasSpokenValue: String {
@@ -1081,6 +1285,16 @@ struct EasyCADWorkspace: View {
             }
         }
         text += viewport.isFit ? "Ekrana sığdırılmış." : "Yakınlaştırma \(String(format: "%.1f", viewport.zoom)) kat."
+        if !viewport.isFit && viewport.pan != .zero { text += " Görünüm kaydırılmış." }
+        // The same reference the drawing shows: the grid size and where X and Y are measured from.
+        if let mapper = transform(canvasSize) {
+            if let squares = grid(for: mapper) {
+                text += " Arkadaki her kare \(DraftPiece.display(squares.step)) milimetre."
+            }
+            text += originVisible(on: mapper, size: canvasSize)
+                ? " Başlangıç noktası (0, 0) ekranda; X sağa, Y yukarı doğru artar."
+                : " Başlangıç noktası (0, 0) şu an ekranda değil; X sağa, Y yukarı doğru artar."
+        }
         return text
     }
 
@@ -1089,7 +1303,11 @@ struct EasyCADWorkspace: View {
         HStack(spacing: 6) {
             if !viewport.isFit {
                 zoomButton("Ekrana sığdır", systemImage: "arrow.up.left.and.down.right.magnifyingglass",
-                           id: "zoom-fit", enabled: true) { viewport = DraftViewport() }
+                           id: "zoom-fit", enabled: true) {
+                    viewport = DraftViewport()
+                    // This button disappears at fit; VoiceOver would otherwise lose its place.
+                    DispatchQueue.main.async { zoomInFocused = true }
+                }
                     .keyboardShortcut("0", modifiers: .command)
             }
             if !viewport.isFit && selectedIndex != nil {
@@ -1106,8 +1324,29 @@ struct EasyCADWorkspace: View {
                 viewport = viewport.zoomed(by: DraftViewport.step)
             }
             .keyboardShortcut("+", modifiers: .command)
+            .accessibilityFocused($zoomInFocused)
         }
         .padding(6)
+        // Cmd + needs Shift on most keyboards; Cmd = is the same key without it. A button takes
+        // one shortcut, so this invisible twin carries the second one.
+        .background {
+            Button {
+                viewport = viewport.zoomed(by: DraftViewport.step)
+            } label: {
+                Color.clear.frame(width: 1, height: 1)
+            }
+            .keyboardShortcut("=", modifiers: .command)
+            .disabled(!viewport.canZoomIn)
+            .opacity(0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    /// The bottom-right corner the zoom buttons cover at fit (zoom out and zoom in), kept free of
+    /// the drawing by `fitMap`.
+    private var zoomControlsFitFootprint: CGSize {
+        CGSize(width: 2 * zoomButtonSide + 6 + 12, height: zoomButtonSide + 12)
     }
 
     /// 44 pt at the default text size, larger with big text, capped so four buttons still fit.
