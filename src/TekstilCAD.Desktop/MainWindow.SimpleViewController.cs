@@ -63,7 +63,7 @@ public partial class MainWindow
             var bar = CommandBarFactory(w);
             commandBar = bar;
             // Region under the header: [command box + help row] [Aç] [Kaydet] [Tüm araçlar].
-            var row = new Grid { MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Center };
+            var row = new Grid { MaxWidth = 1100 };
             row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             row.Children.Add(commandBar.Element);
@@ -139,7 +139,12 @@ public partial class MainWindow
             cardName = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = StudioTheme.Text, TextTrimming = TextTrimming.CharacterEllipsis, Focusable = true };
             cardPiece.Children.Add(cardName);
             widthTile = Tile(); heightTile = Tile(); positionTile = Tile();
-            var tiles = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+            var tiles = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            tiles.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+            tiles.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+            tiles.RowDefinitions.Add(new()); tiles.RowDefinitions.Add(new());
+            Grid.SetColumn(heightTile, 1); Grid.SetRow(positionTile, 1); Grid.SetColumnSpan(positionTile, 2);
+            widthTile.Margin = new Thickness(0, 0, 4, 8); heightTile.Margin = new Thickness(4, 0, 0, 8); positionTile.Margin = new Thickness(0);
             tiles.Children.Add(widthTile); tiles.Children.Add(heightTile); tiles.Children.Add(positionTile);
             cardPiece.Children.Add(tiles);
             cardPiece.Children.Add(new TextBlock { Text = "Bir kutucuğa tıklayın; komut kutusuna yazılır, siz onaylayana kadar hiçbir şey değişmez.", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 6, 0, 0) });
@@ -150,7 +155,7 @@ public partial class MainWindow
 
         private Button Tile()
         {
-            var button = new Button { MinHeight = 48, MinWidth = 120, Margin = new Thickness(0, 0, 8, 8), Padding = new Thickness(10, 6, 10, 6), HorizontalContentAlignment = HorizontalAlignment.Left, Cursor = Cursors.Hand };
+            var button = new Button { MinHeight = 48, Padding = new Thickness(12, 6, 12, 6), HorizontalContentAlignment = HorizontalAlignment.Left, HorizontalAlignment = HorizontalAlignment.Stretch, Cursor = Cursors.Hand };
             return button;
         }
 
@@ -198,7 +203,12 @@ public partial class MainWindow
             r.Set(w.headerGrid, FrameworkElement.MarginProperty, new Thickness(16, 6, 16, 4));
             r.Set(w.taglineText, UIElement.VisibilityProperty, Visibility.Collapsed);
             r.Set(w.aboutButton, FrameworkElement.MinHeightProperty, 32d);
+            // Hakkında first, then the view switch, both flush with the brand at the left edge.
+            r.Set(w.aboutButton, DockPanel.DockProperty, Dock.Left);
+            r.Set(w.aboutButton, FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
             MountSwitch(r);
+            r.Set(switchButton!, DockPanel.DockProperty, Dock.Left);
+            r.Set(switchButton!, FrameworkElement.MarginProperty, new Thickness(0));
             r.Set(w.sourceHistoryDetails, ContentControl.ContentProperty, "Kaynak ve aktarım notları");
             if (w.modeChip.Child is TextBlock modeText)
             {
@@ -290,13 +300,17 @@ public partial class MainWindow
             // Only zoom in and zoom out stay beside the tools; panning has the wheel and the middle button.
             var navigation = w.navigationPanel.Children.Cast<UIElement>().ToList();
             for (var i = 2; i < navigation.Count; i++) r.Set(navigation[i], UIElement.VisibilityProperty, Visibility.Collapsed);
-            foreach (var button in navigation.Take(2).OfType<Button>()) r.Set(button, FrameworkElement.MinHeightProperty, 38d);
+            foreach (var button in navigation.Take(2).OfType<Button>())
+            {
+                r.Set(button, FrameworkElement.MinHeightProperty, 38d);
+                r.Set(button, FrameworkElement.MinWidthProperty, 38d);
+            }
             r.Add(w.toolsPanel, railCaption!, 0);
             r.Add(w.toolsPanel, railHint!);
             foreach (var (tool, label, typed) in ToolTexts)
             {
                 var button = w.toolButtons[tool];
-                r.Set(button, FrameworkElement.MinHeightProperty, 40d);
+                r.Set(button, FrameworkElement.MinHeightProperty, 38d);
                 r.Set(button, AutomationProperties.NameProperty, label);
                 if (button.Content is Grid item && item.Children.Count >= 3)
                 {
@@ -434,9 +448,15 @@ public partial class MainWindow
             AutomationProperties.SetName(w.unitsText, w.unitsText.Text);
 
             var unsaved = w.HasUnsavedWork;
-            saveButton!.Background = unsaved ? StudioTheme.PrimaryFill : StudioTheme.Raised;
-            saveButton.Foreground = unsaved ? StudioTheme.OnPrimary : StudioTheme.Text;
-            saveButton.BorderBrush = unsaved ? StudioTheme.PrimaryBorder : StudioTheme.Border;
+            // Filled while there is unsaved work, otherwise the same plain look as Aç.
+            if (unsaved)
+            {
+                saveButton!.Background = StudioTheme.PrimaryFill; saveButton.Foreground = StudioTheme.OnPrimary; saveButton.BorderBrush = StudioTheme.PrimaryBorder;
+            }
+            else
+            {
+                saveButton!.ClearValue(Control.BackgroundProperty); saveButton.ClearValue(Control.ForegroundProperty); saveButton.ClearValue(Control.BorderBrushProperty);
+            }
             allToolsButton!.Visibility = AllToolsSheetAvailable ? Visibility.Visible : Visibility.Collapsed;
 
             UpdateCard(selected, pieceCount, unsaved);
