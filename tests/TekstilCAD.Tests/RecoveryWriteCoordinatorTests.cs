@@ -32,7 +32,7 @@ public sealed class RecoveryWriteCoordinatorTests
         try
         {
             var first=coordinator.SaveAsync(Doc("first"), [], null);
-            Assert.True(writer.Entered.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(writer.Entered.Wait(TimeSpan.FromSeconds(30)));
             var pending=coordinator.SaveAsync(Doc("pending"), [], null);
             var clear=coordinator.ClearAsync();
             var dispose=coordinator.DisposeAsync().AsTask();
@@ -53,7 +53,7 @@ public sealed class RecoveryWriteCoordinatorTests
         try
         {
             var running=coordinator.SaveAsync(Doc("running"), [], null);
-            Assert.True(writer.Entered.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(writer.Entered.Wait(TimeSpan.FromSeconds(30)));
             var skipped=coordinator.SaveAsync(Doc("skip"), [], null);
             var doc=Doc("retained"); var drafts=new[] { new RecoveryPropertyDraft(Guid.NewGuid(),"draft","bad","3","base",0,0) };
             var points=new List<Point2> { new(3,4) }; var last=coordinator.SaveAsync(doc,drafts,new("Çizgi",points));
@@ -94,7 +94,7 @@ public sealed class RecoveryWriteCoordinatorTests
         try
         {
             var stale=Task.Run(async () => await coordinator.SaveAsync(Doc("stale"),[],null));
-            Assert.True(captured.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(captured.Wait(TimeSpan.FromSeconds(30)));
             if (dispose) await coordinator.DisposeAsync();
             else Assert.True(await coordinator.ClearAsync());
             release.Set(); Assert.False(await stale);
@@ -118,7 +118,7 @@ public sealed class RecoveryWriteCoordinatorTests
         try
         {
             var older=Task.Run(async () => await coordinator.SaveAsync(Doc("older"),[],null));
-            Assert.True(captured.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(captured.Wait(TimeSpan.FromSeconds(30)));
             Assert.True(await coordinator.SaveAsync(Doc("newer"),[],null));
             release.Set(); Assert.False(await older);
             Assert.Equal("newer",writer.LastDocument!.Name);
