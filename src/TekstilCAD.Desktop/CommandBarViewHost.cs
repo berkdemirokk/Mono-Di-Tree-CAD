@@ -10,17 +10,21 @@ namespace TekstilCAD.Desktop;
 /// </summary>
 internal sealed class CommandBarViewHost : ICommandBarHost
 {
+    private readonly MainWindow window;
     private readonly CommandBarView view;
     private readonly OverlaySlot slot;
 
     internal CommandBarViewHost(MainWindow window)
     {
+        this.window = window;
         view = new CommandBarView(window.CreateCommandBarHost())
         {
             // The slot draws the card behind a preview; at rest the box and its chips sit directly on the page.
             Padding = new Thickness(0), BorderThickness = new Thickness(0), Background = null,
         };
         slot = new OverlaySlot { Child = view };
+        slot.LayoutUpdated += (_, _) => KeepCardRightOfRail();
+        window.SetCanvasTopInset(CardCover);
     }
 
     public FrameworkElement Element => slot;
@@ -28,6 +32,20 @@ internal sealed class CommandBarViewHost : ICommandBarHost
     public void SetText(string text) { view.SetText(text); view.FocusBox(); }
 
     public void ClearPreview() => view.ClearPreview();
+
+    public void ShowSuggestions(bool show) => view.ShowSuggestions(show);
+
+    // The tool rail sits left of the canvas: the preview card starts at the canvas's left edge, so it never covers a tool button.
+    private void KeepCardRightOfRail()
+        => view.RowIndent = window.CanvasBoundsIn(slot) is { } canvas ? Math.Clamp(canvas.Left, 0, Math.Max(0, slot.ActualWidth - 320)) : 0;
+
+    // How far down the canvas the card reaches, so a preview frame is moved clear of it.
+    private double CardCover()
+    {
+        if (view.PreviewRow is not { Visibility: Visibility.Visible, ActualHeight: > 0 } row || window.CanvasBoundsIn(slot) is not { } canvas) return 0;
+        var bottom = row.TransformToAncestor(slot).TransformBounds(new Rect(row.RenderSize)).Bottom;
+        return Math.Max(0, bottom + 4 - canvas.Top);
+    }
 
     public void OnRefreshed()
     {
@@ -42,9 +60,7 @@ internal sealed class CommandBarViewHost : ICommandBarHost
     /// </summary>
     private sealed class OverlaySlot : Decorator
     {
-        private const double IdleHeight = 96;   // 52 box + 8 gap + 36 chip row
-        private double drawnHeight;
-
+        private const double IdleHeight = 96;   // 48 box + 8 gap + 40 chip row
         protected override Size MeasureOverride(Size available)
         {
             if (Child is null) return default;
@@ -58,16 +74,22 @@ internal sealed class CommandBarViewHost : ICommandBarHost
         {
             if (Child is null) return finalSize;
             Child.Arrange(new Rect(0, 0, finalSize.Width, Child.DesiredSize.Height));
-            // The card is drawn in OnRender, so it is redrawn only when the height it covers changes.
-            if (Math.Abs(Child.DesiredSize.Height - drawnHeight) > .5) { drawnHeight = Child.DesiredSize.Height; InvalidateVisual(); }
+            // The card is drawn in OnRender behind the child, so it follows every layout of the child.
+            InvalidateVisual();
             return finalSize;
         }
 
         protected override void OnRender(DrawingContext drawingContext)
         {
-            if (Child is not { } child || child.RenderSize.Height <= IdleHeight + .5) return;
-            drawingContext.DrawRoundedRectangle(StudioTheme.Surface, new Pen(StudioTheme.Border, 1),
-                new Rect(-8, -6, ActualWidth + 16, child.RenderSize.Height + 14), 10, 10);
+            if (Child is not CommandBarView view) return;
+            // The preview card and the example list each get a surface of their own; at rest the box sits on the page.
+            foreach (var part in new[] { view.PreviewRow, view.ExamplesPanel })
+            {
+                if (part.Visibility != Visibility.Visible || part.ActualHeight <= 0) continue;
+                var bounds = part.TransformToAncestor(this).TransformBounds(new Rect(part.RenderSize));
+                bounds.Inflate(6, 6);
+                drawingContext.DrawRoundedRectangle(StudioTheme.Surface, new Pen(StudioTheme.Border, 1), bounds, 10, 10);
+            }
         }
     }
 }

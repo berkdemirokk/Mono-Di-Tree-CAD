@@ -54,7 +54,7 @@ public partial class MainWindow
     internal bool IsCommandBoxOpen=>commandBoxHost?.IsOpen ?? false;
 
     private CommandBarContext CommandContext()=>new(Document.Pieces.Count==0,Document.Pieces.Select(p=>p.Name ?? "").ToList(),
-        Selected is not null,canvas is not null && canvas.HasPendingDrawing,dirty);
+        Selected is not null,canvas is not null && canvas.HasPendingDrawing,dirty,Selected is not { } selected || IsPlainRectangle(selected));
 
     /// <summary>The window side of the box. Applying goes through <see cref="ApplyCommand(Plan,bool)"/>; nothing here opens a message box.</summary>
     internal CommandBarHost CreateCommandBarHost()=>new(

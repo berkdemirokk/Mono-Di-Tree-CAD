@@ -24,6 +24,7 @@ public partial class MainWindow
         private readonly ViewRecorder recorder = new();
         private ICommandBarHost? commandBar;
         private Border? commandRegion;
+        private StackPanel? noticeStrip;
         private SideCardView? card;
         private Button? switchButton, themeButton, openButton, saveButton, allToolsButton, openCancelProxy;
         private TextBlock? railCaption, railHint, footerNote, scaleWarning;
@@ -76,31 +77,34 @@ public partial class MainWindow
             openCancelProxy.SetBinding(UIElement.VisibilityProperty, new Binding(nameof(UIElement.Visibility)) { Source = w.projectOpenCancel });
             buttons.Children.Add(openButton); buttons.Children.Add(saveButton); buttons.Children.Add(allToolsButton); buttons.Children.Add(openCancelProxy);
             Grid.SetColumn(buttons, 1); row.Children.Add(buttons);
-            commandRegion = new Border { Margin = new Thickness(16, 8, 16, 6), Child = row };
+            commandRegion = new Border { Margin = new Thickness(16, 6, 16, 4), Child = row };
+            // The warnings of the header sit here, under the box, so the box keeps its place however many warnings there are.
+            noticeStrip = new StackPanel { Margin = new Thickness(16, 0, 16, 2), MaxWidth = 1100 };
+            DockPanel.SetDock(noticeStrip, Dock.Top);
             AutomationProperties.SetName(commandRegion, "Komut çubuğu");
             DockPanel.SetDock(commandRegion, Dock.Top);
             // Above the workspace, so a preview card that grows past the region is drawn and clicked over the canvas.
             System.Windows.Controls.Panel.SetZIndex(commandRegion, 1);
 
-            switchButton = new Button { Content = "Ayrıntılı görünüm", MinHeight = 32, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(10, 0, 0, 0), FontSize = 12, Cursor = Cursors.Hand };
+            switchButton = new Button { Content = "Ayrıntılı görünüm", MinHeight = 40, Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(10, 0, 0, 0), FontSize = 14, Cursor = Cursors.Hand };
             AutomationProperties.SetName(switchButton, "Ayrıntılı görünüme geç");
             switchButton.ToolTip = "Yoğun, ayrıntılı ekran · F9";
             DockPanel.SetDock(switchButton, Dock.Right);
             switchButton.Click += (_, _) => w.ToggleSimpleView();
 
             // Same code path as the switch in the About window; the label names the theme a click would give.
-            themeButton = new Button { MinHeight = 32, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(8, 0, 0, 0), FontSize = 12, Cursor = Cursors.Hand };
+            themeButton = new Button { MinHeight = 40, Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(8, 0, 0, 0), FontSize = 14, Cursor = Cursors.Hand };
             DockPanel.SetDock(themeButton, Dock.Left);
             themeButton.Click += (_, _) => w.SetStatus(InterfaceSettings.ToggleTheme());
 
-            railCaption = new TextBlock { Text = "Fareyle çiz", FontSize = 12, Foreground = StudioTheme.Muted, Margin = new Thickness(4, 8, 0, 7) };
-            railHint = new TextBlock { Text = "Çizerken: Enter kapatır · Esc vazgeçer", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 14, 0, 0), Focusable = true };
+            railCaption = new TextBlock { Text = "Fareyle çiz", FontSize = 14, Foreground = StudioTheme.Muted, Margin = new Thickness(4, 4, 0, 4) };
+            railHint = new TextBlock { Text = "Çizerken: Enter kapatır · Esc vazgeçer", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 8, 0, 0), Focusable = true };
             AutomationProperties.SetName(railHint, "Çizerken: Enter konturu kapatır, Esc çizimden vazgeçer");
 
-            footerNote = new TextBlock { Text = "Bu çizim üretim veya kesim onayı değildir", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, MaxWidth = 280, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Focusable = true };
+            footerNote = new TextBlock { Text = "Bu çizim üretim veya kesim onayı değildir", FontSize = 13, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, MaxWidth = 280, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Focusable = true };
             AutomationProperties.SetName(footerNote, "Bu çizim üretim veya kesim onayı değildir");
             DockPanel.SetDock(footerNote, Dock.Right);
-            scaleWarning = new TextBlock { Text = "Yazı büyüdükçe çalışma alanı küçülür.", FontSize = 12, Foreground = StudioTheme.Warning, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Focusable = true, TextWrapping = TextWrapping.Wrap, MaxWidth = 240 };
+            scaleWarning = new TextBlock { Text = "Yazı büyüdükçe çalışma alanı küçülür.", FontSize = 13, Foreground = StudioTheme.Warning, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Focusable = true, TextWrapping = TextWrapping.Wrap, MaxWidth = 240 };
             AutomationProperties.SetName(scaleWarning, "Yazı büyüdükçe çalışma alanı küçülür.");
             DockPanel.SetDock(scaleWarning, Dock.Right);
 
@@ -161,9 +165,10 @@ public partial class MainWindow
             r.Set(w.unitsText, AutomationProperties.NameProperty, "");
 
             // Header: same instances, calmer.
-            r.Set(w.headerGrid, FrameworkElement.MarginProperty, new Thickness(16, 6, 16, 4));
+            r.Set(w.headerGrid, FrameworkElement.MarginProperty, new Thickness(16, 4, 16, 2));
             r.Set(w.taglineText, UIElement.VisibilityProperty, Visibility.Collapsed);
-            r.Set(w.aboutButton, FrameworkElement.MinHeightProperty, 32d);
+            r.Set(w.aboutButton, FrameworkElement.MinHeightProperty, 40d);
+            r.Set(w.aboutButton, Control.FontSizeProperty, 14d);
             // Hakkında first, then the view switch, both flush with the brand at the left edge.
             r.Set(w.aboutButton, DockPanel.DockProperty, Dock.Left);
             r.Set(w.aboutButton, FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
@@ -177,14 +182,20 @@ public partial class MainWindow
             if (w.modeChip.Child is TextBlock modeText)
             {
                 r.Set(modeText, TextBlock.TextProperty, "Yerel çalışma  ·  mm");
-                r.Set(modeText, TextBlock.FontSizeProperty, 12d);
+                r.Set(modeText, TextBlock.FontSizeProperty, 13d);
             }
-            foreach (var button in Descendants<Button>(w.projectPanel)) r.Set(button, FrameworkElement.MinHeightProperty, 32d);
-            LiftToTwelve(w.projectPanel); LiftToTwelve(w.headerGrid); LiftToTwelve(w.canvasHeaderPanel);
+            foreach (var button in Descendants<Button>(w.projectPanel))
+            {
+                r.Set(button, FrameworkElement.MinHeightProperty, 40d);
+                r.Set(button, Control.FontSizeProperty, 14d);
+            }
+            LiftToThirteen(w.projectPanel); LiftToThirteen(w.headerGrid); LiftToThirteen(w.canvasHeaderPanel); LiftToThirteen(w.toolsPanel); LiftToThirteen(w.footerPanel);
+            MoveNoticesBelowBox(r);
 
             // Command bar region replaces the command strip.
             r.Set(w.commandAreaPanel, UIElement.VisibilityProperty, Visibility.Collapsed);
             r.Add(w.rootPanel, commandRegion!, 1);
+            r.Add(w.rootPanel, noticeStrip!, 2);
 
             // Workspace columns.
             r.Set(w.workspaceGrid.ColumnDefinitions[0], ColumnDefinition.WidthProperty, new GridLength(176));
@@ -207,6 +218,20 @@ public partial class MainWindow
             if (textScale != 100) ApplyScale(r);
             w.canvasTool.Text = ToolHeading(w.ActiveTool);
             OnRefreshed();
+        }
+
+        // Every notice row of the header (everything after the spacer and the title row) moves under the command box and
+        // comes back in place on detach, so the box does not drop when warnings appear.
+        private void MoveNoticesBelowBox(ViewRecorder r)
+        {
+            var rows = w.projectPanel.Children.Cast<UIElement>().Skip(2).ToList();
+            r.Do(() =>
+            {
+                foreach (var row in rows) { w.projectPanel.Children.Remove(row); noticeStrip!.Children.Add(row); }
+            }, () =>
+            {
+                foreach (var row in rows) { noticeStrip!.Children.Remove(row); w.projectPanel.Children.Add(row); }
+            });
         }
 
         internal void Detach()
@@ -281,23 +306,23 @@ public partial class MainWindow
             for (var i = 2; i < navigation.Count; i++) r.Set(navigation[i], UIElement.VisibilityProperty, Visibility.Collapsed);
             foreach (var button in navigation.Take(2).OfType<Button>())
             {
-                r.Set(button, FrameworkElement.MinHeightProperty, 38d);
-                r.Set(button, FrameworkElement.MinWidthProperty, 38d);
+                r.Set(button, FrameworkElement.MinHeightProperty, 40d);
+                r.Set(button, FrameworkElement.MinWidthProperty, 40d);
             }
             r.Add(w.toolsPanel, railCaption!, 0);
             r.Add(w.toolsPanel, railHint!);
             foreach (var (tool, label, typed) in ToolTexts)
             {
                 var button = w.toolButtons[tool];
-                r.Set(button, FrameworkElement.MinHeightProperty, 38d);
+                r.Set(button, FrameworkElement.MinHeightProperty, 40d);
                 r.Set(button, AutomationProperties.NameProperty, label);
                 if (button.Content is Grid item && item.Children.Count >= 3)
                 {
                     var glyph = (TextBlock)item.Children[0]; var text = (TextBlock)item.Children[1]; var key = (TextBlock)item.Children[2];
                     r.Set(glyph, UIElement.VisibilityProperty, Visibility.Collapsed);
                     r.Set(text, TextBlock.TextProperty, label);
-                    r.Set(text, TextBlock.FontSizeProperty, 13d);
-                    r.Set(key, TextBlock.FontSizeProperty, 12d);
+                    r.Set(text, TextBlock.FontSizeProperty, 14d);
+                    r.Set(key, TextBlock.FontSizeProperty, 13d);
                     r.Set(key, UIElement.OpacityProperty, 1.0);
                     r.Add(item, DrawnIcon(tool, item));
                 }
@@ -324,12 +349,13 @@ public partial class MainWindow
             r.Set(w.redoCommand!, ContentControl.ContentProperty, "↷ Yinele");
             foreach (var button in new[] { w.undoCommand!, w.redoCommand!, w.fitCommand! })
             {
-                r.Set(button, FrameworkElement.MinHeightProperty, 36d);
+                r.Set(button, FrameworkElement.MinHeightProperty, 40d);
+                r.Set(button, Control.FontSizeProperty, 14d);
                 r.Set(button, Control.PaddingProperty, new Thickness(12, 4, 12, 4));
             }
             if (w.canvasView.Parent is UIElement chip) r.Set(chip, UIElement.VisibilityProperty, Visibility.Collapsed);
-            r.Set(w.canvasTool, TextBlock.FontSizeProperty, 12d);
-            r.Set(w.historyCapacityNotice, TextBlock.FontSizeProperty, 12d);
+            r.Set(w.canvasTool, TextBlock.FontSizeProperty, 13d);
+            r.Set(w.historyCapacityNotice, TextBlock.FontSizeProperty, 13d);
         }
 
         private void AttachInspector(ViewRecorder r)
@@ -343,8 +369,8 @@ public partial class MainWindow
             r.Add(w.inspectorPanel, card!, 0);
             r.Add(w.inspectorPanel, card!.FirstStepsPanel);
             foreach (var warning in new TextBlock[] { w.gradingGeometryNotice, w.pieceLimits, w.grainlineStatus })
-                r.Set(warning, TextBlock.FontSizeProperty, 12d);
-            r.Set(w.propertyDraftConflict, Control.FontSizeProperty, 12d);
+                r.Set(warning, TextBlock.FontSizeProperty, 13d);
+            r.Set(w.propertyDraftConflict, Control.FontSizeProperty, 13d);
             r.Set(w.grainlineStatus, UIElement.VisibilityProperty, Visibility.Collapsed);
             r.Set(w.sourceHistoryNotice, UIElement.VisibilityProperty, Visibility.Visible);
             r.Set(w.sourceHistoryDetails, UIElement.VisibilityProperty, Visibility.Visible);
@@ -352,12 +378,12 @@ public partial class MainWindow
 
         private void AttachFooter(ViewRecorder r)
         {
-            r.Set(w.statusBarBorder, Border.PaddingProperty, new Thickness(18, 5, 18, 5));
-            r.Set(w.statusViewer, FrameworkElement.MaxHeightProperty, 32d);
-            r.Set(w.status, TextBlock.FontSizeProperty, 12d);
+            r.Set(w.statusBarBorder, Border.PaddingProperty, new Thickness(18, 4, 18, 4));
+            r.Set(w.statusViewer, FrameworkElement.MaxHeightProperty, 36d);
+            r.Set(w.status, TextBlock.FontSizeProperty, 13d);
             // The cursor position rewrites the status on every mouse move; only meaningful messages are live in this view.
             r.Set(w.status, AutomationProperties.LiveSettingProperty, AutomationLiveSetting.Off);
-            r.Set(w.unitsText, TextBlock.FontSizeProperty, 12d);
+            r.Set(w.unitsText, TextBlock.FontSizeProperty, 13d);
             r.Set(w.unitsText, TextBlock.TextWrappingProperty, TextWrapping.Wrap);
             r.Set(w.unitsText, FrameworkElement.MaxWidthProperty, 330d);
             r.Set(w.unitsText, UIElement.FocusableProperty, true);
@@ -380,13 +406,13 @@ public partial class MainWindow
             Attach();
         }
 
-        // Nothing below 12 px in this view: lifts the few smaller text sizes of existing controls.
-        private void LiftToTwelve(DependencyObject root)
+        // Nothing below 13 px in this view: lifts the smaller text sizes of existing controls.
+        private void LiftToThirteen(DependencyObject root)
         {
             foreach (var element in Descendants<DependencyObject>(root))
             {
-                if (element is TextBlock text && text.FontSize < 12) recorder.Set(text, TextBlock.FontSizeProperty, 12d);
-                else if (element is Control control && control.FontSize < 12) recorder.Set(control, Control.FontSizeProperty, 12d);
+                if (element is TextBlock text && text.FontSize < 13) recorder.Set(text, TextBlock.FontSizeProperty, 13d);
+                else if (element is Control control && control.FontSize < 13) recorder.Set(control, Control.FontSizeProperty, 13d);
             }
         }
 
@@ -429,8 +455,8 @@ public partial class MainWindow
             var selected = w.Selected is { Points.Count: > 0 } piece ? piece : null;
             var pieceCount = w.Document.Pieces.Count;
 
-            // The source-history sentence is only meaningful once a project was opened, edited or saved.
-            var visible = pieceCount > 0 || w.filePath is not null || w.HasUnsavedWork;
+            // The source-history sentence and its button mean nothing to a project that has no import history.
+            var visible = w.Document.ImportProvenance is not null;
             w.sourceHistoryNotice.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
             w.sourceHistoryDetails.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
             // The "no grainline" line is noise; the unverified-production sentence only exists when there is a grainline.
@@ -454,7 +480,9 @@ public partial class MainWindow
             allToolsButton!.Visibility = AllToolsSheetAvailable ? Visibility.Visible : Visibility.Collapsed;
 
             UpdateCard(selected, pieceCount, unsaved);
-            commandBar!.OnRefreshed();
+            // The start tasks of the side card offer the same actions as the suggestion chips.
+            commandBar!.ShowSuggestions(!card!.StartTasksVisible);
+            commandBar.OnRefreshed();
         }
 
     }

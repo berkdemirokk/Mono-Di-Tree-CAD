@@ -107,8 +107,9 @@ public partial class MainWindow
             search.ToolTip = "Ad, açıklama ya da bildiğiniz bir sözle arayın: örneğin kopyala, ayna, ölçü";
             search.TextChanged += (_, _) => Arrange();
             var title = new TextBlock { Text = "Tüm araçlar", FontSize = 20, FontWeight = FontWeights.SemiBold, Foreground = StudioTheme.Text, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 18, 0) };
-            var hint = new TextBlock { Text = "Araç ara", FontSize = 12, Foreground = StudioTheme.Muted, Margin = new Thickness(2, 0, 0, 2) };
-            var searchBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { hint, search } };
+            var hint = new TextBlock { Text = "Araç ara", FontSize = 14, Foreground = StudioTheme.Muted, Margin = new Thickness(0, 0, 0, 2) };
+            // Left-aligned with a width of its own, so the label sits directly above the field's left edge.
+            var searchBox = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Width = 360, Children = { hint, search } };
             var close = new Button { Content = "Kapat", MinHeight = 36, MinWidth = 84, Padding = new Thickness(14, 4, 14, 4), FontSize = 14, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(12, 0, 0, 0), ToolTip = "Sayfayı kapat · Esc" };
             AutomationProperties.SetName(close, "Tüm araçlar sayfasını kapat");
             close.Click += (_, _) => Close();
@@ -117,7 +118,6 @@ public partial class MainWindow
             top.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
             top.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             Grid.SetColumn(searchBox, 1); Grid.SetColumn(close, 2);
-            searchBox.HorizontalAlignment = HorizontalAlignment.Stretch;
             top.Children.Add(title); top.Children.Add(searchBox); top.Children.Add(close);
 
             // The window's own capacity notice, repeated word for word while it is shown (the page covers the canvas top).

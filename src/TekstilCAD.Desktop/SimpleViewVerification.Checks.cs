@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using TekstilCAD.Core;
+using TekstilCAD.Core.Guide;
 using static TekstilCAD.Desktop.DesktopVerification;
 
 namespace TekstilCAD.Desktop;
@@ -50,8 +51,16 @@ internal static partial class SimpleViewVerification
         ok = same;
     }); return ok; }
 
+    private static ProjectDocument Imported() => new()
+    {
+        Name = "İçe aktarılan proje", Pieces = [new PatternPiece { Name = "Parça", Points = [new(0, 0), new(100, 0), new(100, 50), new(0, 50)] }],
+        ImportProvenance = new DxfImportProvenance { SourceFileName = "kaynak.dxf", SourceSha256 = new string('a', 64), SourceByteLength = 100, MillimetersPerUnit = 1 },
+    };
+
     private static void VerifyHeaderNotices(string reportPath, List<string> checks) => WithFresh(fresh =>
     {
+        // The source notice and its button only exist for a project with import history.
+        fresh.LoadDocument(Imported());
         Simple(fresh, true);
         var complete = true;
         foreach (var (width, height) in new[] { (1024, 640), (1440, 900) })
@@ -64,18 +73,22 @@ internal static partial class SimpleViewVerification
                 && notice.ActualHeight + notice.Margin.Top + notice.Margin.Bottom >= notice.DesiredSize.Height - .5
                 && Equals(details.Content, "Kaynak ve aktarım notları") && AutomationProperties.GetName(details) == "DXF kaynak ve aktarım notlarını incele"
                 && detailsBounds.Left >= noticeBounds.Right - .5 && notice.Focusable
-                && notice.Text.StartsWith("Kaynak ve önceki aktarım uyarıları projede saklanmaz.", StringComparison.Ordinal);
+                && notice.Text.StartsWith("DXF kaynak ve aktarım notları projede saklanıyor.", StringComparison.Ordinal);
         }
-        Check(complete, "Simple view keeps the save state, the source history notice and its button visible and unclipped at 1024x640 and at 1440x900", checks);
+        Check(complete, "Simple view keeps the save state, the source history notice and its button visible and unclipped at 1024x640 and at 1440x900 for an imported project", checks);
 
-        // An empty new project shows the sentence only after it was opened or edited.
+        // A project without import history shows neither the sentence nor its button, whether new or opened; an import brings them.
+        bool Shown() => F<TextBlock>(fresh, "sourceHistoryNotice").Visibility == Visibility.Visible && F<Button>(fresh, "sourceHistoryDetails").Visibility == Visibility.Visible;
+        bool Hidden() => F<TextBlock>(fresh, "sourceHistoryNotice").Visibility == Visibility.Collapsed && F<Button>(fresh, "sourceHistoryDetails").Visibility == Visibility.Collapsed;
         fresh.LoadDocument(new ProjectDocument());
-        var hidden = F<TextBlock>(fresh, "sourceHistoryNotice").Visibility == Visibility.Collapsed && F<Button>(fresh, "sourceHistoryDetails").Visibility == Visibility.Collapsed;
-        fresh.LoadDocument(new ProjectDocument { Name = "Açılan proje", Pieces = [new PatternPiece { Name = "Parça", Points = [new(0, 0), new(100, 0), new(100, 50), new(0, 50)] }] });
-        var shown = F<TextBlock>(fresh, "sourceHistoryNotice").Visibility == Visibility.Visible && F<Button>(fresh, "sourceHistoryDetails").Visibility == Visibility.Visible;
+        var hiddenNew = Hidden();
+        fresh.LoadDocument(new ProjectDocument { Name = "Açılan proje", Pieces = Imported().Pieces });
+        var hiddenOpened = Hidden();
+        fresh.LoadDocument(Imported());
+        var shown = Shown();
         Simple(fresh, false);
         var classic = F<TextBlock>(fresh, "sourceHistoryNotice").Visibility == Visibility.Visible;
-        Check(hidden && shown && classic, "Simple view shows the source history notice of an empty new project only after the project was opened or edited", checks);
+        Check(hiddenNew && hiddenOpened && shown && classic, "Simple view hides the source history notice and its button until the project has import history; the detailed layout always shows them", checks);
     });
 
     private static void VerifyFooter(List<string> checks) => WithFresh(fresh =>
@@ -110,6 +123,23 @@ internal static partial class SimpleViewVerification
             ok &= NoticesComplete(fresh);
         }
         Check(ok, "Simple view keeps every conditional header notice complete beside its action when set", checks);
+    });
+
+    // The warnings sit under the command box, so the box and its buttons stay where they are however many warnings show.
+    private static void VerifyBoxStaysPut(List<string> checks) => WithFresh(fresh =>
+    {
+        fresh.LoadDocument(Imported());
+        Simple(fresh, true);
+        var view = InlineBox(fresh)!; var root = (FrameworkElement)fresh.Content;
+        Rect Place() => BoundsInRoot(view.Box, root);
+        var clean = new List<Rect>(); var busy = new List<Rect>();
+        var sizes = new[] { (1024, 640), (1440, 900) };
+        foreach (var (width, height) in sizes) { Render(fresh, Temp($"box-clean-{width}x{height}"), width, height); clean.Add(Place()); }
+        MakeBusy(fresh, true);
+        foreach (var (width, height) in sizes) { Render(fresh, Temp($"box-busy-{width}x{height}"), width, height); busy.Add(Place()); }
+        var same = clean.Zip(busy).All(pair => Math.Abs(pair.First.Top - pair.Second.Top) < .5 && Math.Abs(pair.First.Left - pair.Second.Left) < .5 && Math.Abs(pair.First.Height - pair.Second.Height) < .5);
+        Check(same && NoticesComplete(fresh), "Simple view command box keeps its position when every header warning is shown, and the warnings stay complete"
+            + (same ? "" : $" [clean={string.Join("/", clean)} busy={string.Join("/", busy)}]"), checks);
     });
 
     private static void VerifyWarningsUnderCard(List<string> checks) => WithFresh(fresh =>
@@ -203,6 +233,7 @@ internal static partial class SimpleViewVerification
     {
         Simple(fresh, true);
         var offenders = new List<string>(); var toolsOk = true;
+        double minFont = double.MaxValue, minTarget = double.MaxValue;
         foreach (var (width, height) in new[] { (1024, 640), (1440, 900) })
         {
             Render(fresh, Temp($"controls-{width}x{height}"), width, height);
@@ -212,21 +243,48 @@ internal static partial class SimpleViewVerification
                 var label = button.Content as string ?? AutomationProperties.GetName(button);
                 var named = !string.IsNullOrWhiteSpace(AutomationProperties.GetName(button)) || !string.IsNullOrWhiteSpace(AutomationProperties.GetHelpText(button)) || !string.IsNullOrWhiteSpace(button.Content as string);
                 var primary = AutomationProperties.GetName(button) is "Proje aç" or "Projeyi kaydet";
+                minTarget = Math.Min(minTarget, button.ActualHeight);
                 if (!named) offenders.Add($"{width}: unnamed button");
                 else if (!button.Focusable && button.IsEnabled) offenders.Add($"{width}: not focusable {label}");
-                else if (button.ActualHeight < (primary ? 44 : 32) - .5) offenders.Add($"{width}: {label} {button.ActualHeight:0.#} px");
+                else if (button.ActualHeight < (primary ? 44 : 40) - .5) offenders.Add($"{width}: {label} {button.ActualHeight:0.#} px");
             }
             foreach (var element in Descendants<FrameworkElement>(root).Where(e => e is TextBlock || e is Button || e is TextBox || e is CheckBox).Where(e => !VisibleBoundsInRoot(e, root).IsEmpty))
             {
                 var size = element is TextBlock t ? t.FontSize : ((Control)element).FontSize;
-                if (size < 12 - .01) offenders.Add($"{width}: {size} px {element.GetType().Name} {(element as TextBlock)?.Text ?? AutomationProperties.GetName(element)}");
+                minFont = Math.Min(minFont, size);
+                if (size < 13 - .01) offenders.Add($"{width}: {size} px {element.GetType().Name} {(element as TextBlock)?.Text ?? AutomationProperties.GetName(element)}");
             }
             var tools = F<Dictionary<string, Button>>(fresh, "toolButtons").Values;
-            toolsOk &= tools.Count == 6 && tools.All(tool => tool.ActualHeight >= 32 && FullyVisible(tool, root));
+            toolsOk &= tools.Count == 6 && tools.All(tool => tool.ActualHeight >= 40 - .5 && FullyVisible(tool, root));
         }
-        Check(offenders.Count == 0, "Every simple view button has an accessible name, is focusable, is at least 32 px high; primary actions at least 44 px"
+        checks.Add($"[measured] simple view smallest visible font {minFont:0.#} px, smallest visible button height {minTarget:0.#} px");
+        Check(offenders.Count == 0, "Every simple view button has an accessible name, is focusable and at least 40 px high (primary actions 44 px), and no visible text is below 13 px"
             + (offenders.Count == 0 ? "" : " [" + string.Join("; ", offenders.Take(6)) + "]"), checks);
-        Check(toolsOk, "Six drawing tools stay visible without scrolling and at least 32 px high in the simple view", checks);
+        Check(toolsOk, "Six drawing tools stay visible without scrolling and at least 40 px high in the simple view", checks);
+    });
+
+    // Body text of the rail and the side card is at least 14 px; at the smallest window the rail (hint included) and the
+    // start of the side card still fit without scrolling.
+    private static void VerifyReadability(List<string> checks) => WithFresh(fresh =>
+    {
+        fresh.SetGuideStateForVerification([], FirstStepsTracker.Fresh, true);
+        fresh.LoadDocument(new ProjectDocument());
+        Simple(fresh, true);
+        var reasons = new List<string>();
+        foreach (var (width, height) in new[] { (1024, 640), (1440, 900) })
+        {
+            Render(fresh, Temp($"readability-{width}x{height}"), width, height);
+            var root = (FrameworkElement)fresh.Content; var card = fresh.SideCard!;
+            var body = Descendants<TextBlock>(card).Concat(Descendants<TextBlock>(root).Where(t => t.Text == "Fareyle çiz" || t.Text.StartsWith("Çizerken:", StringComparison.Ordinal)))
+                .Where(t => !VisibleBoundsInRoot(t, root).IsEmpty && t.Text.Length > 0).ToList();
+            foreach (var text in body.Where(t => t.FontSize < 14 - .01)) reasons.Add($"{width}: {text.FontSize} px {text.Text}");
+            var hint = body.Single(t => t.Text.StartsWith("Çizerken:", StringComparison.Ordinal));
+            if (!FullyVisible(hint, root)) reasons.Add($"{width}: rail hint cut {BoundsInRoot(hint, root)} / {VisibleBoundsInRoot(hint, root)}");
+            foreach (var tool in F<Dictionary<string, Button>>(fresh, "toolButtons").Values.Where(b => !FullyVisible(b, root))) reasons.Add($"{width}: tool {AutomationProperties.GetName(tool)} cut");
+            if (!card.TaskButtons.All(b => FullyVisible(b, root))) reasons.Add($"{width}: start task cut");
+        }
+        Check(reasons.Count == 0, "Simple view rail and side card text is at least 14 px and the rail and start tasks stay fully visible at 1024x640 and 1440x900"
+            + (reasons.Count == 0 ? "" : " [" + string.Join("; ", reasons.Take(6)) + "]"), checks);
     });
 
     private static List<Point2> Drawing(CadCanvas canvas) => (List<Point2>)typeof(CadCanvas).GetField("drawing", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(canvas)!;

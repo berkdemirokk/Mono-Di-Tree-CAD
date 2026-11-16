@@ -103,6 +103,15 @@ internal static partial class SimpleViewVerification
                     $"Preview card with Uygula and Vazgeç stays fully visible at {width}x{height}"
                     + (FullyVisible(view.ApplyButton, root) && FullyVisible(view.CancelButton, root) ? ""
                         : $" [state={view.State} apply={BoundsInRoot(view.ApplyButton, root)}/{VisibleBoundsInRoot(view.ApplyButton, root)} cancel={BoundsInRoot(view.CancelButton, root)}/{VisibleBoundsInRoot(view.CancelButton, root)}]"), checks);
+
+                // The frame and its labels are never hidden by the card, and the card never reaches the tool rail.
+                var canvasBox = BoundsInRoot(canvas, root);
+                var ghostBox = canvas.GhostScreenBounds() is { } g ? new Rect(canvasBox.X + g.X, canvasBox.Y + g.Y, g.Width, g.Height) : Rect.Empty;
+                var card = BoundsInRoot(view.PreviewRow, root); card.Inflate(6, 6);
+                var ghostClear = !ghostBox.IsEmpty && !ghostBox.IntersectsWith(card) && canvasBox.Contains(ghostBox);
+                var railClear = F<Dictionary<string, Button>>(fresh, "toolButtons").Values.All(tool => !BoundsInRoot(tool, root).IntersectsWith(card));
+                Check(ghostClear && railClear, $"Command preview card hides neither the preview frame with its labels nor the tool rail at {width}x{height}"
+                    + (ghostClear && railClear ? "" : $" [ghost={ghostBox} card={card} canvas={canvasBox} railClear={railClear}]"), checks);
             });
     }
 
@@ -163,12 +172,18 @@ internal static partial class SimpleViewVerification
         }
         fresh.LoadDocument(new ProjectDocument());
         Simple(fresh, true);
-        Scan("empty", "12 x 8 cm dikdörtgen", "150 çizgi");
+        // The empty project shows the start tasks, which hide these chips (checked with the start tasks).
+        Scan("empty");
         fresh.LoadDocument(new ProjectDocument { Pieces = [new PatternPiece { Name = "Parça 1", Points = [new(30, 40), new(150, 40), new(150, 120), new(30, 120)] }] });
         Scan("unselected", "parça 1 seç");
         fresh.Select(fresh.Document.Pieces[0].Id);
         Scan("selected", "genişliği 95 yap", "25 sağa taşı", "90 sağa döndür");
-        Check(seen >= 6 && bad.Count == 0, "Every example chip in the simple view command box parses to a plan"
-            + (seen >= 6 && bad.Count == 0 ? "" : $" [{seen} chips; {string.Join("; ", bad)}]"), checks);
+        // A piece that is not a plain rectangle is not offered the width chip.
+        fresh.LoadDocument(new ProjectDocument { Pieces = [new PatternPiece { Name = "Parça 2", Points = [new(0, 0), new(100, 0), new(60, 80)] }] });
+        fresh.Select(fresh.Document.Pieces[0].Id);
+        Invoke(fresh, "Refresh");
+        var notRectangle = !InlineBox(fresh)!.ChipButtons.Any(c => (string)c.Tag == "genişliği 95 yap") && InlineBox(fresh)!.ChipButtons.Any(c => (string)c.Tag == "25 sağa taşı");
+        Check(seen >= 5 && bad.Count == 0 && notRectangle, "Every example chip in the simple view command box parses to a plan and the width chip is only offered for a plain rectangle"
+            + (seen >= 5 && bad.Count == 0 && notRectangle ? "" : $" [{seen} chips; notRectangle={notRectangle}; {string.Join("; ", bad)}]"), checks);
     });
 }

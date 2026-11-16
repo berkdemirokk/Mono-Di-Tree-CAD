@@ -10,7 +10,7 @@ using TekstilCAD.Core.Commands;
 namespace TekstilCAD.Desktop;
 
 /// <summary>What the box needs to know about the window to offer examples that work right now.</summary>
-internal sealed record CommandBarContext(bool EmptyProject,IReadOnlyList<string> PieceNames,bool HasSelection,bool DrawingInProgress,bool HasUnsavedWork);
+internal sealed record CommandBarContext(bool EmptyProject,IReadOnlyList<string> PieceNames,bool HasSelection,bool DrawingInProgress,bool HasUnsavedWork,bool SelectionIsPlainRectangle=true);
 
 /// <summary>The window side of the command box: planning, applying and history steps. The view never touches the project itself.</summary>
 /// <param name="Preview">Parses and plans the text (text, true when Enter was pressed).</param>
@@ -96,6 +96,18 @@ internal sealed class CommandBarView : Border
     internal Button DangerButton=>danger;
     internal Button ExamplesButton=>examplesToggle;
     internal Button VoiceButton=>voice;
+    /// <summary>The preview / result / refusal card and the example list: the parts that may extend past the box.</summary>
+    internal FrameworkElement PreviewRow=>rowBorder;
+    internal FrameworkElement ExamplesPanel=>examplesPanel;
+    /// <summary>Left offset of the preview card, so a host that sits over a tool rail can keep the card clear of it.</summary>
+    internal double RowIndent { get=>rowBorder.Margin.Left; set { if(Math.Abs(rowBorder.Margin.Left-value)>.5)rowBorder.Margin=new Thickness(value,6,0,0); } }
+    private bool suggestionsShown=true;
+    /// <summary>False hides the "Deneyin" suggestion chips; the "Örnekleri göster" button stays.</summary>
+    internal void ShowSuggestions(bool show)
+    {
+        if(suggestionsShown==show)return;
+        suggestionsShown=show;RefreshChips();
+    }
     internal TextBlock RowTextBlock=>rowText;
     internal TextBlock CaveatTextBlock=>caveatText;
     internal string RowText=>rowText.Text;
@@ -135,7 +147,7 @@ internal sealed class CommandBarView : Border
         var root=new StackPanel();
         // box with its placeholder (a TextBox has none of its own)
         var boxGrid=new Grid();
-        box.FontSize=18;box.MinHeight=52;box.MaxLength=200;box.VerticalContentAlignment=VerticalAlignment.Center;
+        box.FontSize=18;box.MinHeight=48;box.MaxLength=200;box.VerticalContentAlignment=VerticalAlignment.Center;
         box.Padding=new Thickness(12,4,12,4);box.AcceptsReturn=false;box.AcceptsTab=false;
         AutomationProperties.SetName(box,"Komut kutusu");
         AutomationProperties.SetHelpText(box,BoxHelp);
@@ -158,28 +170,30 @@ internal sealed class CommandBarView : Border
         root.Children.Add(boxGrid);
 
         // the one preview / result / refusal row (the only live region)
-        rowBorder.CornerRadius=new CornerRadius(8);rowBorder.Padding=new Thickness(12,10,12,10);rowBorder.Margin=new Thickness(0,8,0,0);
+        rowBorder.CornerRadius=new CornerRadius(8);rowBorder.Padding=new Thickness(12,6,12,6);rowBorder.Margin=new Thickness(0,6,0,0);
         rowBorder.Visibility=Visibility.Collapsed;
         var rowStack=new StackPanel();
-        rowText.FontSize=15;rowText.TextWrapping=TextWrapping.Wrap;rowText.Foreground=StudioTheme.Text;
-        caveatText.FontSize=13;caveatText.TextWrapping=TextWrapping.Wrap;caveatText.Foreground=StudioTheme.Text;caveatText.Margin=new Thickness(0,6,0,0);
+        rowText.FontSize=14;rowText.TextWrapping=TextWrapping.Wrap;rowText.Foreground=StudioTheme.Text;
+        caveatText.FontSize=14;caveatText.TextWrapping=TextWrapping.Wrap;caveatText.Foreground=StudioTheme.Text;caveatText.Margin=new Thickness(0,4,0,0);
         caveatText.Visibility=Visibility.Collapsed;
         AutomationProperties.SetLiveSetting(rowText,AutomationLiveSetting.Polite);
         AutomationProperties.SetName(rowText,"Komut önizlemesi");
-        alternatives.Margin=new Thickness(0,8,0,0);alternatives.Visibility=Visibility.Collapsed;
-        rowButtons.Margin=new Thickness(0,8,0,0);rowButtons.Visibility=Visibility.Collapsed;
+        alternatives.Margin=new Thickness(0,6,0,0);alternatives.Visibility=Visibility.Collapsed;
+        rowButtons.Margin=new Thickness(0,6,0,0);rowButtons.Visibility=Visibility.Collapsed;
         ConfigureButton(apply,"Uygula",true);apply.Click+=(_,_)=>ApplyShown(false);
         ConfigureButton(cancel,"Vazgeç",false);cancel.Click+=(_,_)=>Dismiss(true);
         ConfigureButton(danger,"Evet, parçayı sil",false);danger.Click+=(_,_)=>ApplyShown(true);
         danger.Background=Soft(StudioTheme.Danger,0x55);danger.BorderBrush=StudioTheme.Danger;
         apply.Margin=new Thickness(0,0,8,0);cancel.Margin=new Thickness(0,0,8,0);
         rowButtons.Children.Add(apply);rowButtons.Children.Add(cancel);rowButtons.Children.Add(danger);
-        rowStack.Children.Add(rowText);rowStack.Children.Add(caveatText);rowStack.Children.Add(alternatives);rowStack.Children.Add(rowButtons);
+        // The buttons and the alternative chip share one line, so the card stays as low as readable text allows.
+        var actionLine=new DockPanel();DockPanel.SetDock(rowButtons,Dock.Left);actionLine.Children.Add(rowButtons);actionLine.Children.Add(alternatives);
+        rowStack.Children.Add(rowText);rowStack.Children.Add(caveatText);rowStack.Children.Add(actionLine);
         rowBorder.Child=rowStack;
         root.Children.Add(rowBorder);
 
         chips.Margin=new Thickness(0,8,0,0);
-        examplesToggle.Content="Örnekleri göster";examplesToggle.MinHeight=36;examplesToggle.FontSize=14;examplesToggle.Padding=new Thickness(12,4,12,4);examplesToggle.Margin=new Thickness(0,0,8,6);
+        examplesToggle.Content="Örnekleri göster";examplesToggle.MinHeight=40;examplesToggle.FontSize=14;examplesToggle.Padding=new Thickness(12,4,12,4);examplesToggle.Margin=new Thickness(0,0,8,6);
         AutomationProperties.SetName(examplesToggle,"Örnekleri göster");
         examplesToggle.Click+=(_,_)=>ShowExamples(!ExamplesOpen);
         root.Children.Add(chips);
@@ -193,7 +207,7 @@ internal sealed class CommandBarView : Border
 
     private static void ConfigureButton(Button button,string text,bool primary)
     {
-        button.Content=text;button.MinHeight=44;button.MinWidth=88;button.FontSize=15;button.Padding=new Thickness(14,6,14,6);button.Visibility=Visibility.Collapsed;
+        button.Content=text;button.MinHeight=40;button.MinWidth=88;button.FontSize=14;button.Padding=new Thickness(14,6,14,6);button.Visibility=Visibility.Collapsed;
         AutomationProperties.SetName(button,text);
         if(primary)button.Background=StudioTheme.Accent;
         if(primary)button.Foreground=StudioTheme.Background;
@@ -216,7 +230,7 @@ internal sealed class CommandBarView : Border
 
     private Button MakeChip(string text,bool accent,string? label=null)
     {
-        var chip=new Button { Content=label ?? text,Tag=text,MinHeight=36,FontSize=14,Padding=new Thickness(12,4,12,4),Margin=new Thickness(0,0,8,6) };
+        var chip=new Button { Content=label ?? text,Tag=text,MinHeight=40,FontSize=14,Padding=new Thickness(12,4,12,4),Margin=new Thickness(0,0,8,6) };
         if(accent)chip.BorderBrush=StudioTheme.Accent;
         AutomationProperties.SetName(chip,"Örnek: "+(label ?? text));
         AutomationProperties.SetHelpText(chip,"Kutuya yazar ve önizler; uygulamaz.");
@@ -467,7 +481,7 @@ internal sealed class CommandBarView : Border
     private void FillAlternatives(IReadOnlyList<RefusalButton> buttons)
     {
         alternatives.Children.Clear();
-        foreach(var button in buttons.Take(3))alternatives.Children.Add(MakeChip(button.FillText,false,button.Label));
+        foreach(var button in buttons.Take(3)) { var chip=MakeChip(button.FillText,false,button.Label);chip.Margin=new Thickness(0,0,8,0);alternatives.Children.Add(chip); }
         alternatives.Visibility=alternatives.Children.Count>0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -612,7 +626,8 @@ internal sealed class CommandBarView : Border
         }
         else
         {
-            yield return "genişliği 95 yap";yield return "25 sağa taşı";yield return "90 sağa döndür";
+            if(context.SelectionIsPlainRectangle)yield return "genişliği 95 yap";
+            yield return "25 sağa taşı";yield return "90 sağa döndür";
         }
     }
 
@@ -624,13 +639,13 @@ internal sealed class CommandBarView : Border
         var shown=0;var limit=offerUndo ? 2 : 3;
         if(offerUndo)
         {
-            var undo=new Button { Content="Geri al",MinHeight=36,FontSize=14,Padding=new Thickness(12,4,12,4),Margin=new Thickness(0,0,8,6) };
+            var undo=new Button { Content="Geri al",MinHeight=40,FontSize=14,Padding=new Thickness(12,4,12,4),Margin=new Thickness(0,0,8,6) };
             AutomationProperties.SetName(undo,"Yapılan son işlemi geri al");
             undo.Click+=(_,_)=>{ ShowInfo(host.HistoryStep(false));RefreshChips();FocusBox(); };
             chips.Children.Add(undo);
         }
-        else chips.Children.Add(new TextBlock { Text="Deneyin:",FontSize=14,Foreground=StudioTheme.Muted,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,8,6) });
-        foreach(var text in SuggestedTexts(context))
+        else if(suggestionsShown)chips.Children.Add(new TextBlock { Text="Deneyin:",FontSize=14,Foreground=StudioTheme.Muted,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,8,6) });
+        foreach(var text in suggestionsShown ? SuggestedTexts(context) : Array.Empty<string>())
         {
             if(shown>=limit+(context.HasUnsavedWork ? 1 : 0))break;
             if(host.Preview(text,true).Kind!=CommandPreviewKind.Plan)continue;

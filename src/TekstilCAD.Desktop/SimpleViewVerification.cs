@@ -38,10 +38,12 @@ internal static partial class SimpleViewVerification
             VerifyHeaderNotices(reportPath, checks);
             VerifyFooter(checks);
             VerifyBusyHeader(checks);
+            VerifyBoxStaysPut(checks);
             VerifyWarningsUnderCard(checks);
             VerifyFloors(reportPath, checks);
             VerifyClassicFloorsAfterSwitch(checks);
             VerifyControls(checks);
+            VerifyReadability(checks);
             VerifyRefusals(checks);
             VerifyCommandThroughSimpleView(checks);
             VerifyCommandBox(reportPath, checks);

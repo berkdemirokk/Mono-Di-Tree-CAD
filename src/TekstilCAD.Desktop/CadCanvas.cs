@@ -480,8 +480,8 @@ public sealed class CadCanvas : FrameworkElement
     private double GridStep() { var step=10.0;while(step*scale<18)step*=5;while(step*scale>120)step/=2;return step; }
     /// <summary>Unit, grid spacing and zoom of the current view, as shown beside the canvas title.</summary>
     internal string ViewInfo => $"mm  /  Izgara {GridStep():0.##}  /  {scale*100:0}%";
-    private Point Screen(Point2 p)=>new(p.X*scale+offset.X,p.Y*scale+offset.Y);
-    private Point2 World(Point p,bool snap=true) { var w=new Point2((p.X-offset.X)/scale,(p.Y-offset.Y)/scale); return snap && owner.Snap ? new(Math.Round(w.X),Math.Round(w.Y)) : w; }
+    private Point Screen(Point2 p)=>new(p.X*scale+offset.X,p.Y*scale+offset.Y+ghostShift);
+    private Point2 World(Point p,bool snap=true) { var w=new Point2((p.X-offset.X)/scale,(p.Y-offset.Y-ghostShift)/scale); return snap && owner.Snap ? new(Math.Round(w.X),Math.Round(w.Y)) : w; }
     private void Down(object sender,MouseButtonEventArgs e)
     {
         if(LargeVertexValidationRunning || LargeCompletionRunning) { owner.SetStatus("Doğrulama sürüyor; bekleyin veya Esc ile iptal edin.");return; }
@@ -1040,6 +1040,7 @@ public sealed class CadCanvas : FrameworkElement
     internal string? EmptyStateHint { get; set; }
     protected override void OnRender(DrawingContext dc)
     {
+        FrameGhost();
         base.OnRender(dc);dc.DrawRectangle(StudioTheme.Canvas,null,new Rect(RenderSize));
         var step=GridStep();
         var gridPen=new Pen(StudioTheme.CanvasGrid,.5);var origin=World(new Point(0,0),false);var end=World(new Point(ActualWidth,ActualHeight),false);
@@ -1123,10 +1124,47 @@ public sealed class CadCanvas : FrameworkElement
         var next=scene is { IsEmpty:false } ? scene : null;
         if(ReferenceEquals(next,ghost))return true;
         ghost=next;InvalidateVisual();
-        if(next is null)return true;
+        if(next is null) { ReleaseGhostShift();return true; }
         var inView=GhostIsInView(next);
         if(!inView)owner.SetStatus("Önizleme görünümün dışında; Tümünü göster düğmesine basın.");
         return inView;
+    }
+    /// <summary>Height at the top of the canvas that a card drawn over it covers (the simple view's command preview); 0 when nothing covers it.</summary>
+    internal Func<double>? TopInset { get; set; }
+    // How far down the whole view is drawn while a preview frame would lie under the card; zero again when the preview ends.
+    private double ghostShift;
+    private void ReleaseGhostShift()=>ghostShift=0;
+    private void FrameGhost()
+    {
+        ReleaseGhostShift();
+        var inset=ghost is null ? 0 : TopInset?.Invoke() ?? 0;
+        if(inset<=0 || GhostScreenBounds(false) is not { } box)return;
+        // Just far enough that the frame and its labels clear the card, never so far that the frame's lower edge leaves the view.
+        ghostShift=Math.Max(0,Math.Min(inset+8-box.Top,ActualHeight-8-box.Bottom));
+    }
+    /// <summary>The preview frame with its label plates in canvas coordinates, as drawn (null without a frame); unclamped, labels may lie outside the canvas.</summary>
+    internal Rect? GhostScreenBounds(bool clampLabels=true)
+    {
+        if(ghost is null)return null;
+        var box=Rect.Empty;
+        foreach(var polygon in ghost.Polygons)foreach(var point in polygon.Points)box.Union(Screen(point));
+        foreach(var label in ghost.Labels)box.Union(LabelPlate(label,Format(label.Text,Brushes.White,13),clampLabels));
+        return box.IsEmpty ? null : box;
+    }
+    private Rect LabelPlate(TekstilCAD.Core.Commands.GhostLabel label,FormattedText formatted,bool clamp)
+    {
+        var at=Screen(label.Anchor);
+        double x=at.X,y=at.Y;
+        switch(label.Placement)
+        {
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Above:x-=formatted.Width/2;y-=formatted.Height+4;break;
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Below:x-=formatted.Width/2;y+=4;break;
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Left:x-=formatted.Width+6;y-=formatted.Height/2;break;
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Right:x+=6;y-=formatted.Height/2;break;
+            default:x-=formatted.Width/2;y-=formatted.Height/2;break;
+        }
+        if(clamp) { x=Math.Clamp(x,2,Math.Max(2,ActualWidth-formatted.Width-2));y=Math.Clamp(y,2,Math.Max(2,ActualHeight-formatted.Height-2)); }
+        return new Rect(x-3,y-1,formatted.Width+6,formatted.Height+2);
     }
     private bool GhostIsInView(TekstilCAD.Core.Commands.GhostScene scene)
     {
@@ -1150,19 +1188,9 @@ public sealed class CadCanvas : FrameworkElement
         var plate=new SolidColorBrush(Color.FromArgb(0xD0,0x0D,0x18,0x27));
         foreach(var label in scene.Labels)
         {
-            var formatted=Format(label.Text,text,13);var at=Screen(label.Anchor);
-            double x=at.X,y=at.Y;
-            switch(label.Placement)
-            {
-                case TekstilCAD.Core.Commands.GhostLabelPlacement.Above:x-=formatted.Width/2;y-=formatted.Height+4;break;
-                case TekstilCAD.Core.Commands.GhostLabelPlacement.Below:x-=formatted.Width/2;y+=4;break;
-                case TekstilCAD.Core.Commands.GhostLabelPlacement.Left:x-=formatted.Width+6;y-=formatted.Height/2;break;
-                case TekstilCAD.Core.Commands.GhostLabelPlacement.Right:x+=6;y-=formatted.Height/2;break;
-                default:x-=formatted.Width/2;y-=formatted.Height/2;break;
-            }
-            x=Math.Clamp(x,2,Math.Max(2,ActualWidth-formatted.Width-2));y=Math.Clamp(y,2,Math.Max(2,ActualHeight-formatted.Height-2));
-            dc.DrawRoundedRectangle(plate,null,new Rect(x-3,y-1,formatted.Width+6,formatted.Height+2),3,3);
-            dc.DrawText(formatted,new Point(x,y));
+            var formatted=Format(label.Text,text,13);var bounds=LabelPlate(label,formatted,true);
+            dc.DrawRoundedRectangle(plate,null,bounds,3,3);
+            dc.DrawText(formatted,new Point(bounds.X+3,bounds.Y+1));
         }
     }
     // The ring is 14 DIP across and the label starts 8 DIP to the right.

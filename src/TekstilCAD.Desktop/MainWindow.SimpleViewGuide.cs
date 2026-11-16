@@ -139,23 +139,9 @@ public partial class MainWindow
             HasRecoveryNotice = w.recoveryNotice.Visibility == System.Windows.Visibility.Visible,
             ImportedWithWarnings = w.dxfReview.Visibility == System.Windows.Visibility.Visible,
             IsFirstLaunch = firstLaunch, ActiveToolName = w.ActiveTool, HasPendingDrawing = w.canvas.HasPendingDrawing,
-            SelectedCanResize = selected is not null && IsPlainRectangle(selected),
+            SelectedCanResize = selected is not null && w.IsPlainRectangle(selected),
             ExampleLoaded = exampleEpoch == w.projectEpoch && w.filePath is null, HasTriedEditing = steps.HasTriedEditing,
         };
-
-        // A closed, axis-parallel, four-point piece without grain line, corner marks, curve data or grading rule.
-        private bool IsPlainRectangle(PatternPiece piece)
-        {
-            if (!piece.Closed || piece.Points.Count != 4 || piece.Grainline is not null || piece.Notches is { Count: > 0 } || piece.Curves is { Count: > 0 }) return false;
-            if (w.Document.GradingRules.Any(rule => rule.SourcePieceId == piece.Id)) return false;
-            var p = piece.Points;
-            for (var i = 0; i < 4; i++)
-            {
-                var a = p[i]; var b = p[(i + 1) % 4];
-                if (a.X != b.X && a.Y != b.Y) return false;
-            }
-            return true;
-        }
 
         private string? RecentName => recentExists && recent.Count > 0 ? Path.GetFileName(recent[0]) : null;
 
