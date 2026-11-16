@@ -84,10 +84,19 @@ public partial class MainWindow
     private void ToggleSimpleView()
     {
         var target = !IsSimpleView;
-        if (!TrySetSimpleView(target, out var refusal)) { SetStatus(refusal!); return; }
+        try
+        {
+            if (!TrySetSimpleView(target, out var refusal)) { SetStatus(refusal!); return; }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NullReferenceException)
+        {
+            SetStatus("Görünüm değiştirilemedi · " + ex.Message);
+            return;
+        }
         if (!simpleViewSwitching) return;
         var preferences = UiPreferences.Load(AppPaths.UiPreferencesPath);
-        (preferences with { View = target ? UiPreferences.SimpleView : UiPreferences.DetailedView }).Save(AppPaths.UiPreferencesPath);
+        if (!(preferences with { View = target ? UiPreferences.SimpleView : UiPreferences.DetailedView }).Save(AppPaths.UiPreferencesPath))
+            SetStatus("Görünüm değişti; ancak tercih dosyası yazılamadı, sonraki açılışta eski görünüm gelir.");
     }
 
     private string? SimpleToolHeading(string tool) => simpleView is { IsAttached: true } view ? view.ToolHeading(tool) : null;

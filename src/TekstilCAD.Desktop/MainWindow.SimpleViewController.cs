@@ -114,6 +114,7 @@ public partial class MainWindow
         {
             var real = FindButton(w.commandAreaPanel, content);
             if (real is { IsEnabled: true }) real.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            else w.SetStatus(content + " şu anda kullanılamıyor.");
         }
 
         private static Button? FindButton(DependencyObject root, string content)
@@ -233,12 +234,16 @@ public partial class MainWindow
         {
             if (!IsAttached) return;
             IsAttached = false;
-            recorder.Restore();
-            // These two texts are rewritten by the window itself while the simple view is on, so they are recomputed
-            // instead of restored from a possibly outdated recording.
-            w.canvasTool.Text = "KALIP ALANI   /   " + w.ActiveTool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
-            w.unitsText.Text = w.snap.IsChecked == true ? "MILIMETRE   /   1 mm yakalama" : "MILIMETRE   /   Serbest koordinat";
-            if (switchPermanent) { /* the switch button stays in the interactive detailed layout */ MountSwitchPermanently(); }
+            try { recorder.Restore(); }
+            finally
+            {
+                // These two texts are rewritten by the window itself while the simple view is on, so they are recomputed
+                // instead of restored from a possibly outdated recording.
+                w.canvasTool.Text = "KALIP ALANI   /   " + w.ActiveTool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
+                w.unitsText.Text = w.snap.IsChecked == true ? "MILIMETRE   /   1 mm yakalama" : "MILIMETRE   /   Serbest koordinat";
+                // In the interactive detailed layout the switch button stays where the tagline was.
+                if (switchPermanent) MountSwitchPermanently();
+            }
         }
 
         private static double InspectorWidth(double windowWidth) => windowWidth >= 1200 || windowWidth == 0 ? 320 : 300;
@@ -292,7 +297,7 @@ public partial class MainWindow
             {
                 var button = w.toolButtons[tool];
                 r.Set(button, FrameworkElement.MinHeightProperty, 40d);
-                r.Set(button, UIElement.FocusableProperty, true);
+                r.Set(button, AutomationProperties.NameProperty, label);
                 if (button.Content is Grid item && item.Children.Count >= 3)
                 {
                     var glyph = (TextBlock)item.Children[0]; var text = (TextBlock)item.Children[1]; var key = (TextBlock)item.Children[2];

@@ -31,10 +31,10 @@ public partial class App : Application
         var window = new MainWindow();
         // The window constructor always builds the detailed layout; the saved view is applied here, after construction, interactive start only.
         window.EnableViewSwitching();
+        window.ApplySimpleTextScale(preferences.TextScale);
         if (preferences.View == TekstilCAD.Core.Theme.UiPreferences.SimpleView)
         {
             window.LoadDocument(new TekstilCAD.Core.ProjectDocument());
-            window.ApplySimpleTextScale(preferences.TextScale);
             window.TrySetSimpleView(true, out _);
         }
         window.Show();

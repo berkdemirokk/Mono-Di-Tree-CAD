@@ -210,9 +210,10 @@ internal static partial class SimpleViewVerification
     private static void VerifyRefusals(List<string> checks) => WithFresh(fresh =>
     {
         var canvas = F<CadCanvas>(fresh, "canvas"); var root = (FrameworkElement)fresh.Content;
-        var before = Capture(root);
-        // An unapplied draft refuses the switch.
+        // An unapplied draft refuses the switch. The baseline is taken once the selection has refreshed the window.
         fresh.Select(fresh.Document.Pieces[0].Id);
+        Invoke(fresh, "Refresh");
+        var before = Capture(root);
         F<TextBox>(fresh, "name").Text = "Başka bir ad";
         var draftRefused = !fresh.TrySetSimpleView(true, out var draftMessage) && draftMessage is not null && !fresh.IsSimpleView;
         (typeof(MainWindow).GetField("propertyDrafts", Private)!.GetValue(fresh) as System.Collections.IDictionary)!.Clear();
