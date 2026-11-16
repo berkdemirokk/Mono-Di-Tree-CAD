@@ -95,7 +95,7 @@ public partial class MainWindow
 
             railCaption = new TextBlock { Text = "Fareyle çiz", FontSize = 12, Foreground = StudioTheme.Muted, Margin = new Thickness(4, 8, 0, 7) };
             railHint = new TextBlock { Text = "Çizerken: Enter şekli kapatır · Esc çizimi iptal eder", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 14, 0, 0), Focusable = true };
-            AutomationProperties.SetName(railHint, "Çizerken: Enter konturu kapatır, Esc çizimden vazgeçer");
+            AutomationProperties.SetName(railHint, "Çizerken: Enter şekli kapatır, Esc çizimi iptal eder");
 
             footerNote = new TextBlock { Text = "Bu çizim üretim veya kesim onayı değildir", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, MaxWidth = 280, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Focusable = true };
             AutomationProperties.SetName(footerNote, "Bu çizim üretim veya kesim onayı değildir");

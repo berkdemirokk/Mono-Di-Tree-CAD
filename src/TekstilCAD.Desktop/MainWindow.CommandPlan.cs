@@ -298,11 +298,11 @@ public partial class MainWindow
                     {
                     switch(file.Action)
                     {
-                        case FileAction.Save:return RunHandoff("File.Save",Save,"Kaydetme isteği işlendi.");
-                        case FileAction.SaveAs:return RunHandoff("File.SaveAs",SaveAs,"Kaydetme isteği işlendi.");
-                        case FileAction.SaveCopy:return RunHandoff("File.SaveCopy",SaveNewCopy,"Güvenli kopya isteği işlendi.");
-                        case FileAction.Open:return RunHandoff("File.Open",Open,"Açma isteği işlendi.");
-                        case FileAction.New:return RunHandoff("File.New",NewDocument,"Yeni proje isteği işlendi.");
+                        case FileAction.Save:return RunHandoff("File.Save",Save,"Kaydetme isteği gönderildi.");
+                        case FileAction.SaveAs:return RunHandoff("File.SaveAs",SaveAs,"Kaydetme isteği gönderildi.");
+                        case FileAction.SaveCopy:return RunHandoff("File.SaveCopy",SaveNewCopy,"Güvenli kopya isteği gönderildi.");
+                        case FileAction.Open:return RunHandoff("File.Open",Open,"Açma isteği gönderildi.");
+                        case FileAction.New:return RunHandoff("File.New",NewDocument,"Yeni proje isteği gönderildi.");
                     }
                     }
                     catch(ProjectConflictException) { ShowProjectSaveConflict(this);return Done("Kaydetme çakışması: açılan pencerede bir seçenek seçin."); }

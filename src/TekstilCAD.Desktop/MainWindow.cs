@@ -771,7 +771,8 @@ public partial class MainWindow : Window
             throw new InvalidOperationException("Yeni proje açıldı, ancak görünüm yenilenemedi. Önceki çalışma geri getirilmedi; ana çalışma alanını kontrol edin.",ex);
         }
     }
-    public void SetStatus(string value) { status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); }
+    private int statusWrites;
+    public void SetStatus(string value) { statusWrites++; status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); }
     internal void ShowCanvasError(string message)
     {
         var changed=canvasError.Text!=message || canvasErrorPanel.Visibility!=Visibility.Visible;

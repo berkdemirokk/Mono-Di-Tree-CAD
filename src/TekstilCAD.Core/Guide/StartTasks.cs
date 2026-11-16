@@ -26,7 +26,7 @@ public static class StartTasks
     internal const string OpenFileTitle = "Proje aç";
     internal const string OpenFileDescription = "Kaydettiğiniz bir projeyi açar";
     internal const string TryExampleTitle = "Hazır örneği aç";
-    internal const string TryExampleDescription = "Hazır örnek açılır; bir şey bozulmaz";
+    internal const string TryExampleDescription = "Hazır örnek açılır; hiçbir şey bozulmaz";
     internal const string TryExampleDisabledReason = "Örnek yalnızca boş, yeni bir projede açılır.";
     internal const string ContinueTitle = "Kaldığım yerden devam et";
     internal const string ContinueNoFileDescription = "Kaydettiğiniz projeler burada görünür";
