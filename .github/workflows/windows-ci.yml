@@ -45,3 +45,33 @@ jobs:
           path: ./test-results
           if-no-files-found: ignore
           retention-days: 7
+
+      # Headless: constructs the windows without showing them and renders them off-screen.
+      # The report and the PNG renders must stay under the checkout's work folder.
+      - name: Run headless desktop verification
+        shell: pwsh
+        run: |
+          $out = Join-Path $PWD 'work\ci-verify'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $report = Join-Path $out 'report.json'
+          $exe = Join-Path $PWD 'src\TekstilCAD.Desktop\bin\Release\net10.0-windows\TekstilCAD.Studio.exe'
+          $process = Start-Process -FilePath $exe -ArgumentList '--verify', "`"$report`"" -WorkingDirectory $PWD -PassThru
+          $null = $process.Handle   # keeps ExitCode readable after the process ends
+          if (!$process.WaitForExit(15 * 60 * 1000)) { $process.Kill(); throw 'Desktop verification did not finish within 15 minutes.' }
+          if (!(Test-Path -LiteralPath $report)) { throw "Desktop verification wrote no report (exit code $($process.ExitCode))." }
+          $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+          Write-Host "status=$($result.status) checks=$($result.checks.Count) exit=$($process.ExitCode)"
+          if ($result.status -ne 'PASS' -or $process.ExitCode -ne 0) {
+            Write-Host "Last passed check: $($result.checks | Select-Object -Last 1)"
+            Write-Host $result.failure
+            throw 'Desktop verification failed.'
+          }
+
+      - name: Upload desktop verification report and renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-verification
+          path: ./work/ci-verify
+          if-no-files-found: ignore
+          retention-days: 7
