@@ -47,7 +47,7 @@ public static partial class CommandParser
         " santim yukarı", " santim sağa", " mm sağa", " milim sağa", " cm", " mm", " 50 konumuna taşı", " pastal", " payı",
         " 80 yap", " seç", " sil", " olsun", " yap", " tema", " 3 adım geri", " adım geri", " geri", " 60 yap",
         " 2 yap", " kaydır", " aracı", " 90 derece", " döndür", " beden büyüt", " 10 çizgi", " x 80 dikdörtgen", " çarpı seksen dikdörtgen",
-        " dikdörtgen", " yukarı", " aşağı", " sağa", " konumuna taşı", " üst aynala", " santim aşağı", "0 yukarı", "0 konumuna taşı", "0 çizgi", "0 sağa",
+        " dikdörtgen", " yukarı", " aşağı", " sağa", " konumuna taşı", " üst aynala", " aynala", " santim aşağı", "0 yukarı", "0 konumuna taşı", "0 çizgi", "0 sağa",
     };
 
     private static readonly Lazy<string[]> PrefixVocabulary = new(() =>
@@ -70,6 +70,9 @@ public static partial class CommandParser
 
         var folded = TurkishText.Fold(norm);
         if (Phrases.Keys.Any(k => k.StartsWith(folded, StringComparison.Ordinal))) return true;
+
+        // "adı olsun" already ends in its verb: the empty name is final, not unfinished typing.
+        if (result.Code == Refusals.EmptyName && RenameVerbs.Contains(folded.Substring(folded.LastIndexOf(' ') + 1))) return false;
 
         var bases = new List<string> { norm };
         var last = norm[^1];
