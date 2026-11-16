@@ -515,7 +515,9 @@ struct EasyCADWorkspace: View {
         if verticalSizeClass == .compact { return 130 }
         #endif
         // Very large text needs the room for the tools more than for the drawing.
-        return dynamicTypeSize.isAccessibilitySize ? 160 : 230
+        // The command bar takes about 68 pt under the drawing; the drawing gives that room back so
+        // the tools keep the viewport the existing layout tests were written for.
+        return dynamicTypeSize.isAccessibilitySize ? 160 : 170
     }
 
     /// With the keyboard up in landscape there is no room left for both the drawing and a field.
