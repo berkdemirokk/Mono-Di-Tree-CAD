@@ -6,9 +6,9 @@ import UniformTypeIdentifiers
 struct TekstilCADViewerApp: App {
     var body: some Scene {
         #if os(macOS)
-        Window("Mono Di Tree CAD", id: "workspace") { ContentView().preferredColorScheme(.light).tint(AppTheme.accent) }
+        Window("Mono Di Tree CAD", id: "workspace") { ContentView().appAppearance().tint(AppTheme.accent) }
         #else
-        WindowGroup { ContentView().preferredColorScheme(.light).tint(AppTheme.accent) }
+        WindowGroup { ContentView().appAppearance().tint(AppTheme.accent) }
         #endif
     }
 }
