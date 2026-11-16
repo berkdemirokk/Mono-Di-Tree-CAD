@@ -109,7 +109,9 @@ internal static partial class SimpleViewVerification
         var saved = fresh.FirstSteps.IsDone(FirstStep.Save) && !fresh.FirstSteps.IsDone(FirstStep.ReopenFile) && fresh.FirstSteps.DoneCount == 5;
         Render(fresh, Temp("first-steps-1440x900"), 1440, 900);
         var heading = fresh.SideCard!.StepsHeadingText == "İlk adımlar 5/6" && fresh.RecentProjectFiles.SequenceEqual([path]);
-        Check(drawn && sized && moved && undone && saved && heading, "First steps tick as the project is drawn, resized, moved, undone and saved", checks);
+        var ok = drawn && sized && moved && undone && saved && heading;
+        Check(ok, "First steps tick as the project is drawn, resized, moved, undone and saved"
+            + (ok ? "" : $" [drawn={drawn} sized={sized} moved={moved} undone={undone} saved={saved} heading={heading} steps={fresh.FirstSteps} heading text={fresh.SideCard!.StepsHeadingText} recent={string.Join(';', fresh.RecentProjectFiles)}]"), checks);
     });
 
     private static void VerifyContinueTask(string reportPath, List<string> checks)
