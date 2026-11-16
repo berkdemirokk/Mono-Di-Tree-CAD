@@ -29,6 +29,7 @@ internal static partial class SimpleViewVerification
     internal static void Run(MainWindow studio, string reportPath, List<string> checks)
     {
         StudioTheme.Use(ThemePalette.Light);
+        ReportPath = reportPath;
         try
         {
             VerifyConstructorDefault(checks);

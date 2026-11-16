@@ -10,7 +10,9 @@ namespace TekstilCAD.Desktop;
 
 internal static partial class SimpleViewVerification
 {
-    private static string Temp(string name) => Path.Combine(Path.GetTempPath(), "simple-view-" + name + ".png");
+    // Intermediate renders go next to the report so that CI uploads them for review.
+    internal static string ReportPath = "";
+    private static string Temp(string name) => Path.ChangeExtension(ReportPath, ".simple-view-tmp-" + name + ".png");
 
     private static void VerifyRoundTrip(List<string> checks) => WithFresh(fresh =>
     {
@@ -121,21 +123,32 @@ internal static partial class SimpleViewVerification
             limits.Text = l ? "2500 nokta: Pastal parça başına 2000 noktayla sınırlıdır." : ""; limits.Visibility = l ? Visibility.Visible : Visibility.Collapsed;
             conflict.Text = c ? "Taslak çakışması: ad ve konum taslağı yeni değerlerle uyuşmuyor." : ""; conflict.Visibility = c ? Visibility.Visible : Visibility.Collapsed;
         }
-        bool Under(int width, int height, params FrameworkElement[] warnings)
+        var reasons = new List<string>();
+        bool Under(string state, int width, int height, Action show, params FrameworkElement[] warnings)
         {
-            Render(fresh, Temp($"warnings-{width}x{height}"), width, height);
+            // Render refreshes the window, which resets these warnings to their real (hidden) state; set them again
+            // and lay the window out once more without refreshing.
+            Render(fresh, Temp($"warnings-{state}-{width}x{height}"), width, height);
+            show();
             var root = (FrameworkElement)fresh.Content;
+            root.Measure(new Size(width, height)); root.Arrange(new Rect(0, 0, width, height)); root.UpdateLayout();
             var card = Descendants<FrameworkElement>(root).Single(e => AutomationProperties.GetName(e) == "Sıradaki adım ve seçili parça");
-            var cardBounds = BoundsInRoot(card, root);
-            return warnings.All(w => FullyVisible(w, root) && BoundsInRoot(w, root).Top >= cardBounds.Bottom - .5
-                && (w is not TextBlock t || t.ActualHeight >= t.DesiredSize.Height - .5) && (w is not TextBox box || box.ExtentHeight <= box.ViewportHeight + .5));
+            var cardBounds = BoundsInRoot(card, root); var ok = true;
+            foreach (var w in warnings)
+            {
+                var bounds = BoundsInRoot(w, root);
+                var visible = FullyVisible(w, root) && (w is not TextBlock t || t.ActualHeight >= t.DesiredSize.Height - .5) && (w is not TextBox box || box.ExtentHeight <= box.ViewportHeight + .5);
+                var below = bounds.Top >= cardBounds.Bottom - .5;
+                if (!visible || !below) { ok = false; reasons.Add($"{state} {width}x{height} {w.GetType().Name}: fullyVisible={visible} below={below} top={bounds.Top:0} cardBottom={cardBounds.Bottom:0} h={bounds.Height:0}"); }
+            }
+            return ok;
         }
         // Each warning alone at the smallest window; all three together where the side column is taller.
-        Show(true, false, false); var one = Under(1024, 640, grading);
-        Show(false, true, false); one &= Under(1024, 640, limits);
-        Show(false, false, true); one &= Under(1024, 640, conflict);
-        Show(true, true, true); var all = Under(1440, 900, grading, limits, conflict);
-        Check(one && all, "Simple view keeps the grading, piece limit and draft conflict warnings visible under the piece card", checks);
+        var one = Under("grading", 1024, 640, () => Show(true, false, false), grading);
+        one &= Under("limits", 1024, 640, () => Show(false, true, false), limits);
+        one &= Under("conflict", 1024, 640, () => Show(false, false, true), conflict);
+        var all = Under("all", 1440, 900, () => Show(true, true, true), grading, limits, conflict);
+        Check(one && all, "Simple view keeps the grading, piece limit and draft conflict warnings visible under the piece card" + (one && all ? "" : " [" + string.Join("; ", reasons) + "]"), checks);
     });
 
     private static void VerifyFloors(string reportPath, List<string> checks)
