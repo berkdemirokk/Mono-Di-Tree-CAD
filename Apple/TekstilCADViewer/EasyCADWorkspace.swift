@@ -659,31 +659,75 @@ struct EasyCADWorkspace: View {
         }
     }
 
-    @ViewBuilder
-    private var horizontalMoveButtons: some View {
-        Button("← 10 mm") { move(dx: -10, dy: 0) }
-            .accessibilityHint("Seçili parçayı 10 milimetre sola taşır")
-        Button("10 mm →") { move(dx: 10, dy: 0) }
-            .accessibilityHint("Seçili parçayı 10 milimetre sağa taşır")
+    private var moveLeftButton: some View {
+        Button { move(dx: -10, dy: 0) } label: {
+            Text("← 10 mm").frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .accessibilityHint("Seçili parçayı 10 milimetre sola taşır")
+    }
+
+    private var moveRightButton: some View {
+        Button { move(dx: 10, dy: 0) } label: {
+            Text("10 mm →").frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .accessibilityHint("Seçili parçayı 10 milimetre sağa taşır")
     }
 
     // CAD Y grows upwards, so "up" adds to Y.
-    @ViewBuilder
-    private var verticalMoveButtons: some View {
-        Button("↑ 10 mm") { move(dx: 0, dy: 10) }
-            .accessibilityHint("Seçili parçayı 10 milimetre yukarı taşır")
-        Button("↓ 10 mm") { move(dx: 0, dy: -10) }
-            .accessibilityHint("Seçili parçayı 10 milimetre aşağı taşır")
+    private var moveUpButton: some View {
+        Button { move(dx: 0, dy: 10) } label: {
+            Text("↑ 10 mm").frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .accessibilityHint("Seçili parçayı 10 milimetre yukarı taşır")
+    }
+
+    private var moveDownButton: some View {
+        Button { move(dx: 0, dy: -10) } label: {
+            Text("↓ 10 mm").frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .accessibilityHint("Seçili parçayı 10 milimetre aşağı taşır")
     }
 
     private var rotateButton: some View {
-        Button("90° döndür") { rotateSelected() }
+        Button { rotateSelected() } label: {
+            Text("90° döndür").frame(maxWidth: .infinity, minHeight: 44)
+        }
     }
 
-    @ViewBuilder
-    private var copyDeleteButtons: some View {
-        Button("Kopyala", action: duplicateSelected)
-        Button("Sil", role: .destructive, action: deleteSelected)
+    private var copyButton: some View {
+        Button { duplicateSelected() } label: {
+            Text("Kopyala").frame(maxWidth: .infinity, minHeight: 44)
+        }
+    }
+
+    private var deleteButton: some View {
+        Button(role: .destructive) { deleteSelected() } label: {
+            Text("Sil").frame(maxWidth: .infinity, minHeight: 44)
+        }
+    }
+
+    // Pairs of equal-width buttons so the tools read as one grid.
+    // Large text falls back to one full-width button per line.
+    private var pieceToolGrid: some View {
+        ViewThatFits(in: .horizontal) {
+            VStack(spacing: 10) {
+                HStack(spacing: 10) { moveLeftButton; moveRightButton }
+                HStack(spacing: 10) { moveUpButton; moveDownButton }
+                HStack(spacing: 10) { rotateButton; copyButton }
+                deleteButton
+            }
+            VStack(spacing: 10) {
+                moveLeftButton
+                moveRightButton
+                moveUpButton
+                moveDownButton
+                rotateButton
+                copyButton
+                deleteButton
+            }
+        }
+        .buttonStyle(.appSecondary)
+        .font(.caption)
     }
 
     @ViewBuilder
@@ -730,39 +774,7 @@ struct EasyCADWorkspace: View {
             Text("Nokta düzenleme en fazla 250 noktalı şekillerde kullanılabilir.")
                 .font(.caption)
         }
-        // One row when everything fits; otherwise the rotate button wraps first, then the
-        // vertical pair, and finally every button gets its own line.
-        ViewThatFits(in: .horizontal) {
-            HStack {
-                horizontalMoveButtons
-                verticalMoveButtons
-                rotateButton
-            }
-            VStack(alignment: .leading) {
-                HStack {
-                    horizontalMoveButtons
-                    verticalMoveButtons
-                }
-                rotateButton
-            }
-            VStack(alignment: .leading) {
-                HStack { horizontalMoveButtons }
-                HStack { verticalMoveButtons }
-                rotateButton
-            }
-            VStack(alignment: .leading) {
-                horizontalMoveButtons
-                verticalMoveButtons
-                rotateButton
-            }
-        }
-        .buttonStyle(.appSecondary)
-        .font(.caption)
-        ViewThatFits(in: .horizontal) {
-            HStack { copyDeleteButtons }
-            VStack(alignment: .leading) { copyDeleteButtons }
-        }
-        .buttonStyle(.appSecondary)
+        pieceToolGrid
     }
 
     private var editSection: some View {
