@@ -56,6 +56,8 @@ struct EasyCADWorkspace: View {
     @State private var savedLibrarySnapshot: DraftProject?
     // The pinned drawing gives way to the keyboard so the focused field stays reachable.
     @State private var keyboardVisible = false
+    // A command card or result is showing under the drawing (see CommandBar).
+    @State private var commandHasOutput = false
     // The zoom buttons grow with the text size and never drop below the 44 pt touch target.
     @ScaledMetric(relativeTo: .body) private var zoomButtonBase: CGFloat = 44
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -210,16 +212,14 @@ struct EasyCADWorkspace: View {
         select(piece)
     }
 
-    @discardableResult
-    private func saveDetails() -> Bool {
+    /// The document with the text fields' values applied, without committing or reporting anything.
+    /// The command field plans against this, so a command never silently depends on a field that
+    /// holds an invalid value.
+    private func pendingDraft() -> (project: DraftProject?, problem: String?) {
         let name = projectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else {
-            problem = "Proje adı boş olamaz."
-            return false
-        }
+        guard !name.isEmpty else { return (nil, "Proje adı boş olamaz.") }
         guard name.count <= 128 else {
-            problem = "Proje adı en fazla 128 karakter olabilir (şu an \(name.count))."
-            return false
+            return (nil, "Proje adı en fazla 128 karakter olabilir (şu an \(name.count)).")
         }
         var updated = document
         updated.name = name
@@ -227,21 +227,116 @@ struct EasyCADWorkspace: View {
             let selectedName = pieceName.trimmingCharacters(in: .whitespacesAndNewlines)
             let piece = updated.pieces[index]
             if let message = detailsProblem(for: piece, name: selectedName) {
-                problem = message
-                return false
+                return (nil, message)
             }
             guard let resized = piece.applyingDimensions(x: pieceX, y: pieceY,
                                                          width: pieceWidth, height: pieceHeight) else {
-                problem = dimensionProblem(for: piece)
-                return false
+                return (nil, dimensionProblem(for: piece))
             }
             updated.pieces[index].points = resized
             updated.pieces[index].name = selectedName
+        }
+        return (updated, nil)
+    }
+
+    @discardableResult
+    private func saveDetails() -> Bool {
+        let draft = pendingDraft()
+        guard let updated = draft.project else {
+            problem = draft.problem
+            return false
         }
         guard commit(updated, notice: "Değişiklikler uygulandı.") else { return false }
         projectName = updated.name
         if let index = selectedIndex { select(updated.pieces[index]) }
         return true
+    }
+
+    @discardableResult
+    private func saveProjectToLibrary() -> Bool {
+        guard saveDetails() else { return false }
+        do {
+            try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
+            savedLibrarySnapshot = document
+            success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
+            return true
+        } catch {
+            problem = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    private func saveSeparateCopy() -> Bool {
+        guard saveDetails() else { return false }
+        var copy = document
+        copy.id = UUID()
+        copy.name = String(document.name.prefix(120)) + " (kopya)"
+        do {
+            try CADProjectLibrary.save(copy)
+            success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
+            return true
+        } catch {
+            problem = "Kopya kaydedilemedi. " + error.localizedDescription
+            return false
+        }
+    }
+
+    // MARK: Command field
+    // The command field plans and confirms in `CommandBar`; this view only describes the drawing
+    // to it and applies a confirmed plan through the same `commit` path as every button. Text-field
+    // values that were typed but not applied yet are applied by the command itself, in the same
+    // single undo step; when they are invalid the command is refused with that reason.
+
+    private func commandContext() -> CommandContext {
+        let draft: (project: DraftProject?, problem: String?)
+        if hasPendingDetails { draft = pendingDraft() } else { draft = (document, nil) }
+        return CommandContext(document: document, base: draft.project, baseProblem: draft.problem,
+                              selectedID: selectedID, undoCount: undoStack.count, redoCount: redoStack.count)
+    }
+
+    /// Applies a confirmed plan. Returns the result line, or nil when nothing was applied.
+    private func applyCommand(_ plan: CommandPlan) -> String? {
+        switch plan.effect {
+        case .edit(let updated, let selection):
+            let appliedFields = plan.base != document
+            guard commit(updated, notice: plan.notice) else { return nil }
+            if appliedFields { projectName = document.name }
+            if case .piece(let id) = selection {
+                select(document.pieces.first(where: { $0.id == id }))
+            }
+            return plan.notice
+        case .select(let id):
+            if plan.base != document {
+                guard commit(plan.base, notice: "Değişiklikler uygulandı.") else { return nil }
+                projectName = document.name
+            }
+            select(document.pieces.first(where: { $0.id == id }))
+            success = plan.notice
+            return plan.notice
+        case .undo(let steps):
+            var done = 0
+            for _ in 0..<max(steps, 1) {
+                let before = undoStack.count
+                undo()
+                if undoStack.count == before { break }
+                done += 1
+            }
+            guard done > 0 else { return nil }
+            let notice = done == 1 ? "Son işlem geri alındı." : "Son \(done) işlem geri alındı."
+            success = notice
+            return notice
+        case .redo:
+            let before = redoStack.count
+            redo()
+            return redoStack.count < before ? plan.notice : nil
+        case .saveProject:
+            return saveProjectToLibrary() ? "Proje kaydedildi." : nil
+        case .saveCopy:
+            return saveSeparateCopy() ? "Bağımsız kopya kaydedildi." : nil
+        case .info:
+            return nil
+        }
     }
 
     // MARK: Field messages
@@ -529,7 +624,9 @@ struct EasyCADWorkspace: View {
         if verticalSizeClass == .compact { return 130 }
         #endif
         // Very large text needs the room for the tools more than for the drawing.
-        return dynamicTypeSize.isAccessibilitySize ? 160 : 230
+        // The command bar takes about 68 pt under the drawing; the drawing gives that room back so
+        // the tools keep the viewport the existing layout tests were written for.
+        return dynamicTypeSize.isAccessibilitySize ? 160 : 170
     }
 
     /// With the keyboard up in landscape there is no room left for both the drawing and a field.
@@ -537,6 +634,8 @@ struct EasyCADWorkspace: View {
         #if os(iOS)
         if keyboardVisible && verticalSizeClass == .compact { return false }
         #endif
+        // With very large text a command card needs the whole room above the tools.
+        if dynamicTypeSize.isAccessibilitySize && commandHasOutput { return false }
         return true
     }
 
@@ -790,12 +889,7 @@ struct EasyCADWorkspace: View {
             Text("Çizimin cihazda otomatik saklanır. Listede kalıcı görünmesi için Projeyi kaydet'e bas.")
                 .font(.caption).foregroundStyle(AppTheme.muted)
             Button {
-                guard saveDetails() else { return }
-                do {
-                    try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
-                    savedLibrarySnapshot = document
-                    success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
-                } catch { problem = error.localizedDescription }
+                saveProjectToLibrary()
             } label: {
                 Label("Projeyi kaydet", systemImage: "tray.and.arrow.down")
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -809,14 +903,7 @@ struct EasyCADWorkspace: View {
             }
             .font(.caption).foregroundStyle(AppTheme.muted)
             Button {
-                guard saveDetails() else { return }
-                var copy = document
-                copy.id = UUID()
-                copy.name = String(document.name.prefix(120)) + " (kopya)"
-                do {
-                    try CADProjectLibrary.save(copy)
-                    success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
-                } catch { problem = "Kopya kaydedilemedi. " + error.localizedDescription }
+                saveSeparateCopy()
             } label: {
                 Label("Farklı kopya kaydet", systemImage: "doc.on.doc")
                     .frame(maxWidth: .infinity, minHeight: 48)
@@ -868,6 +955,9 @@ struct EasyCADWorkspace: View {
                                ? workspaceSize.width * Self.wideCanvasShare : nil)
                     Divider()
                 }
+                CommandBar(context: commandContext(), keyboardVisible: keyboardVisible,
+                           hasOutput: $commandHasOutput,
+                           apply: { applyCommand($0) }, undoLast: { undo() })
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         coachTip.appCard()
@@ -882,6 +972,9 @@ struct EasyCADWorkspace: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("workshop-tools")
+                // At very large text a command card gets the whole room below the bar.
+                .frame(maxHeight: dynamicTypeSize.isAccessibilitySize && commandHasOutput ? 0 : .infinity)
+                .accessibilityHidden(dynamicTypeSize.isAccessibilitySize && commandHasOutput)
             }
             .background(GeometryReader { proxy in
                 Color.clear

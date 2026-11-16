@@ -216,6 +216,21 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 - Bozuk/eksik v9 `Curves` alanı, bilinmeyen segment türleri ve yanlış sürüm zarfı iPhone görüntüleyicide reddedilir. Dosya değiştirilmez.
 - Gerçek iPhone üzerinde Dosyalar sağlayıcısı, ölçek/segment doğruluğu, erişilebilirlik ve kullanıcı kabulü ayrıca test edilmelidir.
 
+## Komut kutusu (Türkçe tek satır komut)
+
+Atölyede çizimin hemen altındaki alana komut yazılır (ya da klavyenin mikrofon düğmesiyle söylenir): `120 x 80 dikdörtgen`, `25 sağa taşı`, `90 sağa döndür`, `genişliği 95 yap`, `adı kol olsun`, `kopyala`, `sil`, `ön bedeni seç`, `geri al`, `yinele`, `kaydet`. Kurallar:
+
+- Çözümleyici kural tabanlıdır, çevrimdışıdır, tahmin etmez: anlamadığını örnekli bir cümleyle reddeder (`CommandParser.swift`).
+- **Önce gösterir, sonra uygular.** Return ve `Hazırla` yalnız önizleme çıkarır; `Uygula`'ya dokunmadan çizim değişmez. `sil` her zaman ayrı bir `Evet, parçayı sil` düğmesi ister. Önizlemeden sonra çizim değişirse önizleme yenilenir ve yeniden onay istenir.
+- Komut mevcut yazma yolunu (`commit`) kullanır: taslak kaydı, 50 adımlık geri alma ve karşılaştır-ve-değiştir aynen korunur; bir komut tek geri alma adımıdır.
+- **Alanlarda uygulanmamış değerler:** alandaki geçerli değerler komutla aynı adımda uygulanır (önizlemede söylenir); geçersizse komut o nedenle reddedilir. `sil`, `geri al` ve `yinele` alanlara bakmaz (düğmeler gibi).
+- iPhone farkları (Windows'tan): Y yukarı artar, konum sol alt köşedir; döndür düğmesi saat yönünün tersinedir, komut `90 sağa döndür` saat yönünde döndürür ve önizleme bunu söyler; ölçü değiştirme (`genişliği 95 yap`) iPhone'da var, aynalama yok; fare araçları, DXF, dikiş payı, serileme, pastal gibi işler için "yalnız Windows programında var" denir.
+- Klavye `Done` yerine `Go` gösterir. Başka bir alan (En, Boy, Proje adı) klavyeyi alınca komut çubuğu yer açmak için çekilir.
+
+Testler: `UnitTests/CommandParserTests.swift` (cümle tabloları, FINAL_COMMANDS.md'nin 60 cümlesi dahil), `UnitTests/CommandPlannerTests.swift` (önizleme cümleleri ve sonuç geometrisi), `Tests/CommandFieldUITests.swift` (yaz → önizle → onayla → geri al, silme onayı, ret, geçersiz alan, klavye yerleşimi), `ScreenshotTourTests` içinde `testTour07CommandField` ve `testTour08CommandFieldLargeText` (görüntüler `22-` … `30-`).
+
+Doğrulanmayanlar: gerçek cihaz, VoiceOver, Türkçe klavyedeki sesle yazmanın komutu nasıl yazdığı (rakam mı sözcük mü, `x` mi `çarpı` mı).
+
 ## Parmakla şekil çizme ve kayıp koruması
 
 1. Atölyede **Parmakla şekil çiz**'i aç; seçilen alanın (varsayılan 300 × 300 mm) dışına dokun: kısa bir uyarı görünmeli, nokta eklenmemeli.
