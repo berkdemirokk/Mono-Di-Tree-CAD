@@ -231,7 +231,7 @@ internal static class CommandCatalogueData
             "Seçili parçaları köşe işaretleriyle birlikte inceleme dosyasına yazar. Üretim dosyası değildir.",
             "Seçilen parçalar · işaretli inceleme DXF…", None,
             ["işaretli dxf", "köşe işareti", "çentik"]));
-        all.Add(D("exchange.export-all", GExchange, "Tümünü dışa aktar…",
+        all.Add(D("exchange.export-all", GExchange, "Hepsini dışa aktar…",
             "Projedeki bütün parçaları DXF, SVG, HPGL ya da PDF biçiminde inceleme dosyası olarak yazar; üretim onayı değildir.",
             "Tümünü dışa aktar…", ["dışa aktar", "pdf yap", "plotter dosyası hazırla", "kesime gönder", "plotterdan çıkar"],
             ["dışa ver", "hepsini çıkar", "plotter"]));
