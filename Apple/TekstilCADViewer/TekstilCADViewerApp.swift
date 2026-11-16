@@ -661,7 +661,8 @@ private struct ContentView: View {
                                     ?? "\(project.pieces.count) parçanın önizlemesi"
                             )
                             .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
-                            .frame(height: max(260, min(outer.size.height * 0.55, 560)))
+                            // The drawing keeps its old height; the 52 pt are the button row below it.
+                            .frame(height: max(260, min(outer.size.height * 0.55, 560)) + 52)
                             .background(AppTheme.page)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             if project.pieces.contains(where: { $0.grain != nil }) {
@@ -1087,56 +1088,64 @@ private struct DrawingView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            let currentZoom = limitedZoom(zoom * pinch)
-            let currentOffset = limitedOffset(
-                CGSize(width: offset.width + drag.width, height: offset.height + drag.height),
-                size: geometry.size, scale: currentZoom
-            )
-            ZStack(alignment: .topTrailing) {
-                drawing
-                    .scaleEffect(currentZoom)
-                    .offset(currentOffset)
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .accessibilityLabel(label)
-                    .accessibilityHint("Yakınlaştırmak için iki parmağını aç; çizimi taşımak için sürükle.")
-                    .accessibilityValue("Yüzde \(Int(currentZoom * 100))")
-                    .accessibilityAdjustableAction { direction in
-                        switch direction {
-                        case .increment: zoom = limitedZoom(zoom * 1.25)
-                        case .decrement: zoom = limitedZoom(zoom / 1.25)
-                        @unknown default: break
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geometry in
+                let currentZoom = limitedZoom(zoom * pinch)
+                let currentOffset = limitedOffset(
+                    CGSize(width: offset.width + drag.width, height: offset.height + drag.height),
+                    size: geometry.size, scale: currentZoom
+                )
+                ZStack(alignment: .topTrailing) {
+                    drawing
+                        .scaleEffect(currentZoom)
+                        .offset(currentOffset)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .accessibilityLabel(label)
+                        .accessibilityHint("Yakınlaştırmak için iki parmağını aç; çizimi taşımak için sürükle.")
+                        .accessibilityValue("Yüzde \(Int(currentZoom * 100))")
+                        .accessibilityAdjustableAction { direction in
+                            switch direction {
+                            case .increment: zoom = limitedZoom(zoom * 1.25)
+                            case .decrement: zoom = limitedZoom(zoom / 1.25)
+                            @unknown default: break
+                            }
+                            offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                         }
-                        offset = limitedOffset(offset, size: geometry.size, scale: zoom)
-                    }
-                VStack(alignment: .trailing, spacing: 8) {
-                    Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
-                    if pieces.contains(where: { $0.grain != nil }) {
-                        Button(showGrain ? "Kumaş yönünü gizle" : "Kumaş yönünü göster") { showGrain.toggle() }
-                    }
                 }
-                .buttonStyle(.appSecondary)
-                .padding(8)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .contentShape(Rectangle())
-            .clipped()
-            .gesture(
-                MagnificationGesture()
-                    .updating($pinch) { value, state, _ in state = value }
-                    .onEnded { value in
-                        zoom = limitedZoom(zoom * value)
-                        offset = limitedOffset(offset, size: geometry.size, scale: zoom)
-                    }
-                    .simultaneously(with: DragGesture()
-                        .updating($drag) { value, state, _ in state = value.translation }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .contentShape(Rectangle())
+                .clipped()
+                .gesture(
+                    MagnificationGesture()
+                        .updating($pinch) { value, state, _ in state = value }
                         .onEnded { value in
-                            offset = limitedOffset(
-                                CGSize(width: offset.width + value.translation.width, height: offset.height + value.translation.height),
-                                size: geometry.size, scale: zoom
-                            )
-                        })
-            )
+                            zoom = limitedZoom(zoom * value)
+                            offset = limitedOffset(offset, size: geometry.size, scale: zoom)
+                        }
+                        .simultaneously(with: DragGesture()
+                            .updating($drag) { value, state, _ in state = value.translation }
+                            .onEnded { value in
+                                offset = limitedOffset(
+                                    CGSize(width: offset.width + value.translation.width, height: offset.height + value.translation.height),
+                                    size: geometry.size, scale: zoom
+                                )
+                            })
+                )
+            }
+            // Controls sit below the drawing so they never hide pattern lines.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { viewerButtons }
+                VStack(alignment: .leading, spacing: 8) { viewerButtons }
+            }
+            .buttonStyle(.appSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var viewerButtons: some View {
+        Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
+        if pieces.contains(where: { $0.grain != nil }) {
+            Button(showGrain ? "Kumaş yönünü gizle" : "Kumaş yönünü göster") { showGrain.toggle() }
         }
     }
 
