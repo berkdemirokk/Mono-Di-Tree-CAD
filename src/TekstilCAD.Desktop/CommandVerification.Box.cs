@@ -33,7 +33,7 @@ internal static partial class CommandVerification
     }
     private static void Relayout(CommandBarView view,double width=880)
     {
-        var holder=(FrameworkElement)view.Parent;holder.Width=width;
+        var holder=(FrameworkElement)view.Parent;holder.Width=width;holder.InvalidateMeasure();holder.InvalidateArrange();
         holder.Measure(new Size(width,3000));holder.Arrange(new Rect(0,0,width,holder.DesiredSize.Height));holder.UpdateLayout();
     }
     private static void RenderView(CommandBarView view,string? reportPath,string name,double width=880)
