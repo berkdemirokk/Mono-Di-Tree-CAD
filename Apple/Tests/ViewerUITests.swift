@@ -9,7 +9,7 @@ final class ViewerUITests: XCTestCase {
     }
 
     private func countLabel(_ count: Int, in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts["\(count) parça • Önizleme ölçüye göre ekrana sığdırılır"]
+        app.staticTexts["\(count) parça • Tümü ekranda"]
     }
 
     /// The workshop's tools scroll under a pinned drawing. Scrolling must start inside that tools
@@ -67,7 +67,7 @@ final class ViewerUITests: XCTestCase {
         let demo = app.buttons["Örnekle dene"]
         XCTAssertTrue(demo.waitForExistence(timeout: 15))
         demo.tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Dikdörtgen ekle"].exists)
     }
 
@@ -152,7 +152,7 @@ final class ViewerUITests: XCTestCase {
         app.buttons["Dikdörtgen ekle"].tap()
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
 
-        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğiniz kalıp önizlemesi"]
+        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğin kalıp çizimi"]
         XCTAssertTrue(drawing.waitForExistence(timeout: 5))
         let width = app.textFields["En"]
         tapBelow(width, in: app)

@@ -181,6 +181,9 @@ enum AppTheme {
     static let warning = adaptive(light: (0.60, 0.30, 0.0), lightHigh: (0.45, 0.20, 0.0),
                                   dark: (1.0, 0.70, 0.30), darkHigh: (1.0, 0.80, 0.50))
     static let radius: CGFloat = 16
+    /// The interface is Turkish only: dates and numbers use Turkish rules ("1.000", "16 Kas 2026")
+    /// even on a phone set to another region, so the screen never mixes two languages.
+    static let locale = Locale(identifier: "tr_TR")
 
     private static let accentLight: Tone = (0.14, 0.38, 0.93)
     private static let accentLightHigh: Tone = (0.06, 0.25, 0.72)

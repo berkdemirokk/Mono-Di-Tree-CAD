@@ -2,7 +2,7 @@ import XCTest
 
 /// The workshop drawing: its reference grid, panning while zoomed and the fit control.
 final class CanvasUITests: XCTestCase {
-    private let drawingLabel = "Dokunarak parça seçebileceğiniz kalıp önizlemesi"
+    private let drawingLabel = "Dokunarak parça seçebileceğin kalıp çizimi"
 
     /// A new project with one 100 x 150 mm rectangle whose corner is at (0, 0).
     private func openWithRectangle() -> XCUIApplication {
@@ -19,7 +19,7 @@ final class CanvasUITests: XCTestCase {
     }
 
     private func fitCaption(in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts["1 parça • Önizleme ölçüye göre ekrana sığdırılır"]
+        app.staticTexts["1 parça • Tümü ekranda"]
     }
 
     private func drawing(in app: XCUIApplication) -> XCUIElement {

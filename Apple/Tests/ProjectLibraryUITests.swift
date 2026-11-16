@@ -165,7 +165,7 @@ final class ProjectLibraryUITests: XCTestCase {
         app.buttons["Yeni proje oluştur"].tap()
         XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
         app.buttons["Dikdörtgen ekle"].tap()
-        XCTAssertTrue(app.staticTexts["1 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • Tümü ekranda"].waitForExistence(timeout: 5))
         app.buttons["Kapat"].tap()
 
         let resume = app.buttons["Son çizime devam et"]
@@ -177,7 +177,7 @@ final class ProjectLibraryUITests: XCTestCase {
 
         // Starting the example puts the previous drawing into the library and says so.
         app.buttons["Örnekle dene"].tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         app.buttons["Kapat"].tap()
         let notice = app.staticTexts["Önceki çizimin «Yeni kalıp» Son projeler'e kaydedildi."]
         XCTAssertTrue(notice.waitForExistence(timeout: 10))

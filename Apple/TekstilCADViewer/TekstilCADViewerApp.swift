@@ -6,9 +6,13 @@ import UniformTypeIdentifiers
 struct TekstilCADViewerApp: App {
     var body: some Scene {
         #if os(macOS)
-        Window("Mono Di Tree CAD", id: "workspace") { ContentView().appAppearance().tint(AppTheme.accent) }
+        Window("Mono Di Tree CAD", id: "workspace") {
+            ContentView().appAppearance().tint(AppTheme.accent).environment(\.locale, AppTheme.locale)
+        }
         #else
-        WindowGroup { ContentView().appAppearance().tint(AppTheme.accent) }
+        WindowGroup {
+            ContentView().appAppearance().tint(AppTheme.accent).environment(\.locale, AppTheme.locale)
+        }
         #endif
     }
 }
@@ -194,7 +198,7 @@ private struct ContentView: View {
         } catch {
             localDraft = nil
             showNotice("Son çizim açılamadı",
-                       "Taslak okunamadı. \(error.localizedDescription) Yeni bir çalışma başlatırken bu taslağı ayırabilirsiniz.")
+                       "Taslak okunamadı. \(error.localizedDescription) Yeni bir çalışma başlatırken bu taslağı ayırabilirsin.")
         }
         recentRefresh = UUID()
     }
@@ -316,7 +320,7 @@ private struct ContentView: View {
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
                 let url = try result.get()
-                guard url.pathExtension.lowercased() == "tcad" else { throw ViewerError.message("Lütfen bir .tcad dosyası seçin.") }
+                guard url.pathExtension.lowercased() == "tcad" else { throw ViewerError.message("Bir .tcad dosyası seç.") }
                 let request = UUID()
                 loadRequest = request
                 isLoading = true
@@ -494,7 +498,7 @@ private struct ContentView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(entry.name)
-                .accessibilityValue(entry.modified.formatted(.dateTime.day().month().year().hour().minute()))
+                .accessibilityValue(entry.modified.formatted(.dateTime.day().month().year().hour().minute().locale(AppTheme.locale)))
                 .accessibilityHint("Projeyi açar.")
                 .accessibilityIdentifier("recent-\(entry.id.uuidString)")
             } else {

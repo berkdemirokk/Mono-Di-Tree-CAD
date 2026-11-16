@@ -142,7 +142,7 @@ final class ScreenshotTourTests: XCTestCase {
     func testTour02ExampleSaveAndRecents() {
         let app = launch(["--ui-test-reset-draft"])
         XCTAssertTrue(reachAndTap(app.buttons["Örnekle dene"], in: app))
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         snap("09-example-two-pieces")
 
         XCTAssertTrue(reachAndTap(app.buttons["Projeyi kaydet"], in: app))
@@ -241,7 +241,7 @@ final class ScreenshotTourTests: XCTestCase {
     func testTour08ProjectActionsMenu() {
         let app = launch(["--ui-test-reset-draft"])
         XCTAssertTrue(reachAndTap(app.buttons["Örnekle dene"], in: app))
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         XCTAssertTrue(reachAndTap(app.buttons["Projeyi kaydet"], in: app))
         XCTAssertTrue(reachAndTap(app.buttons["Kapat"], in: app))
 

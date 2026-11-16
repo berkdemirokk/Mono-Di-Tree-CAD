@@ -100,7 +100,7 @@ struct TouchContourComposer: View {
 
     private func appendPoint(at location: CGPoint, size: CGSize) {
         guard points.count < DraftContourGeometry.pointLimit else {
-            error = "Tek bir şekle en fazla 250 nokta ekleyebilirsiniz."
+            error = "Tek bir şekle en fazla 250 nokta ekleyebilirsin."
             return
         }
         guard let p = transform(size)?.sketchPoint(at: location, extent: extent, snapToFive: snapToFive) else {
@@ -110,7 +110,7 @@ struct TouchContourComposer: View {
         }
         tappedOutside = false
         if points.last == p {
-            error = "Bu nokta bir önceki noktayla aynı. Farklı bir yere dokunun."
+            error = "Bu nokta bir önceki noktayla aynı. Farklı bir yere dokun."
             return
         }
         points.append(p)
@@ -296,7 +296,9 @@ struct TouchContourComposer: View {
                 if selected {
                     Image(systemName: "checkmark").accessibilityHidden(true)
                 }
-                Text("\(Int(size.rounded())) mm")
+                Text(verbatim: "\(Int(size.rounded())) mm")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity, minHeight: 44)
         }
