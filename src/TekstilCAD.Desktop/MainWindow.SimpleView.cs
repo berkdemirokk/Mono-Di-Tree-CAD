@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using TekstilCAD.Core;
 using TekstilCAD.Core.Theme;
 
 namespace TekstilCAD.Desktop;
@@ -13,6 +14,10 @@ internal interface ICommandBarHost
     void FocusBox();
     /// <summary>Fills the box with text. This never applies anything: the user still confirms with Enter.</summary>
     void SetText(string text);
+    /// <summary>Shows or hides the "Deneyin" suggestion chips (the side card's start tasks offer the same actions).</summary>
+    void ShowSuggestions(bool show);
+    /// <summary>True while the box's own live row shows a preview, result or refusal (it announces itself).</summary>
+    bool ShowsMessage { get; }
     /// <summary>Called after every window refresh while the simple view is shown.</summary>
     void OnRefreshed();
     /// <summary>Drops a shown preview and its canvas ghost (the box is leaving the window).</summary>
@@ -102,6 +107,30 @@ public partial class MainWindow
         var preferences = UiPreferences.Load(AppPaths.UiPreferencesPath);
         if (!(preferences with { View = target ? UiPreferences.SimpleView : UiPreferences.DetailedView }).Save(AppPaths.UiPreferencesPath))
             SetStatus("Görünüm değişti; ancak tercih dosyası yazılamadı, sonraki açılışta eski görünüm gelir.");
+    }
+
+    /// <summary>The canvas as a rectangle in the coordinates of <paramref name="target"/>; null while the two are not in one tree.</summary>
+    internal Rect? CanvasBoundsIn(UIElement target)
+    {
+        try { return canvas.TransformToVisual(target).TransformBounds(new Rect(canvas.RenderSize)); }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>Tells the canvas how much of its top the simple view's command card covers, so a preview frame is kept clear of it.</summary>
+    internal void SetCanvasTopInset(Func<double> inset) => canvas.TopInset = inset;
+
+    // A closed, axis-parallel, four-point piece without grain line, corner marks, curve data or grading rule.
+    internal bool IsPlainRectangle(PatternPiece piece)
+    {
+        if (!piece.Closed || piece.Points.Count != 4 || piece.Grainline is not null || piece.Notches is { Count: > 0 } || piece.Curves is { Count: > 0 }) return false;
+        if (Document.GradingRules.Any(rule => rule.SourcePieceId == piece.Id)) return false;
+        var p = piece.Points;
+        for (var i = 0; i < 4; i++)
+        {
+            var a = p[i]; var b = p[(i + 1) % 4];
+            if (a.X != b.X && a.Y != b.Y) return false;
+        }
+        return true;
     }
 
     private string? SimpleToolHeading(string tool) => simpleView is { IsAttached: true } view ? view.ToolHeading(tool) : null;

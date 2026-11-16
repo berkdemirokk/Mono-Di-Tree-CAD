@@ -32,7 +32,7 @@ internal sealed class SideCardView : Border
         stack.Children.Add(new Border
         {
             Background = StudioTheme.AccentSoft, CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 10, 12, 10),
-            Child = new StackPanel { Children = { new TextBlock { Text = "Sıradaki adım", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = StudioTheme.Accent }, nextStep } },
+            Child = new StackPanel { Children = { new TextBlock { Text = "Sıradaki adım", FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = StudioTheme.Accent }, nextStep } },
         });
 
         startPanel.Margin = new Thickness(0, 14, 0, 0);
@@ -58,8 +58,8 @@ internal sealed class SideCardView : Border
         stepsHeading.FontSize = 14; stepsHeading.FontWeight = FontWeights.SemiBold; stepsHeading.Foreground = StudioTheme.Text; stepsHeading.Focusable = true;
         stepsPanel.Children.Add(stepsHeading);
         stepsPanel.Children.Add(stepsList);
-        dismiss.Content = FirstStepsTracker.DismissLabel; dismiss.MinHeight = 32; dismiss.Padding = new Thickness(12, 3, 12, 3); dismiss.Margin = new Thickness(0, 6, 0, 0);
-        dismiss.HorizontalAlignment = HorizontalAlignment.Left; dismiss.FontSize = 12; dismiss.Cursor = Cursors.Hand;
+        dismiss.Content = FirstStepsTracker.DismissLabel; dismiss.MinHeight = 40; dismiss.Padding = new Thickness(14, 3, 14, 3); dismiss.Margin = new Thickness(0, 6, 0, 0);
+        dismiss.HorizontalAlignment = HorizontalAlignment.Left; dismiss.FontSize = 14; dismiss.Cursor = Cursors.Hand;
         AutomationProperties.SetName(dismiss, "İlk adımlar listesini gizle");
         dismiss.Click += (_, _) => this.dismissFirstSteps();
         stepsPanel.Children.Add(dismiss);
@@ -87,9 +87,11 @@ internal sealed class SideCardView : Border
     internal Button PositionTile => positionTile;
     internal string PieceNameText => pieceName.Text;
 
-    internal void Update(GuideStep step, IReadOnlyList<StartTask> tasks, PatternPiece? selected, int pieceCount, FirstStepsTracker steps)
+    internal void Update(GuideStep step, IReadOnlyList<StartTask> allTasks, PatternPiece? selected, int pieceCount, FirstStepsTracker steps)
     {
         nextStep.Text = step.Sentence;
+        // A disabled "continue" task (no recent file) only shows a dead button, so it is not drawn at all.
+        var tasks = allTasks.Where(task => task.Enabled || task.Id != "continue-last").ToList();
         ShowTasks(tasks);
         startPanel.Visibility = tasks.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -118,7 +120,7 @@ internal sealed class SideCardView : Border
                 var done = steps.IsDone((FirstStep)i); var label = FirstStepsTracker.LabelOf((FirstStep)i);
                 var line = new TextBlock
                 {
-                    Text = (done ? "✓ " : "○ ") + label, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 3, 0, 0),
+                    Text = (done ? "✓ " : "○ ") + label, FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 3, 0, 0),
                     Foreground = done ? StudioTheme.Success : StudioTheme.Muted, Focusable = true,
                 };
                 AutomationProperties.SetName(line, (done ? "Tamamlandı: " : "Bekliyor: ") + label);
@@ -139,9 +141,9 @@ internal sealed class SideCardView : Border
         {
             var content = new StackPanel();
             content.Children.Add(new TextBlock { Text = task.Title, FontSize = 14, FontWeight = FontWeights.SemiBold });
-            content.Children.Add(new TextBlock { Text = task.Description, FontSize = 12, Foreground = StudioTheme.Muted, TextTrimming = TextTrimming.CharacterEllipsis });
+            content.Children.Add(new TextBlock { Text = task.Description, FontSize = 14, Foreground = StudioTheme.Muted, TextTrimming = TextTrimming.CharacterEllipsis });
             if (!task.Enabled && task.DisabledReason is not null)
-                content.Children.Add(new TextBlock { Text = task.DisabledReason, FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+                content.Children.Add(new TextBlock { Text = task.DisabledReason, FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
             var button = new Button
             {
                 Content = content, MinHeight = 48, Padding = new Thickness(12, 6, 12, 6), Margin = new Thickness(0, 0, 0, 8), HorizontalContentAlignment = HorizontalAlignment.Left,
@@ -159,7 +161,7 @@ internal sealed class SideCardView : Border
     {
         tile.Content = new StackPanel { Children =
         {
-            new TextBlock { Text = label, FontSize = 12, Foreground = StudioTheme.Muted },
+            new TextBlock { Text = label, FontSize = 14, Foreground = StudioTheme.Muted },
             new TextBlock { Text = value, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap },
         } };
         AutomationProperties.SetName(tile, label + " " + value + "; komut kutusuna yazılır: " + typed);

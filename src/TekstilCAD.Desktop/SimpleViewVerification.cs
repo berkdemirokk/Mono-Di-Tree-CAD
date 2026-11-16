@@ -38,14 +38,18 @@ internal static partial class SimpleViewVerification
             VerifyHeaderNotices(reportPath, checks);
             VerifyFooter(checks);
             VerifyBusyHeader(checks);
+            VerifyBoxStaysPut(checks);
+            VerifyNoticeBanner(checks);
             VerifyWarningsUnderCard(checks);
             VerifyFloors(reportPath, checks);
             VerifyClassicFloorsAfterSwitch(checks);
             VerifyControls(checks);
+            VerifyReadability(checks);
             VerifyRefusals(checks);
             VerifyCommandThroughSimpleView(checks);
             VerifyCommandBox(reportPath, checks);
             VerifyAllTools(reportPath, checks);
+            VerifyAccessibility(checks);
             VerifyRenders(reportPath, checks);
             VerifySideCard(reportPath, checks);
             VerifyNoWindowVisible(studio, checks);
@@ -127,6 +131,21 @@ internal static partial class SimpleViewVerification
             }
         }
         return complete;
+    }
+
+    private static FrameworkElement NoticeStrip(MainWindow window)
+        => Descendants<FrameworkElement>((FrameworkElement)window.Content).First(e => AutomationProperties.GetName(e) == "Uyarılar");
+
+    private static Button? NoticeToggle(MainWindow window)
+        => Descendants<Button>((FrameworkElement)window.Content).FirstOrDefault(b => AutomationProperties.GetName(b) is "Uyarıların tamamını göster" or "Uyarıları daralt");
+
+    // Two or more warnings are one banner line; this opens (or closes) the rows below it and lays the window out again.
+    private static void SetNotices(MainWindow window, bool open, int width, int height)
+    {
+        if (NoticeToggle(window) is { } toggle && (AutomationProperties.GetName(toggle) == "Uyarıları daralt") != open)
+            toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        var root = (FrameworkElement)window.Content;
+        root.Measure(new Size(width, height)); root.Arrange(new Rect(0, 0, width, height)); root.UpdateLayout();
     }
 
     private static void CheckFloor(double actual, double floor, string name, List<string> checks)

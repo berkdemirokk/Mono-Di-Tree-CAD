@@ -771,7 +771,8 @@ public partial class MainWindow : Window
             throw new InvalidOperationException("Yeni proje açıldı, ancak görünüm yenilenemedi. Önceki çalışma geri getirilmedi; ana çalışma alanını kontrol edin.",ex);
         }
     }
-    public void SetStatus(string value) { status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); }
+    // announce=false is for the cursor read-out, which rewrites the status on every mouse move and must stay silent.
+    public void SetStatus(string value, bool announce = true) { status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); simpleView?.StatusChanged(value, announce); }
     internal void ShowCanvasError(string message)
     {
         var changed=canvasError.Text!=message || canvasErrorPanel.Visibility!=Visibility.Visible;
@@ -1064,7 +1065,7 @@ public partial class MainWindow : Window
             button.Value.BorderBrush = button.Key == tool ? StudioTheme.Accent : StudioTheme.Border;
         }
         canvasTool.Text = SimpleToolHeading(tool) ?? "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
-        SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool));
+        SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool), announce: false);
     }
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
     public void Commit(string description, Action action) => CommitObserved(description,action,null);
@@ -2041,8 +2042,10 @@ public partial class MainWindow : Window
     private void Redo() => ApplyHistoryChange(true);
     private void ApplyHistoryChange(bool redo)
     {
-        if(BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation() || (redo ? session.RedoCount : session.UndoCount)==0 ||
-           !ConfirmStableDiscardPendingDrawing(redo ? "Yinelenirse" : "Geri alınırsa"))return;
+        if(BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation())return;
+        // The simple view keeps these buttons focusable when there is nothing to do, so the answer must be spoken here.
+        if((redo ? session.RedoCount : session.UndoCount)==0) { SetStatus(redo ? "Yinelenecek işlem yok." : "Geri alınacak işlem yok."); return; }
+        if(!ConfirmStableDiscardPendingDrawing(redo ? "Yinelenirse" : "Geri alınırsa"))return;
         if(BlockForActiveDrag() || BlockForLargeVertexValidation() || !(redo ? session.Redo() : session.Undo()))return;
         // The history operation has already changed the document. A later UI
         // failure must not encourage the user to undo the next history entry.

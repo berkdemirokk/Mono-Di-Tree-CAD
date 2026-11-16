@@ -43,10 +43,13 @@ internal static partial class SimpleViewVerification
         var titles = tasks.Select(button => AutomationProperties.GetName(button)).ToList();
         var enabled = tasks.Select(button => button.IsEnabled).ToList();
         Render(fresh, Temp("start-tasks-1024x640"), 1024, 640);
-        Check(card.StartTasksVisible && titles.SequenceEqual(["Ölçü yazarak başla", "Dosya aç", "Örnekle dene", "Kaldığım yerden devam et"])
-            && enabled.SequenceEqual([true, true, true, false]) && card.NextStepText.Length > 10
+        // Without a recent file the disabled "Kaldığım yerden devam et" task is not drawn, and the suggestion chips that
+        // repeat the start tasks are hidden while the tasks are shown.
+        var chipsHidden = !InlineBox(fresh)!.ChipButtons.Any() && !Descendants<TextBlock>(root).Any(t => t.Text == "Deneyin:" && VisibleBoundsInRoot(t, root) is { IsEmpty: false });
+        Check(card.StartTasksVisible && titles.SequenceEqual(["Ölçü yazarak başla", "Dosya aç", "Örnekle dene"])
+            && enabled.SequenceEqual([true, true, true]) && card.NextStepText.Length > 10 && chipsHidden
             && card.StepsHeadingText == "İlk adımlar 0/6" && card.FirstStepsVisible && !card.PieceVisible,
-            "Empty project shows the four start tasks and the next step sentence", checks);
+            "Empty project shows the three start tasks without the dead continue task and without suggestion chips, and the next step sentence", checks);
         Render(fresh, Temp("start-tasks-1440x900"), 1440, 900);
         Check(tasks.All(button => button.ActualHeight >= 48 - .5 && FullyVisible(button, root)), "Start task buttons are at least 48 px high and fully visible at 1440x900", checks);
     });
