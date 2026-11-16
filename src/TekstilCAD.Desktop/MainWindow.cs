@@ -157,6 +157,7 @@ public class MainWindow : Window
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfPointVertexSelection>?>? ConfirmDxfPointsForVerification { get; set; }
+    internal Func<DxfAamaLayerSuggestion,bool>? ConfirmDxfAamaRolesForVerification { get; set; }
     internal Action? BeforeDxfPointCommitForVerification { get; set; }
     internal Func<PatternPiece,int,bool>? ConfirmDeleteWithGradingForVerification { get; set; }
     internal Action<Window>? MetadataDialogSuccessForVerification { get; set; }
@@ -2735,6 +2736,46 @@ public class MainWindow : Window
                 pointSelections=selection.ToArray();
                 if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
             }
+            // Optional AAMA/ASTM numbered-layer role proposal. It is offered only
+            // when no POINT mapping was chosen, because that path builds a second
+            // marked document this proposal does not update.
+            IReadOnlyList<DxfTextileRoleSelection> roleSelections=Array.Empty<DxfTextileRoleSelection>();
+            if(pointSelections.Count==0 && (ConfirmDxfReviewForVerification is null || ConfirmDxfAamaRolesForVerification is not null))
+            {
+                DxfAamaLayerSuggestion? roleSuggestion=null;
+                DxfTextileRoleSelection[] eligibleRoles=Array.Empty<DxfTextileRoleSelection>();
+                var skippedRoleCandidates=0;
+                try
+                {
+                    roleSuggestion=DxfAamaLayerPreset.Suggest(imported);
+                    if(roleSuggestion.Proposals.Length>0)
+                    {
+                        var rolePlan=DxfTextileLayerRolePlan.Create(imported,roleSuggestion.ToSelections(),DxfTextileGrainlineMapping.CaptureFingerprint(imported));
+                        var consumedMarkers=grainSelections.Select(s=>s.MarkerId).ToHashSet();
+                        eligibleRoles=rolePlan.Candidates.Where(c=>c.Eligibility==DxfLayerRoleEligibility.Eligible && !consumedMarkers.Contains(c.Selection.PieceId)).Select(c=>c.Selection).ToArray();
+                        skippedRoleCandidates=rolePlan.Candidates.Length-eligibleRoles.Length;
+                    }
+                }
+                catch(Exception ex) when(ex is InvalidDataException or ArgumentException or InvalidOperationException) { roleSuggestion=null; }
+                if(roleSuggestion is not null && eligibleRoles.Length>0)
+                {
+                    bool acceptRoles;
+                    if(ConfirmDxfAamaRolesForVerification is { } confirmRoles)acceptRoles=confirmRoles(roleSuggestion);
+                    else
+                    {
+                        var roleText=new StringBuilder("Bu dosyada AAMA/ASTM numaralı katman adları bulundu:\n\n");
+                        foreach(var proposal in roleSuggestion.Proposals)
+                            roleText.Append(CultureInfo.InvariantCulture,$"Katman {proposal.Number} — {proposal.Meaning}: {proposal.PieceCount} parça → {(proposal.Role==DxfTextileRole.Cutting ? "Kesim" : "Yardımcı")}\n");
+                        roleText.Append(CultureInfo.InvariantCulture,$"\n{eligibleRoles.Length} parçaya önerilen rol atansın mı?");
+                        if(skippedRoleCandidates>0)roleText.Append(CultureInfo.InvariantCulture,$" {skippedRoleCandidates} parça (açık kesim konturu, mevcut rol veya iplik yönüne eşlenen çizgi) atlanır.");
+                        roleText.Append("\n\nKatman adının sayı olması dosyanın standarda uyduğunu kanıtlamaz; roller üretim onayı değildir. Hayır seçilirse rol atanmaz.");
+                        acceptRoles=MessageBox.Show(this,roleText.ToString(),"AAMA/ASTM katman rolleri",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
+                    }
+                    if(!PreparedImportMatches())return;
+                    if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+                    if(acceptRoles)roleSelections=eligibleRoles;
+                }
+            }
             bool saved,discard;
             if(DxfDiscardDecisionForVerification is { } decision) { var choice=decision();discard=choice.Accepted;saved=choice.Saved; }
             else discard=CanDiscard(out saved);
@@ -2782,6 +2823,7 @@ public class MainWindow : Window
                 var markedImport=imported with { Project=marked };
                 marked=DxfTextileGrainlineMapping.Apply(markedImport,grainSelections,DxfTextileGrainlineMapping.CaptureFingerprint(markedImport)).Project;
             }
+            if(roleSelections.Count>0 && marked is null)DxfTextileRoleMapping.ApplyToCopy(candidate,roleSelections,CancellationToken.None);
             var historyWarnings = imported.Warnings.ToList();
             if(reflectY)historyWarnings.Add("Kullanıcı seçimiyle içe aktarılan geometride Y işareti ters çevrildi; kaynak dosya değişmedi. Konum ve kapalı kontur yönü yansıtıldı; kaynakla karşılaştırın.");
             else historyWarnings.Add("Koordinatların yönü korundu; seçilen birim ölçeği dışında Y işareti değiştirilmedi. Tuvalde Y aşağı artar; kaynak görünümünü kontrol edin.");
@@ -2789,6 +2831,8 @@ public class MainWindow : Window
                 historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
             if (grainSelections.Count > 0)
                 historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
+            if(roleSelections.Count>0 && marked is null)
+                historyWarnings.Add("AAMA/ASTM numaralı katman adlarına göre önerilen parça rolleri kullanıcı onayıyla atandı; katman adı standart uyumunu kanıtlamaz. Rolleri kaynakla karşılaştırın.");
             const string pointHistory="POINT kayıtları kullanıcı seçimiyle görsel köşe işareti olarak eşlendi; kaynak POINT kimlikleri projede saklanmaz. Fiziksel çentik veya üretim onayı değildir.";
             var history=new DxfImportProvenance { SourceFileName=preparedDxfSource,
                 SourceSha256=imported.SourceSha256 ?? "", SourceByteLength=imported.SourceByteLength ?? -1,
