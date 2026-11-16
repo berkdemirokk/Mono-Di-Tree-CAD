@@ -35,8 +35,8 @@ public partial class MainWindow
 
         internal bool IsAttached { get; private set; }
 
-        /// <summary>Set to true once the "Tüm araçlar" sheet exists; until then its button stays hidden.</summary>
-        internal bool AllToolsSheetAvailable { get; set; }
+        /// <summary>True once the "Tüm araçlar" sheet exists (AllToolsSheet.cs); while false its button stays hidden.</summary>
+        internal bool AllToolsSheetAvailable { get; set; } = true;
 
         private static readonly (string Tool, string Label, string Typed)[] ToolTexts =
         [
@@ -69,7 +69,7 @@ public partial class MainWindow
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, 4, 0, 0) };
             openButton = Primary("Aç", "Proje aç", "Proje aç · Ctrl+O", 64, () => RaiseClick("Aç…"));
             saveButton = Primary("Kaydet", "Projeyi kaydet", "Kaydet · Ctrl+S", 92, () => RaiseClick("Kaydet"));
-            allToolsButton = Primary("Tüm araçlar", "Tüm araçlar", "Programın bütün işlevleri", 136, () => w.SetStatus("Tüm araçlar sayfası sonraki sürümde gelecek; şimdilik Ayrıntılı görünümü kullanın."));
+            allToolsButton = Primary("Tüm araçlar", "Tüm araçlar", "Programın bütün işlevleri", 136, w.ToggleAllToolsSheet);
             allToolsButton.Visibility = Visibility.Collapsed;
             openCancelProxy = Primary("Açmayı iptal et", "Açmayı iptal et", "Okuma sonucunu kullanma; mevcut çalışma korunur.", 120, () => RaiseClick("Açmayı iptal et"));
             openCancelProxy.SetBinding(UIElement.VisibilityProperty, new Binding(nameof(UIElement.Visibility)) { Source = w.projectOpenCancel });
@@ -201,6 +201,7 @@ public partial class MainWindow
         internal void Detach()
         {
             if (!IsAttached) return;
+            w.CloseAllToolsSheet();
             IsAttached = false;
             try { recorder.Restore(); }
             finally
@@ -383,6 +384,16 @@ public partial class MainWindow
         internal string ToolHeading(string tool) => "Kalıp alanı · " + (ToolTexts.FirstOrDefault(t => t.Tool == tool).Label ?? tool);
 
         internal void FocusSwitch() => switchButton?.Focus();
+
+        /// <summary>Fills the command box with text (never applies it) and moves the focus there.</summary>
+        internal void FillCommandBox(string text)
+        {
+            if (!IsAttached) return;
+            commandBar!.SetText(text);
+            commandBar.FocusBox();
+        }
+
+        internal void FocusAllToolsButton() => allToolsButton?.Focus();
 
         internal bool FocusCommandBar()
         {
