@@ -74,6 +74,8 @@ public static class StudioTheme
     public static Brush Ghost { get; } = Shared[nameof(Ghost)];
     public static Brush GhostFill { get; } = Shared[nameof(GhostFill)];
     public static Brush OnPrimary { get; } = Shared[nameof(OnPrimary)];
+    public static Brush DangerHover { get; } = Shared[nameof(DangerHover)];
+    public static Brush DangerPressed { get; } = Shared[nameof(DangerPressed)];
 
     /// <summary>The palette currently applied. Dark until <see cref="Use"/> is called.</summary>
     public static ThemePalette Current { get; private set; } = ThemePalette.Dark;

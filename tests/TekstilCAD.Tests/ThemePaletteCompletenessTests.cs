@@ -49,9 +49,10 @@ public class ThemePaletteCompletenessTests
     [Fact]
     public void DefaultTokenSetCoversTheSpecifiedGroups()
     {
-        // 10 existing + 25 interface + 17 canvas and preview tokens from the design, plus OnPrimary for text on the primary button fill.
-        Assert.Equal(53, ThemePalette.Tokens.Count);
-        foreach (var token in new[] { "Background", "Selection", "Input", "Focus", "BorderStrong", "Canvas", "PieceHover", "Ghost", "GhostFill", "OnPrimary" })
+        // 10 existing + 25 interface + 17 canvas and preview tokens from the design, plus OnPrimary (text on the primary fill)
+        // and DangerHover and DangerPressed (the destructive button's own states).
+        Assert.Equal(55, ThemePalette.Tokens.Count);
+        foreach (var token in new[] { "Background", "Selection", "Input", "Focus", "BorderStrong", "Canvas", "PieceHover", "Ghost", "GhostFill", "OnPrimary", "DangerHover", "DangerPressed" })
             Assert.Contains(token, ThemePalette.Tokens);
     }
 

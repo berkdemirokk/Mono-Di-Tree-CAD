@@ -19,6 +19,8 @@ internal static class AppPaths
     public static string MachineSpoolDirectory => Path.Combine(DataDirectory, "MachineSpool");
     public static string ProjectsDirectory => Path.Combine(DataDirectory, "Projects");
     public static string LogsDirectory => Path.Combine(DataDirectory, "Logs");
+    /// <summary>Interface preferences (theme, view, text scale); read only by the interactive start path.</summary>
+    public static string UiPreferencesPath => Path.Combine(DataDirectory, TekstilCAD.Core.Theme.UiPreferences.FileName);
     public static string PrepareProjectsDirectory()
     {
         TekstilCAD.FileFormats.ProjectStorage.EnsureWritableDestination(Path.Combine(ProjectsDirectory, "project.tcad"));

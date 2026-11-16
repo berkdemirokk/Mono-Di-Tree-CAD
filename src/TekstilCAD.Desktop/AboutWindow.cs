@@ -9,8 +9,8 @@ namespace TekstilCAD.Desktop;
 
 /// <summary>
 /// Read-only product information: version, preview status, data location and third-party notices.
-/// It changes no project or setting; the only side effects are opening a folder or file in Windows
-/// and copying the support summary to the clipboard, each on an explicit button press.
+/// It changes no project; the only side effects are opening a folder or file in Windows, copying the support
+/// summary to the clipboard and switching the colour theme (saved in ui.json for the next start), each on an explicit button press.
 /// </summary>
 internal sealed class AboutWindow : Window
 {
@@ -22,6 +22,7 @@ internal sealed class AboutWindow : Window
     internal Button OpenLogs { get; } = new() { Content = "Hata günlüklerini aç", Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 8, 6) };
     internal Button OpenNotices { get; } = new() { Content = "Bildirim dosyasını aç", Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 6, 8, 0), HorizontalAlignment = HorizontalAlignment.Left };
     internal Button CopySummary { get; } = new() { Content = "Sürüm bilgisini kopyala", Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 8, 0) };
+    internal Button ThemeToggle { get; } = new() { Padding = new Thickness(12, 8, 12, 8), HorizontalAlignment = HorizontalAlignment.Left };
     internal TextBlock Status { get; } = new() { TextWrapping = TextWrapping.Wrap, Foreground = StudioTheme.Muted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
 
     /// <summary>Shows a folder in File Explorer; replaced during background verification.</summary>
@@ -67,6 +68,12 @@ internal sealed class AboutWindow : Window
                 Foreground = StudioTheme.Warning, TextWrapping = TextWrapping.Wrap
             }
         });
+
+        panel.Children.Add(Heading("GÖRÜNÜM"));
+        UpdateThemeToggle();
+        AutomationProperties.SetHelpText(ThemeToggle, "Koyu ve açık görünüm arasında geçer. Seçiminiz bir sonraki açılışta da kullanılır.");
+        ThemeToggle.Click += (_, _) => SwitchTheme();
+        panel.Children.Add(ThemeToggle);
 
         panel.Children.Add(Heading("ÇALIŞMA ORTAMI"));
         panel.Children.Add(new TextBlock { Text = EnvironmentLine(), TextWrapping = TextWrapping.Wrap });
@@ -130,6 +137,23 @@ internal sealed class AboutWindow : Window
             Announce(OpenFile(path) ? "Windows'ta açıldı." : "Windows bu dosyayı açamadı.");
         }
         catch (Exception) { Announce("Windows bu dosyayı açamadı."); }
+    }
+
+    private void UpdateThemeToggle()
+    {
+        var light = ReferenceEquals(StudioTheme.Current, TekstilCAD.Core.Theme.ThemePalette.Light);
+        ThemeToggle.Content = light ? "Görünüm: Açık" : "Görünüm: Koyu";
+        AutomationProperties.SetName(ThemeToggle, (string)ThemeToggle.Content);
+    }
+
+    /// <summary>Switches between the dark and the light palette; every open window repaints at once, and the choice is saved.</summary>
+    internal void SwitchTheme()
+    {
+        var next = ReferenceEquals(StudioTheme.Current, TekstilCAD.Core.Theme.ThemePalette.Light) ? TekstilCAD.Core.Theme.ThemePalette.Dark : TekstilCAD.Core.Theme.ThemePalette.Light;
+        StudioTheme.Use(next);
+        UpdateThemeToggle();
+        var saved = (TekstilCAD.Core.Theme.UiPreferences.Load(AppPaths.UiPreferencesPath) with { Theme = next.Name }).Save(AppPaths.UiPreferencesPath);
+        Announce((next.Name == "Light" ? "Açık görünüm kullanılıyor." : "Koyu görünüm kullanılıyor.") + (saved ? "" : " Seçim kaydedilemedi; uygulama yeniden açılınca önceki görünüm geri gelir."));
     }
 
     private void Announce(string text)
