@@ -139,7 +139,7 @@ public sealed class CadCanvas : FrameworkElement
         AutomationProperties.SetName(this,"Kalıp çalışma alanı");
         AutomationProperties.SetHelpText(this,KeyboardHelp);
         ToolTip=KeyboardHelp;
-        GotKeyboardFocus+=(_,_)=> { InvalidateVisual();if(!LargeVertexValidationRunning && !LargeCompletionRunning)owner.SetStatus(ToolGuidance(owner.ActiveTool)+" · Oklar: 1 mm · Shift+ok: 10 mm · Ctrl+ok: 0,1 mm"); };
+        GotKeyboardFocus+=(_,_)=> { InvalidateVisual();if(!LargeVertexValidationRunning && !LargeCompletionRunning)owner.SetStatus(ToolGuidance(owner.ActiveTool)+" · Oklar: 1 mm · Shift+ok: 10 mm · Ctrl+ok: 0,1 mm",announce:false); };
         LostKeyboardFocus+=(_,_)=>InvalidateVisual();
         MouseDown+=(s,e)=>Safe(()=>Down(s,e), restoreDrawingOnFailure:true); MouseMove+=(s,e)=>Safe(()=>Move(s,e));
         MouseUp+=(s,e)=>Safe(()=>Up(e)); MouseWheel+=(s,e)=>Safe(()=>Wheel(s,e));
@@ -610,7 +610,7 @@ public sealed class CadCanvas : FrameworkElement
                 var curve = new CurveSegment.CubicBezier(drawing[0], drawing[1], drawing[2], drawing[3]);
                 AddValidated(ParametricContour.Sample([curve]), false, curve);
             }
-            else owner.SetStatus(ToolGuidance(owner.ActiveTool));
+            else owner.SetStatus(ToolGuidance(owner.ActiveTool),announce:false);
             InvalidateVisual();return;
         }
         if(owner.ActiveTool=="Yay")
@@ -621,7 +621,7 @@ public sealed class CadCanvas : FrameworkElement
                 var curve = ArcSource(drawing[0], drawing[1], drawing[2]);
                 AddValidated(ParametricContour.Sample([curve]), false, curve);
             }
-            else owner.SetStatus(ToolGuidance(owner.ActiveTool));
+            else owner.SetStatus(ToolGuidance(owner.ActiveTool),announce:false);
             InvalidateVisual();return;
         }
         if(owner.ActiveTool=="Çoklu çizgi")
@@ -639,7 +639,7 @@ public sealed class CadCanvas : FrameworkElement
         else { var first=drawing[0]; if(Geometry.Distance(first,p)<.001)return;
             if(owner.ActiveTool=="Dikdörtgen") { if(Math.Abs(first.X-p.X)<.001 || Math.Abs(first.Y-p.Y)<.001)return; AddValidated([first,new(p.X,first.Y),p,new(first.X,p.Y)],true); }
             else AddValidated([first,p],false); }
-        if(drawing.Count>0)owner.SetStatus(ToolGuidance(owner.ActiveTool));
+        if(drawing.Count>0)owner.SetStatus(ToolGuidance(owner.ActiveTool),announce:false);
         InvalidateVisual();
     }
     // Match paint order: a later piece covers the selected piece's handles.

@@ -772,7 +772,7 @@ public partial class MainWindow : Window
         }
     }
     // announce=false is for the cursor read-out, which rewrites the status on every mouse move and must stay silent.
-    public void SetStatus(string value, bool announce = true) { status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); if (announce) simpleView?.Announce(value); }
+    public void SetStatus(string value, bool announce = true) { status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); simpleView?.StatusChanged(value, announce); }
     internal void ShowCanvasError(string message)
     {
         var changed=canvasError.Text!=message || canvasErrorPanel.Visibility!=Visibility.Visible;
@@ -1065,7 +1065,7 @@ public partial class MainWindow : Window
             button.Value.BorderBrush = button.Key == tool ? StudioTheme.Accent : StudioTheme.Border;
         }
         canvasTool.Text = SimpleToolHeading(tool) ?? "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
-        SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool));
+        SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool), announce: false);
     }
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
     public void Commit(string description, Action action) => CommitObserved(description,action,null);

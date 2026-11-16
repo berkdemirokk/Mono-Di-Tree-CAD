@@ -65,7 +65,8 @@ internal static partial class SimpleViewVerification
             "Kaydet button's help text follows the saved and unsaved state" + (clean != dirty ? "" : $" [{clean} / {dirty}]"), checks);
     });
 
-    // An outcome reaches the polite status line (name = message); the cursor read-out leaves it untouched.
+    // An outcome reaches the polite status line (name = message); the cursor read-out keeps the name in step with the text without a live event
+    // (a listener cannot be attached headlessly, so only the name is checked).
     private static void VerifyOutcomeAnnouncement(List<string> checks) => WithFresh(fresh =>
     {
         Simple(fresh, true);
@@ -73,7 +74,7 @@ internal static partial class SimpleViewVerification
         fresh.SetStatus("Parça silindi · deneme.");
         var spoken = AutomationProperties.GetName(status) == "Parça silindi · deneme.";
         fresh.SetStatus("Çizgi aracı  ·  X 12 mm  Y 8 mm  ·  Yakınlaşma 100%", announce: false);
-        var cursorSilent = AutomationProperties.GetName(status) == "Parça silindi · deneme." && status.Text.Contains("X 12 mm", StringComparison.Ordinal);
+        var cursorSilent = AutomationProperties.GetName(status) == status.Text && status.Text.Contains("X 12 mm", StringComparison.Ordinal);
         var live = AutomationProperties.GetLiveSetting(status) == AutomationLiveSetting.Polite;
         Simple(fresh, false);
         var restored = AutomationProperties.GetName(status) == "Uygulama durumu";

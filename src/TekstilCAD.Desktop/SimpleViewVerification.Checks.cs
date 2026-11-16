@@ -120,6 +120,7 @@ internal static partial class SimpleViewVerification
         foreach (var (width, height) in new[] { (1024, 640), (1440, 900) })
         {
             Render(fresh, Temp($"notices-{width}x{height}"), width, height);
+            SetNotices(fresh, true, width, height);
             ok &= NoticesComplete(fresh);
         }
         Check(ok, "Simple view keeps every conditional header notice complete beside its action when set", checks);
@@ -138,9 +139,51 @@ internal static partial class SimpleViewVerification
         MakeBusy(fresh, true);
         foreach (var (width, height) in sizes) { Render(fresh, Temp($"box-busy-{width}x{height}"), width, height); busy.Add(Place()); }
         var same = clean.Zip(busy).All(pair => Math.Abs(pair.First.Top - pair.Second.Top) < .5 && Math.Abs(pair.First.Left - pair.Second.Left) < .5 && Math.Abs(pair.First.Height - pair.Second.Height) < .5);
+        SetNotices(fresh, true, 1440, 900);
         Check(same && NoticesComplete(fresh), "Simple view command box keeps its position when every header warning is shown, and the warnings stay complete"
             + (same ? "" : $" [clean={string.Join("/", clean)} busy={string.Join("/", busy)}]"), checks);
     });
+
+    // Two or more warnings are one banner line under the box (the first warning and how many there are); the toggle opens them all with
+    // their buttons. A single warning is shown as it is.
+    private static void VerifyNoticeBanner(List<string> checks)
+    {
+        var ok = true; var reasons = new List<string>();
+        WithFresh(fresh =>
+    {
+        Simple(fresh, true);
+        MakeBusy(fresh, true);
+        foreach (var (width, height, floor) in new[] { (1024, 640, BusyFloor1024), (1440, 900, BusyFloor1440) })
+        {
+            Render(fresh, Temp($"banner-{width}x{height}"), width, height);
+            SetNotices(fresh, false, width, height);
+            var root = (FrameworkElement)fresh.Content; var strip = NoticeStrip(fresh); var toggle = NoticeToggle(fresh)!;
+            var summary = Descendants<TextBlock>(strip).First(t => t.Text.Contains(" uyarı: ", StringComparison.Ordinal));
+            var oneLine = strip.ActualHeight <= 44 && summary.ActualHeight <= 24;
+            var reachable = FullyVisible(toggle, root) && toggle.Focusable && toggle.ActualHeight >= 40;
+            var canvas = F<CadCanvas>(fresh, "canvas").ActualHeight >= floor;
+            SetNotices(fresh, true, width, height);
+            var complete = NoticesComplete(fresh);
+            SetNotices(fresh, false, width, height);
+            if (!(oneLine && reachable && canvas && complete)) reasons.Add($"{width}x{height} strip={strip.ActualHeight:0} summary={summary.ActualHeight:0} reachable={reachable} canvas={canvas} complete={complete}");
+            ok &= oneLine && reachable && canvas && complete;
+        }
+        });
+        // One warning only: no banner, the row shows as it is.
+        WithFresh(single =>
+        {
+            single.LoadDocument(Imported());
+            Simple(single, true);
+            Render(single, Temp("banner-single"), 1024, 640);
+            var root = (FrameworkElement)single.Content;
+            var alone = NoticeToggle(single) is null || ((FrameworkElement)NoticeToggle(single)!.Parent).Visibility == Visibility.Collapsed;
+            alone &= FullyVisible(F<TextBlock>(single, "sourceHistoryNotice"), root);
+            if (!alone) reasons.Add("single notice is hidden behind a banner");
+            ok &= alone;
+        });
+        Check(ok, "Simple view collapses two or more header warnings to one banner line with a reachable toggle that shows them all, and shows a single warning as it is"
+            + (ok ? "" : $" [{string.Join("; ", reasons)}]"), checks);
+    }
 
     private static void VerifyWarningsUnderCard(List<string> checks) => WithFresh(fresh =>
     {

@@ -25,7 +25,12 @@ public partial class MainWindow
         private readonly ViewRecorder recorder = new();
         private ICommandBarHost? commandBar;
         private Border? commandRegion;
-        private StackPanel? noticeStrip;
+        private StackPanel? noticeStrip, noticeRowsPanel;
+        private Grid? noticeBanner;
+        private TextBlock? noticeSummary;
+        private Button? noticeToggle;
+        private readonly List<UIElement> noticeRows = [];
+        private bool noticesExpanded;
         private SideCardView? card;
         private Button? switchButton, themeButton, openButton, saveButton, allToolsButton, openCancelProxy;
         private TextBlock? railCaption, railHint, footerNote, scaleWarning;
@@ -83,7 +88,19 @@ public partial class MainWindow
             Grid.SetColumn(buttons, 1); row.Children.Add(buttons);
             commandRegion = new Border { Margin = new Thickness(16, 6, 16, 4), Child = row };
             // The warnings of the header sit here, under the box, so the box keeps its place however many warnings there are.
+            // With two or more warnings it shows one banner line; the toggle opens the rows with their action buttons.
             noticeStrip = new StackPanel { Margin = new Thickness(16, 0, 16, 2), MaxWidth = 1100 };
+            noticeSummary = new TextBlock { FontSize = 14, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = StudioTheme.Warning };
+            noticeToggle = new Button { MinHeight = 40, FontSize = 14, Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(8, 0, 0, 0), Cursor = Cursors.Hand };
+            noticeToggle.Click += (_, _) => { noticesExpanded = !noticesExpanded; UpdateNotices(); };
+            noticeBanner = new Grid { Visibility = Visibility.Collapsed };
+            noticeBanner.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+            noticeBanner.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+            Grid.SetColumn(noticeToggle, 1);
+            noticeBanner.Children.Add(noticeSummary); noticeBanner.Children.Add(noticeToggle);
+            noticeRowsPanel = new StackPanel();
+            noticeStrip.Children.Add(noticeBanner); noticeStrip.Children.Add(noticeRowsPanel);
+            AutomationProperties.SetName(noticeStrip, "Uyarılar");
             DockPanel.SetDock(noticeStrip, Dock.Top);
             AutomationProperties.SetName(commandRegion, "Komut çubuğu");
             DockPanel.SetDock(commandRegion, Dock.Top);
@@ -231,13 +248,36 @@ public partial class MainWindow
         private void MoveNoticesBelowBox(ViewRecorder r)
         {
             var rows = w.projectPanel.Children.Cast<UIElement>().Skip(2).ToList();
+            EventHandler layoutChanged = (_, _) => UpdateNotices();
             r.Do(() =>
             {
-                foreach (var row in rows) { w.projectPanel.Children.Remove(row); noticeStrip!.Children.Add(row); }
+                foreach (var row in rows) { w.projectPanel.Children.Remove(row); noticeRowsPanel!.Children.Add(row); }
+                noticeRows.AddRange(rows); noticesExpanded = false;
+                noticeStrip!.LayoutUpdated += layoutChanged;
             }, () =>
             {
-                foreach (var row in rows) { noticeStrip!.Children.Remove(row); w.projectPanel.Children.Add(row); }
+                noticeStrip!.LayoutUpdated -= layoutChanged;
+                noticeRows.Clear();
+                foreach (var row in rows) { noticeRowsPanel!.Children.Remove(row); w.projectPanel.Children.Add(row); }
             });
+        }
+
+        // Two or more shown warnings collapse to one banner line (the first warning and how many there are); the toggle opens them all.
+        private void UpdateNotices()
+        {
+            static UIElement Lead(UIElement row) => row is Grid { Children.Count: > 0 } g ? g.Children[0] : row;
+            var shown = noticeRows.Where(row => Lead(row).Visibility == Visibility.Visible).ToList();
+            var many = shown.Count > 1;
+            var banner = many ? Visibility.Visible : Visibility.Collapsed;
+            if (noticeBanner!.Visibility != banner) noticeBanner.Visibility = banner;
+            var rows = !many || noticesExpanded ? Visibility.Visible : Visibility.Collapsed;
+            if (noticeRowsPanel!.Visibility != rows) noticeRowsPanel.Visibility = rows;
+            if (!many) return;
+            var first = Lead(shown[0]) switch { TextBlock t => t.Text, TextBox b => b.Text, _ => "" };
+            var summary = $"{shown.Count} uyarı: {first}";
+            if (noticeSummary!.Text != summary) noticeSummary.Text = summary;
+            var label = noticesExpanded ? "Uyarıları daralt" : "Uyarıların tamamını göster";
+            if (!Equals(noticeToggle!.Content, label)) { noticeToggle.Content = label; AutomationProperties.SetName(noticeToggle, label); }
         }
 
         internal void Detach()
@@ -399,7 +439,7 @@ public partial class MainWindow
             r.Set(w.statusViewer, FrameworkElement.MaxHeightProperty, 36d);
             r.Set(w.status, TextBlock.FontSizeProperty, 13d);
             // The cursor read-out rewrites the status on every mouse move and never raises the live event (SetStatus(announce:false));
-            // only outcomes do, through Announce, which also puts the message into the name a screen reader reads.
+            // only outcomes do, through StatusChanged, which also puts the message into the name a screen reader reads.
             r.Set(w.status, AutomationProperties.LiveSettingProperty, AutomationLiveSetting.Polite);
             r.Set(w.status, AutomationProperties.NameProperty, "Uygulama durumu");
             r.Set(w.unitsText, TextBlock.FontSizeProperty, 13d);
@@ -461,14 +501,14 @@ public partial class MainWindow
         internal void FocusAllToolsButton() => allToolsButton?.Focus();
 
         /// <summary>
-        /// Says an outcome through the polite status line. While the command box's own row shows a preview, result or refusal
-        /// it is the live region and speaks for itself, so nothing is raised twice.
+        /// Keeps the name a screen reader reads in step with the status text. Only outcomes also raise the live event, and not while
+        /// the command box's own row shows a preview, result or refusal (it is the live region and speaks for itself).
         /// </summary>
-        internal void Announce(string message)
+        internal void StatusChanged(string message, bool announce)
         {
-            if (!IsAttached || commandBar is null || commandBar.ShowsMessage) return;
+            if (!IsAttached || commandBar is null) return;
             AutomationProperties.SetName(w.status, message);
-            if (AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
+            if (announce && !commandBar.ShowsMessage && AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
                 UIElementAutomationPeer.FromElement(w.status)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }
 

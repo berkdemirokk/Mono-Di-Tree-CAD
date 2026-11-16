@@ -52,6 +52,7 @@ public partial class MainWindow
         private Border? root;
         private TextBox? search;
         private TextBlock? emptyResult, resultCount;
+        private string spoken = "";
         private readonly List<(UIElement Element, KeyboardNavigationMode Mode)> blocked = [];
         private Grid? body;
         private ScrollViewer? scroller;
@@ -221,9 +222,12 @@ public partial class MainWindow
 
         // ---------------------------------------------------------------- arrange
 
-        private static void Say(TextBlock live, string spoken)
+        // Arrange also runs on width changes; the same result is not said twice.
+        private void Say(TextBlock live, string text)
         {
-            AutomationProperties.SetName(live, spoken);
+            if (spoken == text) return;
+            spoken = text;
+            AutomationProperties.SetName(live, text);
             if (AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
                 UIElementAutomationPeer.FromElement(live)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         }
@@ -246,7 +250,7 @@ public partial class MainWindow
                 body.Children.Add(list);
                 return;
             }
-            emptyResult!.Visibility = Visibility.Collapsed; resultCount!.Visibility = Visibility.Collapsed;
+            emptyResult!.Visibility = Visibility.Collapsed; resultCount!.Visibility = Visibility.Collapsed; spoken = "";
             var count = Math.Max(2, columns);
             for (var i = 0; i < count; i++) body.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
             var panels = Enumerable.Range(0, count).Select(_ => new StackPanel { Margin = new Thickness(0, 0, 4, 0) }).ToArray();
