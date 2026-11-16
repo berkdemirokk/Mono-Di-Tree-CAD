@@ -24,9 +24,19 @@ public partial class App : Application
             return;
         }
         // Interactive runs only: verification modes keep their own failure reporting and data directory.
-        StudioTheme.Use(TekstilCAD.Core.Theme.UiPreferences.Load(AppPaths.UiPreferencesPath).Palette);
+        var preferences = TekstilCAD.Core.Theme.UiPreferences.Load(AppPaths.UiPreferencesPath);
+        StudioTheme.Use(preferences.Palette);
         CrashReporter.Attach();
         CrashReporter.ShowPendingNotice();
-        new MainWindow().Show();
+        var window = new MainWindow();
+        // The window constructor always builds the detailed layout; the saved view is applied here, after construction, interactive start only.
+        window.EnableViewSwitching();
+        if (preferences.View == TekstilCAD.Core.Theme.UiPreferences.SimpleView)
+        {
+            window.LoadDocument(new TekstilCAD.Core.ProjectDocument());
+            window.ApplySimpleTextScale(preferences.TextScale);
+            window.TrySetSimpleView(true, out _);
+        }
+        window.Show();
     }
 }

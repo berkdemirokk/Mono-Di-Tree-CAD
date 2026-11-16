@@ -1174,6 +1174,7 @@ internal static class DesktopVerification
             VerifyCompactWorkspace(studio,reportPath,checks);
             CommandVerification.Run(studio,checks);
             ThemeVerification.Run(studio,work,reportPath,checks);
+            SimpleViewVerification.Run(studio,reportPath,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
@@ -14687,7 +14688,7 @@ internal static class DesktopVerification
     }
     internal static Rect BoundsInRoot(FrameworkElement element,FrameworkElement root)
         => ReferenceEquals(element,root)?new Rect(root.RenderSize):element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
-    private static Rect VisibleBoundsInRoot(FrameworkElement element,FrameworkElement root)
+    internal static Rect VisibleBoundsInRoot(FrameworkElement element,FrameworkElement root)
     {
         var visible=BoundsInRoot(element,root);
         visible.Intersect(new Rect(root.RenderSize));

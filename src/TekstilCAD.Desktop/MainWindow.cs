@@ -284,13 +284,13 @@ public partial class MainWindow : Window
         var commandArea = new WrapPanel { Margin = new Thickness(12, 0, 12, 6) };
         var start = CommandGroup(commandArea, "BAŞLANGIÇ");
         var design = AddButton(start, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "İstek hazırlar; kalıp oluşturmaz.");
-        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.Background;
+        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.OnAccent;
         var files = CommandGroup(commandArea, "PROJE");
         AddButton(files, "Yeni", NewDocument, "Yeni proje · Ctrl+N");
         AddButton(files, "Aç…", Open, "Proje aç · Ctrl+O");
         projectOpenCancel=AddButton(files,"Açmayı iptal et",CancelProjectOpen,"Okuma sonucunu kullanma; mevcut çalışma korunur.");
         projectOpenCancel.Visibility=Visibility.Collapsed;
-        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
+        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.OnAccent;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
         CompactLabel(AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true), "Güvenli kopya…");
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
@@ -532,6 +532,11 @@ public partial class MainWindow : Window
         var canvasShell = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = canvasArea };
         Grid.SetColumn(canvasShell, 1); workspace.Children.Add(canvasShell);
 
+        // Layout containers kept as fields so the optional simple view can rearrange this same tree (MainWindow.SimpleView.cs).
+        rootPanel = root; headerGrid = header; commandAreaPanel = commandArea; workspaceGrid = workspace; toolsPanel = tools; this.railScroller = railScroller;
+        inspectorPanel = inspector; canvasHeaderPanel = canvasHeader; statusBarBorder = statusBar; footerPanel = footer; taglineText = brandLine.Children.OfType<TextBlock>().First();
+        brandLinePanel = brandLine; aboutButton = about; unitsText = units; modeChip = mode; projectPanel = project; navigationPanel = navigation; viewCommandsPanel = viewCommands;
+        canvasShellBorder = canvasShell; inspectorShellBorder = inspectorShell;
         KeyDown += OnKeyDown;
         try { recoveryStore=new RecoveryStore(AppPaths.RecoveryDirectory); recoveryWriter=new RecoveryWriteCoordinator(recoveryStore); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -577,7 +582,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => { recoveryScanCancellation.Cancel(); if(!recoveryScanRunning) { recoveryCursor?.Dispose(); recoveryCursor=null; } };
         autosaveTimer.Tick += async (_, _) => await SaveRecoveryAsync();
         autosaveTimer.Start();
-        Loaded += async (_, _) => { Refresh(); canvas.Fit(); canvas.Focus(); await BeginRecoveryScan(); };
+        Loaded += async (_, _) => { Refresh(); canvas.Fit(); if (!FocusSimpleCommandBar()) canvas.Focus(); await BeginRecoveryScan(); };
         SetTool("Seç"); Refresh();
     }
     private static TextBlock Label(string text, Brush? color = null, int size = 12) => new() { Text = text, Foreground = color ?? Ink, FontSize = size, Margin = new Thickness(4, 8, 0, 7) };
@@ -1053,10 +1058,10 @@ public partial class MainWindow : Window
         foreach(var button in toolButtons)
         {
             button.Value.Background = button.Key == tool ? StudioTheme.Accent : StudioTheme.Surface;
-            button.Value.Foreground = button.Key == tool ? StudioTheme.Background : StudioTheme.Text;
+            button.Value.Foreground = button.Key == tool ? StudioTheme.OnAccent : StudioTheme.Text;
             button.Value.BorderBrush = button.Key == tool ? StudioTheme.Accent : StudioTheme.Border;
         }
-        canvasTool.Text = "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
+        canvasTool.Text = SimpleToolHeading(tool) ?? "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
         SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool));
     }
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
@@ -1268,6 +1273,7 @@ public partial class MainWindow : Window
         if (notchReviewExportCommand is not null) notchReviewExportCommand.IsEnabled = Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !ExportRunning && !DxfImportRunning;
         UpdateFitCommand();
         canvas?.InvalidateVisual();
+        simpleView?.OnRefreshed();
     }
     private void UpdateHistoryCapacityNotice()
     {
@@ -2093,7 +2099,7 @@ public partial class MainWindow : Window
         var cancel = AddButton(buttons, "Vazgeç", () => prompt.DialogResult = false); cancel.IsCancel = true;
         AddButton(buttons, "Kaydetmeden devam et", () => prompt.DialogResult = true);
         var save = AddButton(buttons, "Kaydet", () => { Save(); if (!HasUnsavedDocumentWork) { onSaved();prompt.DialogResult = true; } }, projectSaveAction:true);
-        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.Background; save.IsDefault = true;
+        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.OnAccent; save.IsDefault = true;
         return prompt;
     }
     private void Open()
@@ -4315,6 +4321,8 @@ public partial class MainWindow : Window
         {
             if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F1)
             { OpenAbout(); e.Handled = true; return; }
+            if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F9 && simpleViewSwitching)
+            { ToggleSimpleView(); e.Handled = true; return; }
             if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.S)
             { SaveAs(); e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.Control)

@@ -1035,6 +1035,9 @@ public sealed class CadCanvas : FrameworkElement
         return false;
     }
     private bool Hit(PatternPiece p,Point2 point) { if(p.Points.Count==0)return false; if(p.Closed && Geometry.PointInPolygon(point,p.Points))return true; for(var i=0;i<p.Points.Count-(p.Closed?0:1);i++) { var a=p.Points[i];var b=p.Points[(i+1)%p.Points.Count];var dx=b.X-a.X;var dy=b.Y-a.Y;var length=dx*dx+dy*dy;var t=length==0?0:Math.Clamp(((point.X-a.X)*dx+(point.Y-a.Y)*dy)/length,0,1);if(Geometry.Distance(point,new(a.X+t*dx,a.Y+t*dy))<8/scale)return true; } return false; }
+    // Set only by the simple view while the project has no piece; null in the detailed view, so nothing extra is drawn there.
+    internal string? EmptyStateTitle { get; set; }
+    internal string? EmptyStateHint { get; set; }
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);dc.DrawRectangle(StudioTheme.Canvas,null,new Rect(RenderSize));
@@ -1095,6 +1098,13 @@ public sealed class CadCanvas : FrameworkElement
             if(owner.ActiveTool=="Yay" && drawing.Count==2)DrawContour(dc,Arc(drawing[0],drawing[1],cursor),false,null,new Pen(StudioTheme.Piece,2));
         }
         catch(ArgumentException) { /* Incomplete preview is allowed; final input is validated. */ }
+        if(EmptyStateTitle is not null && drawing.Count==0 && !owner.Document.Pieces.Any(piece=>piece.Points.Count>0))
+        {
+            var title=Format(EmptyStateTitle,StudioTheme.Text,20);var hint=EmptyStateHint is null ? null : Format(EmptyStateHint,StudioTheme.Muted,16);
+            var top=Math.Max(8,(ActualHeight-title.Height-(hint?.Height+8 ?? 0))/2);
+            dc.DrawText(title,new Point(Math.Max(8,(ActualWidth-title.Width)/2),top));
+            if(hint is not null)dc.DrawText(hint,new Point(Math.Max(8,(ActualWidth-hint.Width)/2),top+title.Height+8));
+        }
         if(IsKeyboardFocused && ActualWidth>4 && ActualHeight>4)
             dc.DrawRectangle(null,new Pen(StudioTheme.Piece,2),new Rect(2,2,ActualWidth-4,ActualHeight-4));
     }
