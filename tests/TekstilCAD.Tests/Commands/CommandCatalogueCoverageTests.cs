@@ -286,8 +286,8 @@ public class CommandCatalogueCoverageTests
         private static readonly Regex SetNameCall = new(@"AutomationProperties\.SetName\(\s*[^,\r\n]+,\s*");
         private static readonly HashSet<string> AllowedVariables = ["tool", "glyph"];
 
-        private static readonly Regex OrthogonalCall = new(@"AddOrthogonalButton\(\s*\w+\s*,\s*OrthogonalOps\.(\w+)\s*\)");
-        private static readonly Regex OtherHelper = new(@"(?!AddButton|AddOrthogonalButton)(Add\w*Button)\(");
+        private static readonly Regex OrthogonalCall = new(@"\bAddOrthogonalButton\(\s*\w+\s*,\s*OrthogonalOps\.(\w+)\s*\)");
+        private static readonly Regex OtherHelper = new(@"\b(?!AddButton\b|AddOrthogonalButton\b)(Add\w*Button)\(");
 
         /// <summary>The label of table entry <paramref name="member"/> in the OrthogonalOps declaration text, or null.</summary>
         private static string? OrthogonalLabel(string commandsText, string member)
