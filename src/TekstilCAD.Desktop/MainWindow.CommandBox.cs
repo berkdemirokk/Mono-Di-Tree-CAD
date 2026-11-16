@@ -65,6 +65,8 @@ public partial class MainWindow
         {
             try
             {
+                if(windowClosed || recoveryClosing)return "Pencere kapanıyor.";
+                if(!EnsureMainMutationReady())return "Görünüm yenilendi; geri almayı yeniden deneyin.";
                 if(canvas.HasPendingDrawing)return "Önce çizimi bitirin (Enter) ya da iptal edin (Esc).";
                 var before=redo ? session.RedoCount : session.UndoCount;
                 if(before==0)return redo ? "Yinelenecek işlem yok." : "Geri alınacak işlem yok.";

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using TekstilCAD.Core;
 using TekstilCAD.Core.Commands;
+using TekstilCAD.FileFormats;
 using Geometry = TekstilCAD.Core.Geometry;
 
 namespace TekstilCAD.Desktop;
@@ -55,12 +56,20 @@ public partial class MainWindow
     {
         var typed=text ?? "";
         if(string.IsNullOrWhiteSpace(typed))return new(CommandPreviewKind.Empty,typed);
-        var parsed=CommandParser.Parse(typed,new ParserContext(Document.Pieces.Select(p=>p.Name ?? "").ToList(),canvas is not null && canvas.HasPendingDrawing));
-        if(parsed.IsIncomplete && !onEnter)return new(CommandPreviewKind.Typing,typed);
-        var planned=CommandPlanner.Plan(parsed,CommandView(),CommandSelection());
-        if(planned.Plan is { } plan)return new(CommandPreviewKind.Plan,typed,plan,null,parsed.UnitAssumed);
-        var notice=planned.Refusal!;
-        return new(notice.IsQuestion ? CommandPreviewKind.Question : CommandPreviewKind.Refusal,typed,null,notice);
+        try
+        {
+            var parsed=CommandParser.Parse(typed,new ParserContext(Document.Pieces.Select(p=>p.Name ?? "").ToList(),canvas is not null && canvas.HasPendingDrawing));
+            if(parsed.IsIncomplete && !onEnter)return new(CommandPreviewKind.Typing,typed);
+            var planned=CommandPlanner.Plan(parsed,CommandView(),CommandSelection());
+            if(planned.Plan is { } plan)return new(CommandPreviewKind.Plan,typed,plan,null,parsed.UnitAssumed);
+            var notice=planned.Refusal!;
+            return new(notice.IsQuestion ? CommandPreviewKind.Question : CommandPreviewKind.Refusal,typed,null,notice);
+        }
+        catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        {
+            // A timer tick or key press must never carry an exception out of the box.
+            return new(CommandPreviewKind.Refusal,typed,null,Refusals.Failed("Komut hesaplanamadı"));
+        }
     }
 
     /// <summary>
@@ -81,7 +90,8 @@ public partial class MainWindow
         CommandOutcome outcome;
         try
         {
-            outcome=plan.IsProjectEdit ? ApplyProjectPlan(plan) : ApplyOtherPlan(plan);
+            // A delete is a "dangerous" plan that still edits the project in Core, so it takes the project route too.
+            outcome=plan.IsProjectEdit || plan.AppliesInCore || plan.Operation is not null ? ApplyProjectPlan(plan) : ApplyOtherPlan(plan);
         }
         catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
@@ -90,8 +100,11 @@ public partial class MainWindow
             outcome=new(CommandResult.Refused,message,CommandGuards.Commit);
         }
         // A refused edit must not leave the selection it set inside the (rolled back) commit.
-        if(outcome.Result is CommandResult.Refused or CommandResult.Stale && !selection.SequenceEqual(selectionBefore))
+        if(outcome.Result is CommandResult.Refused or CommandResult.Stale && (plan.AppliesInCore || plan.Operation is not null) && !selection.SequenceEqual(selectionBefore))
+        {
             SetSelectionCore(selectionBefore,primaryBefore);
+            try { Refresh(); } catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException) { /* the refusal text already tells what happened */ }
+        }
         return outcome with { Caveats=plan.Caveats.Count>0 ? plan.Caveats : null };
     }
 
@@ -228,17 +241,45 @@ public partial class MainWindow
             case PlanKind.Tool:
                 if(plan.Command is ToolCommand tool && canvas.HasPendingDrawing==false)
                 {
-                    SetTool(tool.Tool switch
+                    var wanted=tool.Tool switch
                     {
                         DrawingTool.Line=>"Çizgi",DrawingTool.Polyline=>"Çoklu çizgi",DrawingTool.Rectangle=>"Dikdörtgen",
                         DrawingTool.Bezier=>"Bézier",DrawingTool.Arc=>"Yay",_=>"Seç",
-                    });
+                    };
+                    SetTool(wanted);
+                    // SetTool returns silently while a drag or a validation runs: report what really happened.
+                    if(ActiveTool!=wanted)
+                    {
+                        var blocked=$"Fare aracı değişmedi · Sürüklemeyi ya da doğrulamayı tamamlayın, sonra yeniden deneyin.";
+                        SetStatus(blocked);
+                        return new(CommandResult.Refused,blocked,CommandGuards.Drag);
+                    }
                     return Done($"Fare aracı: {ActiveTool}.");
+                }
+                break;
+            case PlanKind.FinishDrawing:
+                if(plan.Command is FinishDrawingCommand finish && canvas.HasPendingDrawing)
+                {
+                    if(BlockForActiveDrag() || BlockForLargeVertexValidation())return Refuse(CommandGuards.Drag);
+                    var points=canvas.PendingDrawingPointCount;
+                    switch(finish.Action)
+                    {
+                        case FinishDrawingAction.Close:canvas.FinishPolyline();break;
+                        case FinishDrawingAction.FinishOpen:FinishOpenDrawing();break;
+                        case FinishDrawingAction.Cancel:canvas.CancelDrawing();ClearCanvasError();break;
+                        case FinishDrawingAction.RemoveLastPoint:canvas.RemoveLastPendingPoint();break;
+                    }
+                    var changed=!canvas.HasPendingDrawing || canvas.PendingDrawingPointCount!=points;
+                    if(!changed)return Refuse(CommandGuards.PendingWork);
+                    return finish.Action is FinishDrawingAction.Close or FinishDrawingAction.FinishOpen
+                        ? new(CommandResult.Applied,"Çizim bitirildi.") : Done(finish.Action==FinishDrawingAction.Cancel ? "Çizim iptal edildi." : "Son nokta silindi.");
                 }
                 break;
             case PlanKind.File:
                 if(plan.Command is FileCommand file)
                 {
+                    try
+                    {
                     switch(file.Action)
                     {
                         case FileAction.Save:Save();return Done("Kaydetme isteği işlendi.");
@@ -246,6 +287,8 @@ public partial class MainWindow
                         case FileAction.Open:Open();return Done("Açma isteği işlendi.");
                         case FileAction.New:NewDocument();return Done("Yeni proje isteği işlendi.");
                     }
+                    }
+                    catch(ProjectConflictException) { ShowProjectSaveConflict(this);return Done("Kaydetme çakışması: açılan pencerede bir seçenek seçin."); }
                 }
                 break;
             case PlanKind.Window:

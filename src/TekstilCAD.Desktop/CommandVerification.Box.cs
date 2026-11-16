@@ -52,6 +52,16 @@ internal static partial class CommandVerification
         var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream=new FileStream(path,FileMode.Create,FileAccess.Write);encoder.Save(stream);
     }
+    // A detached element is never "IsVisible"; it is shown when it and every parent up to the view are Visible.
+    private static bool Shown(FrameworkElement element,FrameworkElement root)
+    {
+        for(DependencyObject? node=element;node is not null;node=VisualTreeHelper.GetParent(node))
+        {
+            if(node is UIElement ui && ui.Visibility!=Visibility.Visible)return false;
+            if(ReferenceEquals(node,root))return true;
+        }
+        return false;
+    }
     private static bool Type(CommandBarView view,string text)
     {
         view.SetText(text);return true;
@@ -191,10 +201,9 @@ internal static partial class CommandVerification
             var opens=host.Opens;window.CloseCommandBox();
             var fromTextBox=window.HandleCommandBoxShortcut(ModifierKeys.Control,Key.K);
             var refusedPlain=!window.HandleCommandBoxShortcut(ModifierKeys.None,Key.K) && !window.HandleCommandBoxShortcut(ModifierKeys.Shift,Key.K);
-            // Esc through the window's own key handler closes an open box and is marked handled.
-            var args=new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(window)!,0,Key.Escape) { RoutedEvent=Keyboard.KeyDownEvent };
-            typeof(MainWindow).GetMethod("OnKeyDown",Private)!.Invoke(window,[window,args]);
-            Check(fromCanvas && opens==1 && fromTextBox && host.Opens==2 && refusedPlain && args.Handled && !host.IsOpen,
+            // Esc closes an open box and is reported as used (the same code OnKeyDown calls first).
+            var escUsed=window.HandleCommandBoxShortcut(ModifierKeys.None,Key.Escape);
+            Check(fromCanvas && opens==1 && fromTextBox && host.Opens==2 && refusedPlain && escUsed && !host.IsOpen,
                 "Ctrl+K reaches the command box from the canvas and from a text box, and Esc closes it",checks);
         });
         // 9: Ctrl+Z only undoes the project when the box is empty.
@@ -249,14 +258,14 @@ internal static partial class CommandVerification
             void Audit(string state)
             {
                 Relayout(view);
-                foreach(var button in view.AllButtons.Where(b=>b.IsVisible))
+                foreach(var button in view.AllButtons.Where(b=>Shown(b,view)))
                 {
                     var name=System.Windows.Automation.AutomationProperties.GetName(button);
                     if(string.IsNullOrWhiteSpace(name))problems.Add($"{state}: unnamed button {button.Content}");
                     if(!button.Focusable || !button.IsEnabled)problems.Add($"{state}: button {name} is not focusable or enabled");
                     if(button.FontSize<12)problems.Add($"{state}: {name} font {button.FontSize}");
                 }
-                foreach(var text in Descendants<TextBlock>(view).Where(t=>t.IsVisible && t.Text.Length>0))
+                foreach(var text in Descendants<TextBlock>(view).Where(t=>Shown(t,view) && t.Text.Length>0))
                     if(text.FontSize<12)problems.Add($"{state}: text '{text.Text}' font {text.FontSize}");
                 if(view.Box.FontSize<12)problems.Add($"{state}: box font");
             }

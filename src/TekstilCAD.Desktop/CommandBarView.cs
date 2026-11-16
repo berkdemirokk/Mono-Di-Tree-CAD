@@ -220,7 +220,12 @@ internal sealed class CommandBarView : Border
     /// <summary>Replaces the typed text (as typing would): the shown preview is dropped.</summary>
     internal void SetText(string text)
     {
-        box.Text=text ?? "";box.CaretIndex=box.Text.Length;
+        suppressTextChanged=true;
+        try { box.Text=text ?? "";box.CaretIndex=box.Text.Length;box.IsUndoEnabled=false;box.IsUndoEnabled=true; }
+        finally { suppressTextChanged=false; }
+        UpdatePlaceholder();
+        previewTimer.Stop();
+        if(AutoPreview && box.Text.Trim().Length>0)previewTimer.Start();
         // TextChanged only fires when the text really differs; make a same-text call drop the preview too.
         if(string.Equals(shownText,box.Text,StringComparison.Ordinal)==false)DropPreview();
     }
@@ -518,7 +523,7 @@ internal sealed class CommandBarView : Border
         SetRow("Yapıldı · "+outcome.Message.TrimEnd(),outcome.Caveats ?? [],tint,0x26);
         HideRowButtons();alternatives.Children.Clear();alternatives.Visibility=Visibility.Collapsed;
         chips.Visibility=Visibility.Visible;
-        RefreshChips(outcome.Changed);
+        RefreshChips(outcome.Changed && !outcome.RefreshFailed);
         FocusBox();
     }
 
