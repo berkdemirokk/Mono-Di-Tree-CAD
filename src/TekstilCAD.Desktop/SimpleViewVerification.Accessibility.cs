@@ -105,6 +105,7 @@ internal static partial class SimpleViewVerification
     {
         var session = F<DocumentSession>(fresh, "session");
         var undo = F<Button>(fresh, "undoCommand"); var redo = F<Button>(fresh, "redoCommand"); var status = F<TextBlock>(fresh, "status");
+        var originalHelp = AutomationProperties.GetHelpText(undo); var originalEnabled = (undo.IsEnabled, redo.IsEnabled);
         Simple(fresh, true);
         var empty = session.UndoCount == 0 && session.RedoCount == 0;
         var focusable = undo.IsEnabled && redo.IsEnabled && undo.Focusable && redo.Focusable
@@ -118,7 +119,7 @@ internal static partial class SimpleViewVerification
         var resultUndo = box.AllButtons.First(b => b.Content as string == "Geri al");
         var tall = resultUndo.MinHeight >= 44;
         Simple(fresh, false);
-        var restored = !undo.IsEnabled && !redo.IsEnabled && undo.Opacity == 1 && AutomationProperties.GetHelpText(undo).Length == 0;
+        var restored = (undo.IsEnabled, redo.IsEnabled) == originalEnabled && undo.Opacity == 1 && AutomationProperties.GetHelpText(undo) == originalHelp;
         Check(empty && focusable && undoSaid && redoSaid && tall && restored,
             "Geri al and Yinele stay focusable without history and answer with the status sentence; the result row's Geri al is at least 44 px high"
             + (empty && focusable && undoSaid && redoSaid && tall && restored ? "" : $" [empty={empty}; focusable={focusable}; undo={undoSaid}; redo={redoSaid}; tall={tall}; restored={restored}]"), checks);
