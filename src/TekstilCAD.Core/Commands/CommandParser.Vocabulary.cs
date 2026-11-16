@@ -43,9 +43,9 @@ public static partial class CommandParser
     private static readonly HashSet<string> MirrorWords = Set("aynala");
     private static readonly HashSet<string> MirrorModifiers = Set("dikey", "yatay", "sagsol", "altust", "yukariasagi", "eksene", "eksen", "gore", "eksenine");
 
-    private static readonly HashSet<string> DeleteVerbs = Set("sil", "kaldir");
-    private static readonly HashSet<string> SelectVerbs = Set("sec");
-    private static readonly HashSet<string> SelectedPieceWords = Set("parca", "parcayi", "secili", "seciliyi", "secileni", "parcasini", "bunu");
+    private static readonly HashSet<string> DeleteVerbs = Set("sil", "kaldir", "silin", "siliniz", "kaldirin");
+    private static readonly HashSet<string> SelectVerbs = Set("sec", "secin", "seciniz");
+    private static readonly HashSet<string> SelectedPieceWords = Set("parca", "parcayi", "parcanin", "secili", "seciliyi", "secileni", "parcasini", "bunu");
 
     private static readonly HashSet<string> RenameLabels = Set("adi", "adini", "ismi", "ismini", "isim", "ad");
     private static readonly HashSet<string> RenameVerbs = Set("olsun", "yap", "degistir", "koy", "yaz", "et", "ver");

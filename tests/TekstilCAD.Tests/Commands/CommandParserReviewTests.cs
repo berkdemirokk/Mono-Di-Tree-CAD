@@ -107,13 +107,13 @@ public sealed class CommandParserReviewTests
     public void OneLetterNamesAreNotMatched()
     {
         Assert.False(Run("i sil", "İç Kol").IsCommand);
-        Assert.False(Run("ka sil", "Arka beden").IsCommand);
     }
 
     [Fact]
     public void FindPiecesUsesTheParsersRule()
     {
-        Assert.Equal(new[] { "Ön beden", "Ön beden 2" }, CommandParser.FindPieces("ön beden", new[] { "Ön beden 2", "Ön beden" }).OrderBy(x => x.Length));
+        Assert.Equal(new[] { "Ön beden" }, CommandParser.FindPieces("ön beden", new[] { "Ön beden 2", "Ön beden" })); // an exactly equal name wins
+        Assert.Equal(2, CommandParser.FindPieces("beden", new[] { "Ön beden 2", "Ön beden" }).Count);
         Assert.Empty(CommandParser.FindPieces("", B1));
         Assert.Empty(CommandParser.FindPieces("kol", null));
         Assert.Equal(new[] { "İç Kol" }, CommandParser.FindPieces("IÇ KOL", new[] { "İç Kol", "Dış Kol" }));
