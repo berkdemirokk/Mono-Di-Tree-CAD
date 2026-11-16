@@ -64,11 +64,13 @@ internal static partial class SimpleViewVerification
         fresh.LoadDocument(new ProjectDocument());
         typeof(MainWindow).GetField("dirty", Private)!.SetValue(fresh, true);
         Invoke(fresh, "Refresh");
+        Render(fresh, Temp("sample-task-off"), 1440, 900);
         var off = fresh.SideCard!.TaskButtons.Single(button => AutomationProperties.GetName(button) == "Örnekle dene");
         var disabled = !off.IsEnabled && TextsOf(off).Contains("Örnek yalnızca boş, yeni bir çalışmada açılır.");
         Click(off);
         var untouched = fresh.Document.Pieces.Count == 0 && F<TextBlock>(fresh, "status").Text.Contains("Örnek yalnızca boş", StringComparison.Ordinal);
-        Check(loaded && disabled && untouched, "Sample task loads the example only into a clean empty project", checks);
+        Check(loaded && disabled && untouched, "Sample task loads the example only into a clean empty project"
+            + (loaded && disabled && untouched ? "" : $" [loaded={loaded} disabled={disabled} untouched={untouched} pieces={fresh.Document.Pieces.Count} status={F<TextBlock>(fresh, "status").Text}]"), checks);
     });
 
     private static void VerifyPieceTiles(List<string> checks) => WithFresh(fresh =>
