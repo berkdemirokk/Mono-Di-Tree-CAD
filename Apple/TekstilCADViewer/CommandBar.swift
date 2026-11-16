@@ -69,14 +69,27 @@ struct CommandBar: View {
         if isShown {
             VStack(alignment: .leading, spacing: 8) {
                 fieldRow
-                if let card { cardView(card) }
-                if let result { resultRow(result) }
+                if dynamicTypeSize.isAccessibilitySize {
+                    // At very large text a card is taller than the screen: it scrolls inside the bar
+                    // instead of pushing the bar under the navigation bar.
+                    ScrollView { outputs }.frame(maxHeight: 300)
+                } else {
+                    outputs
+                }
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(Color.secondary.opacity(0.06))
             .onChange(of: text) { _ in textChanged() }
             Divider()
+        }
+    }
+
+    @ViewBuilder
+    private var outputs: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let card { cardView(card) }
+            if let result { resultRow(result) }
         }
     }
 
