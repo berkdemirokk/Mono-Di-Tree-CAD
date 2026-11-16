@@ -5,6 +5,8 @@
       - path: UnitTests
       - path: Tests/Fixtures/mobile-simple.tcad
         buildPhase: resources
+      - path: Tests/Fixtures/command-vectors.json
+        buildPhase: resources
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:
@@ -18,6 +20,13 @@
     sources:
       - path: Tests/ViewerUITests.swift
       - path: Tests/FixtureLoadingTests.swift
+      - path: Tests/ScreenshotTourTests.swift
+      - path: Tests/CommandFieldUITests.swift
+      - path: Tests/PointEditorUITests.swift
+      - path: Tests/ComposerUITests.swift
+      - path: Tests/ProjectLibraryUITests.swift
+      - path: Tests/WorkshopPanelUITests.swift
+      - path: Tests/CanvasUITests.swift
       - path: Tests/Fixtures
         buildPhase: resources
     dependencies:

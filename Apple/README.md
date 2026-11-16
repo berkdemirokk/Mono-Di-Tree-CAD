@@ -1,19 +1,50 @@
 # Mono Di Tree CAD iPhone — başlangıç ve Kalıp Atölyesi
 
-Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` dosyası seçip parça konturlarını salt okunur gösterir. Eski JSON nesnesi ile 1–8 sürümlü `[sürüm, proje]` zarfındaki `Name`, `Pieces`, `Points`, `Closed` alanlarını **yalnız kontur önizlemesi amacıyla** okur. Sürüm 6–8 için zorunlu bazı zarf alanları kontrol edilir; Windows doğrulayıcısının tüm şema ve geometri kuralları uygulanmaz. Dosyaya yazmaz. Dosya seçiciden iCloud Drive dahil erişilebilir dosyalar açılabilir.
+Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` dosyası seçip parça konturlarını salt okunur gösterir. Eski JSON nesnesi ile 1–9 sürümlü `[sürüm, proje]` zarfındaki `Name`, `Pieces`, `Points`, `Closed` alanlarını **yalnız kontur önizlemesi amacıyla** okur. Sürüm 6–8 için zorunlu bazı zarf alanları kontrol edilir; Windows doğrulayıcısının tüm şema ve geometri kuralları uygulanmaz. Dosyaya yazmaz. Dosya seçiciden iCloud Drive dahil erişilebilir dosyalar açılabilir.
 
 ## İlk açılış: yeni başlayan çalışma alanı
 
 Ana ekranda **Yeni proje oluştur** ve **Örnekle dene** düğmeleri bulunur. Bu seçenekler `EasyCADWorkspace.swift` içindeki gerçek, yerel bir çizim atölyesini açar; bağlantı, hesap veya ücretli API gerektirmez.
 
-- Yeni dikdörtgen veya çizgi ekle; parçayı seç ve değiştir.
+- Yeni dikdörtgen, çizgi, daire (72 köşeli, en ve boy çapı verir) veya üçgen ekle; parçayı seç ve değiştir.
+- **Parmakla şekil çiz:** alan 100, 300 ya da 1000 mm seçilebilir (varsayılan 300); ölçek ızgarası, kenarlarda mm sayıları ve sol altta (0, 0) noktası gösterilir. Noktalar yeni alana sığmıyorsa alan değiştirilmeden önce sorulur. **Tümünü temizle** onay ister.
 - Dikdörtgenin en ve boyunu, çizginin uzunluğunu ve parçanın X/Y konumunu milimetre cinsinden düzenle.
-- Parçayı 10 mm sağa/sola taşı, 90 derece döndür, çoğalt veya sil.
+- Parçayı 10 mm sağa/sola/yukarı/aşağı taşı, 90 derece döndür, çoğalt veya sil. Köşe noktalarını düzenlerken "Uygula" sayfayı kapatmaz ve sıradaki noktaya geçer; "Bitti" ile kapanır. **Önceki/Sonraki nokta** ile gezilir; **Nokta ekle** seçili noktadan sonra ortaya yeni nokta ekler (açık çizginin sonunda çizgiyi uzatır); **Noktayı sil** kapalı parçada 3, açık çizgide 2 noktanın altına inmez. Yazılıp uygulanmamış değer başka noktaya geçince, nokta eklerken veya Bitti'de otomatik uygulanır; geçersizse nokta seçili kalır ve nedeni gösterilir.
+- Ana ekranda Son projeler: bir projeyi silmek (onay ister; o projenin otomatik taslağı da silinir) ya da adını değiştirmek için satırdaki "…" menüsünü kullan. Listede en çok 10 proje görünür. Okunamayan projeler «Okunamıyor» olarak listelenir; açılamaz, yalnız silinebilir. Silme ve ad değiştirme hataları kendi başlığıyla ("Proje silinemedi", "Ad değiştirilemedi") gösterilir.
+- **Son çizime devam et** düğmesi çizimin adını, parça sayısını ve son değişiklik zamanını gösterir. Yeni proje ya da örnek açıldığında önceki çizim sormadan Son projeler'e kaydedilir ve ana ekranda bunu söyleyen tek satırlık, kapatılabilir bir bildirim çıkar.
+- Atölyede bir alana geçersiz değer yazılıysa **Kapat** iki seçenek sunar: «Değişikliği at ve kapat» (yalnız yazılan metni atar) ve «Düzeltmeye dön».
+- iPad'de ve yatay ekranda çizim solda (%60), araçlar sağda durur; dikey iPhone düzeni değişmedi.
 - Son 50 değişiklik için geri al/ileri al.
-- `.tcad` dosyası hazırla; sistem Paylaş menüsünden Dosyalara Kaydet, AirDrop veya diğer seçeneği kullan.
+- Tek dokunuşla **Paylaş veya Dosyalara kaydet**: yazılmış değerler önce uygulanır, `.tcad` dosyası o an proje adıyla yazılır ve sistem paylaşma ekranı açılır (Dosyalara Kaydet, AirDrop vb.). Düğme düzenlemeden sonra kaybolmaz; çizim boşken pasiftir ve nedeni altında yazar. macOS'ta eski iki adımlı akış kalır.
+- `.tcad` dosya önizlemesi ana ekranla aynı açık kart düzenindedir; **Ana ekrana dön** düğmesi vardır, sade sözcükler kullanılır (ör. "Kumaş yönü").
+- Çizimi yakınlaştır ve kaydır; seçili parçanın ölçüsünü çizimin üstünde oku (aşağıda "Çizimi yakınlaştırma, kaydırma ve ölçü etiketleri").
+
+Ana ekranda "Nasıl çalışır?" başlığı altında üç adım (Şekil ekle, Ölçüyü yaz, Kaydet ve paylaş) gösterilir. Atölyede çizimin altında, çizimin durumuna göre değişen tek cümlelik bir ipucu bulunur: çizim boşken şekil eklemeyi, parça seçili değilken parçaya dokunmayı, parça seçiliyken ölçüleri milimetre olarak yazmayı söyler.
 
 **Önemli:** Atölye yeni çizimlerin yanında **daha önce iPhone'un ürettiği basit, sürümsüz, üretim metaverisi içermeyen .tcad çizimlerini** de `Kopyasını düzenle` seçeneğiyle açabilir. Yalnızca adı, boş serileme listesi, benzersiz parça kimlikleri ve X/Y konturlarından oluşan katı şema kabul edilir. Sürüm zarfları, katman, çentik, geçmiş, pastal, ölçü kuralı veya başka üretim verileri bulunan fabrika dosyaları salt okunur kalır; kaynak dosya asla yeniden yazılmaz. İçe aktarılan çizim cihazda yeni taslak olarak saklanır ve eski taslağı değiştirmeden önce onay alınır. Dışa aktarılan dosyalar kontur/kimlik verisi ve boş serileme listesi içerir; üretim, kesim ya da gerçek CAD uyumluluğu sertifikası değildir. Dosyanın Windows uygulamasında açılıp tekrar okunması ve gerçek iPhone testleri ayrıca yapılmalıdır.
 
+
+## Çizimi yakınlaştırma, kaydırma ve ölçü etiketleri
+
+Atölyedeki çizim varsayılan olarak ekrana sığdırılır. Çizimde en az bir parça varsa:
+
+- **Yakınlaştırma:** iki parmakla sıkıştırın ya da çizimin sağ alt köşesindeki **Yakınlaştır** ve **Uzaklaştır** düğmelerini kullanın. Düğmeler iki parmak hareketine bağlı kalmamak için vardır. Yakınlaştırma 1× ile 24× arasındadır; düğmeyle her dokunuş 1,6 kat değiştirir. iOS 17 ve sonrasında iki parmakla yakınlaştırma parmakların olduğu yere doğru yapılır; iOS 16'da ve düğmelerle çizim alanının ortasına doğru. Cmd + ve Cmd = yakınlaştırır. Çizimin altındaki satır yakınlaştırılmışken örneğin "2.6× yakınlaştırıldı" yazar.
+- **Izgara ve başlangıç noktası:** çizimin arkasında soluk bir milimetre ızgarası vardır; kare boyu yakınlaştırmaya göre değişir ve sol üstte «Kare: N mm» yazar. (0, 0) noktası bir nokta ve X (sağa) / Y (yukarı) oklarıyla gösterilir. Ekran okuyucu değeri kare boyunu ve (0, 0)'ın ekranda olup olmadığını söyler.
+- **Kaydırma:** ekrana sığdırılmışken sürükleme eskisi gibi parçayı taşır. Yakınlaştırılmışken yalnız seçili parçanın kenar çizgisinin yakınından (24 nokta) başlayan sürükleme parçayı taşır; diğer her sürükleme görünümü kaydırır, böylece ekranı kaplayan bir parçada da kaydırılabilir. Bu kural ilk yakınlaştırmada bir kez ipucu olarak gösterilir («Anladım»). Çizim, en fazla 48 noktası görünür kalacak kadar uzaklaştırılabilir; tamamen ekran dışına itilemez. Sürüklemeden kaydırmak için **Seçili parçayı göster** düğmesi seçili parçayı çizim alanının ortasına getirir (yakınlaştırılmış ve bir parça seçiliyken görünür). İki parmakla yapılan hareket sıkıştırma sayılır; parça ya da görünüm sürüklenmez.
+- **Ekrana sığdır:** yakınlaştırılmışken düğmeler arasında **Ekrana sığdır** da görünür; yakınlaştırmayı ve kaydırmayı sıfırlar; basılınca ekran okuyucu odağı **Yakınlaştır**'a geçer. Sığdırma, büyük bir parçanın sağ alttaki düğmelerin altında kalmaması için o köşeyi boş bırakır. Uzaklaştırarak 1×'e inmek de kaydırmayı sıfırlar. Klavye açılınca çizim küçüldüğü için görünüm ekrana sığdırılır; son parça silinince de sıfırlanır.
+- **Parça taşıma:** yakınlaştırılmışken parmağın ekranda aldığı yol, yakınlaştırma oranına bölünerek milimetreye çevrilir; yani parça parmağın altında kalır. Parça taşınırken sıkıştırma hareketi yok sayılır.
+- **Ölçü etiketleri:** seçili parçanın en ve boyu (açık çizgide uzunluğu) milimetre olarak çizimin üstünde küçük etiketlerle yazılır. Çizim alanı 150 nokta yüksekliğinden küçükse gösterilmez; bu, klavye açıkken ve telefon yatayken olur. Etiketler çizim alanının dışına taşmaz. Yakınlaştırma düğmeleri de klavye açıkken gizlenir.
+- **Titreşim:** parça seçildiğinde ve taşınan parça bırakıldığında hafif bir dokunsal geri bildirim verilir (iOS dışında etkisizdir).
+
+**Doğrulanmadı:** Bu değişiklikler Swift kodunda var, ancak Swift kodu yerelde derlenmedi; derleyen tek ortam iPhone CI'dır. Yakınlaştırma düğmeleri ve ipucu simülatör arayüz testlerinde, yakınlaştırma/kaydırma hesabı birim testlerinde var; **iki parmakla sıkıştırma ve boş kâğıdı sürükleyerek kaydırma hareketi simülatör testinde yoktur**. Ölçü etiketlerinin görünümü ve yakınlaştırma sırasında konumları otomatik denetlenmez. Gerçek cihazda ve VoiceOver ile henüz denenmedi. Etiketlerdeki ölçüler görüntü amaçlıdır; üretim ya da kesim için kullanmayın.
+
+## Erişilebilirlik (kod düzeyinde; cihazda doğrulanmadı)
+
+Çizim tuvalinin ekran okuyucu değeri parça sayısını, seçili parçanın adını ve ölçüsünü ve yakınlaştırma düzeyini söyler; yukarı/aşağı kaydırma (ayarlanabilir eylem) yakınlaştırır. Yakınlaştırma ve ölçü değişimi ekran okuyucuya duyurulur. Bölüm başlıkları başlık olarak işaretlidir, "Nasıl çalışır?" adımları numarasıyla okunur, hareket azaltma tercihi klavye animasyonunu kapatır. Soluk gri ve turuncu metinler koyulaştırıldı. VoiceOver ile gerçek cihazda sınanmadı; tuval içine çizilen ölçü etiketleri ekran okuyucuya yalnız bu değer üzerinden ulaşır.
+
+## Görünüm
+
+Uygulama varsayılan olarak açık temayla açılır; telefon koyu moddayken de açık kalır. Ana ekranın altındaki **Görünüm** menüsünde üç seçenek vardır: Açık (varsayılan), Koyu, Telefona uy. Seçim cihazda `appearance` anahtarında saklanır. Renkler koyu görünüme ve Kontrastı Artır ayarına göre değişir; açık renkler aynı kaldı. Renk çiftlerinin WCAG oranları `AppTheme.swift` başındaki yorumda hesaplanmıştır (metinler en az 4,5:1). `ScreenshotTourTests` içinde `testTour06` (telefon koyu, uygulama açık) ve `testTour07` (`-appearance dark` ile koyu) görüntü üretir. Kontrastı Artır görünümünün ekran görüntüsü yoktur; gerçek cihazda ve Dynamic Type ile ayrıca denenmedi.
 
 ## Xcode'da oluşturma
 
@@ -25,13 +56,17 @@ iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı eri
 
 ## Sınırlar
 
-Uygulama GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Sürüm 6–8 için uygulama görünür bir uyarı verir: çentikler, döndürülmüş pastal izleri, katman görünürlüğü ve üretim semantiği dikkate alınmaz. Dolayısıyla Windows'ta gizli olan bir katman iPhone önizlemesinde görülebilir; bu görüntü üretim dosyası veya kullanıcı yetkilendirmesi değildir. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. **Salt okunur fabrika dosyası görüntüleyicisinde** serileme, pastal, kaynak geçmişi, üretim dışa aktarma ve cihaz bağlantıları işlenmez. **Ayrı basit çizim atölyesi** kontur oluşturma, düzenleme ve .tcad dosyası paylaşma sağlar. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
+Uygulama GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Sürüm 6–8 için uygulama görünür bir uyarı verir: çentikler, döndürülmüş pastal izleri, katman görünürlüğü ve üretim semantiği dikkate alınmaz. Dolayısıyla Windows'ta gizli olan bir katman iPhone önizlemesinde görülebilir; bu görüntü üretim dosyası veya kullanıcı yetkilendirmesi değildir. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. **Salt okunur fabrika dosyası görüntüleyicisinde** serileme, pastal, kaynak geçmişi, üretim dışa aktarma ve cihaz bağlantıları işlenmez. **Ayrı basit çizim atölyesi** kontur oluşturma, düzenleme ve .tcad dosyası paylaşma sağlar. Çizim varsayılan olarak ekrana sığdırılır, istenirse yakınlaştırılıp kaydırılabilir; ölçüm ya da üretim için kullanılmamalıdır. Ölçü etiketleri de görüntü amaçlıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
 
 Dağıtım öncesi en azından Xcode derlemesi, gerçek cihaz dosya sağlayıcıları ve masaüstü örnekleriyle uyumluluk, erişilebilirlik ve büyük dosya performansı doğrulanmalıdır.
 
 ## TestFlight hazırlığı (taslak)
 
 TestFlight için macOS üzerinde Xcode ve XcodeGen ile projenin üretilmesi, doğru Apple Developer ekibiyle imzalanması ve App Store Connect'te `com.berkdemirokk.monoditreecad` kimliğiyle eşleşen uygulama kaydı gerekir. Arşivleme, yükleme ve TestFlight süreci gerçek Mac ve Apple hesabında doğrulanmalıdır. Otomasyon ileride kurulursa App Store Connect API anahtarı gibi gizli değerler depoya eklenmemeli, GitHub Secrets gibi bir gizli bilgi deposunda tutulmalıdır. Elle tetiklenen yükleme taslağı aşağıda açıklanmıştır; otomatik yayın yapılandırılmamıştır.
+
+## App Store hazırlığı (taslak)
+
+`Apple/AppStore/` klasöründe mağaza metinleri (Türkçe/İngilizce), gizlilik politikası taslağı ve gizlilik etiketi yanıtları, App Review notları, ekran görüntüsü planı ve yalnız hesap sahibinin yapabileceği adımların listesi bulunur. `Apple/TekstilCADViewer/PrivacyInfo.xcprivacy` gizlilik bildirimidir (izleme yok, veri toplanmaz; dosya zamanı ve UserDefaults için gerekçe kodları). `project.yml` içindeki `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO`, TestFlight'ın her derlemede ihracat uyumluluğu sormasını önlemek içindir; çalıştığı bir sonraki yüklemede App Store Connect'te doğrulanmalıdır. Gizlilik politikası hukuki görüş değildir ve herkese açık bir adreste yayımlanmalıdır.
 
 ## GitHub Actions ile derleme kontrolü
 

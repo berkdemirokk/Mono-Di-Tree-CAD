@@ -1,26 +1,130 @@
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media;
+using TekstilCAD.Core.Theme;
 
 namespace TekstilCAD.Desktop;
 
-/// <summary>Shared visual tokens for the native desktop shell and tool windows.</summary>
+/// <summary>
+/// Shared visual tokens for the native desktop shell and tool windows.
+/// Every token is ONE shared <see cref="SolidColorBrush"/> instance; <see cref="Use"/> changes the colour of those instances in
+/// place, so every control and every drawing that holds a token repaints at once, in windows that are already open as well as in
+/// windows opened later, and reference comparisons such as <c>ReferenceEquals(x.Foreground, StudioTheme.Warning)</c> stay valid.
+/// The same instances are published to <c>Application.Resources</c> as <c>Studio.&lt;Token&gt;</c> (<see cref="RegisterResources"/>),
+/// which App.xaml reads with <c>DynamicResource</c>. The default palette is Dark; nothing reads a saved preference here.
+/// WPF freezes a Freezable that is added to Application.Resources, and a frozen brush can no longer change colour. Each token brush
+/// therefore takes its colour through a one-way binding to a private shadow brush, which makes it impossible to freeze
+/// (<c>CanFreeze</c> is false); <see cref="Use"/> changes the shadow. The brushes belong to the UI thread.
+/// </summary>
 public static class StudioTheme
 {
-    public static Brush Background { get; } = Solid("#101923");
-    public static Brush Surface { get; } = Solid("#16222F");
-    public static Brush Raised { get; } = Solid("#1D2C3C");
-    public static Brush Border { get; } = Solid("#304254");
-    public static Brush Accent { get; } = Solid("#49D8BB");
-    public static Brush Text { get; } = Solid("#EDF4FA");
-    public static Brush Muted { get; } = Solid("#9BADBE");
-    public static Brush Warning { get; } = Solid("#F5C377");
-    public static Brush Danger { get; } = Solid("#FF9999");
+    private static readonly Dictionary<string, SolidColorBrush> Shadows = CreateShadows();
+    private static readonly Dictionary<string, SolidColorBrush> Shared = CreateBrushes();
 
-    private static Brush Solid(string hex)
+    public static Brush Background { get; } = Shared[nameof(Background)];
+    public static Brush Surface { get; } = Shared[nameof(Surface)];
+    public static Brush Raised { get; } = Shared[nameof(Raised)];
+    public static Brush Border { get; } = Shared[nameof(Border)];
+    public static Brush Accent { get; } = Shared[nameof(Accent)];
+    public static Brush Text { get; } = Shared[nameof(Text)];
+    public static Brush Muted { get; } = Shared[nameof(Muted)];
+    public static Brush Warning { get; } = Shared[nameof(Warning)];
+    public static Brush Danger { get; } = Shared[nameof(Danger)];
+    public static Brush Selection { get; } = Shared[nameof(Selection)];
+    public static Brush BorderStrong { get; } = Shared[nameof(BorderStrong)];
+    public static Brush BorderHover { get; } = Shared[nameof(BorderHover)];
+    public static Brush Input { get; } = Shared[nameof(Input)];
+    public static Brush Placeholder { get; } = Shared[nameof(Placeholder)];
+    public static Brush OnAccent { get; } = Shared[nameof(OnAccent)];
+    public static Brush AccentHover { get; } = Shared[nameof(AccentHover)];
+    public static Brush AccentPressed { get; } = Shared[nameof(AccentPressed)];
+    public static Brush AccentSoft { get; } = Shared[nameof(AccentSoft)];
+    public static Brush PrimaryFill { get; } = Shared[nameof(PrimaryFill)];
+    public static Brush PrimaryBorder { get; } = Shared[nameof(PrimaryBorder)];
+    public static Brush Success { get; } = Shared[nameof(Success)];
+    public static Brush SuccessSoft { get; } = Shared[nameof(SuccessSoft)];
+    public static Brush WarningSoft { get; } = Shared[nameof(WarningSoft)];
+    public static Brush DangerSoft { get; } = Shared[nameof(DangerSoft)];
+    public static Brush SelectionBorder { get; } = Shared[nameof(SelectionBorder)];
+    public static Brush TextSelection { get; } = Shared[nameof(TextSelection)];
+    public static Brush HoverFill { get; } = Shared[nameof(HoverFill)];
+    public static Brush PressedFill { get; } = Shared[nameof(PressedFill)];
+    public static Brush RowAlt { get; } = Shared[nameof(RowAlt)];
+    public static Brush GridLine { get; } = Shared[nameof(GridLine)];
+    public static Brush ScrollThumb { get; } = Shared[nameof(ScrollThumb)];
+    public static Brush ScrollThumbHover { get; } = Shared[nameof(ScrollThumbHover)];
+    public static Brush TooltipBg { get; } = Shared[nameof(TooltipBg)];
+    public static Brush TooltipText { get; } = Shared[nameof(TooltipText)];
+    public static Brush Focus { get; } = Shared[nameof(Focus)];
+    public static Brush Canvas { get; } = Shared[nameof(Canvas)];
+    public static Brush CanvasGrid { get; } = Shared[nameof(CanvasGrid)];
+    public static Brush CanvasAxis { get; } = Shared[nameof(CanvasAxis)];
+    public static Brush Piece { get; } = Shared[nameof(Piece)];
+    public static Brush PieceFill { get; } = Shared[nameof(PieceFill)];
+    public static Brush PieceSelected { get; } = Shared[nameof(PieceSelected)];
+    public static Brush PieceSelectedFill { get; } = Shared[nameof(PieceSelectedFill)];
+    public static Brush PieceHover { get; } = Shared[nameof(PieceHover)];
+    public static Brush PieceHoverFill { get; } = Shared[nameof(PieceHoverFill)];
+    public static Brush PieceLabel { get; } = Shared[nameof(PieceLabel)];
+    public static Brush PieceLabelSelected { get; } = Shared[nameof(PieceLabelSelected)];
+    public static Brush Notch { get; } = Shared[nameof(Notch)];
+    public static Brush GrainOk { get; } = Shared[nameof(GrainOk)];
+    public static Brush GrainReview { get; } = Shared[nameof(GrainReview)];
+    public static Brush DrawingPreview { get; } = Shared[nameof(DrawingPreview)];
+    public static Brush Ghost { get; } = Shared[nameof(Ghost)];
+    public static Brush GhostFill { get; } = Shared[nameof(GhostFill)];
+    public static Brush OnPrimary { get; } = Shared[nameof(OnPrimary)];
+    public static Brush DangerHover { get; } = Shared[nameof(DangerHover)];
+    public static Brush DangerPressed { get; } = Shared[nameof(DangerPressed)];
+
+    /// <summary>The palette currently applied. Dark until <see cref="Use"/> is called.</summary>
+    public static ThemePalette Current { get; private set; } = ThemePalette.Dark;
+
+    /// <summary>Raised on the calling thread after every <see cref="Use"/>.</summary>
+    public static event Action? Changed;
+
+    /// <summary>The shared brush of a token.</summary>
+    internal static SolidColorBrush TokenBrush(string token) => Shared[token];
+
+    /// <summary>Switches every token to a palette, in place. Open windows repaint immediately; call on the UI thread.</summary>
+    public static void Use(ThemePalette palette)
     {
-        var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
-        brush.Freeze();
-        return brush;
+        ArgumentNullException.ThrowIfNull(palette);
+        foreach (var token in ThemePalette.Tokens) Shadows[token].Color = ParseColor(palette[token]);
+        Current = palette;
+        Changed?.Invoke();
+    }
+
+    /// <summary>True when every token brush currently holds the colour of the palette.</summary>
+    internal static bool Matches(ThemePalette palette) =>
+        ThemePalette.Tokens.All(token => Shared[token].Color == ParseColor(palette[token]));
+
+    /// <summary>Publishes the shared brushes as <c>Studio.&lt;Token&gt;</c> resources for the DynamicResource references in App.xaml.</summary>
+    internal static void RegisterResources(ResourceDictionary resources)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+        foreach (var token in ThemePalette.Tokens) resources["Studio." + token] = Shared[token];
+    }
+
+    internal static Color ParseColor(string hex) => (Color)ColorConverter.ConvertFromString(hex);
+
+    private static Dictionary<string, SolidColorBrush> CreateShadows()
+    {
+        var shadows = new Dictionary<string, SolidColorBrush>(ThemePalette.Tokens.Count);
+        foreach (var token in ThemePalette.Tokens) shadows[token] = new SolidColorBrush(ParseColor(ThemePalette.Dark[token]));
+        return shadows;
+    }
+
+    private static Dictionary<string, SolidColorBrush> CreateBrushes()
+    {
+        var brushes = new Dictionary<string, SolidColorBrush>(ThemePalette.Tokens.Count);
+        foreach (var token in ThemePalette.Tokens)
+        {
+            var brush = new SolidColorBrush();
+            BindingOperations.SetBinding(brush, SolidColorBrush.ColorProperty, new Binding(nameof(SolidColorBrush.Color)) { Source = Shadows[token], Mode = BindingMode.OneWay });
+            brushes[token] = brush;
+        }
+        return brushes;
     }
 
     /// <summary>Apply window-level tokens. App.xaml supplies implicit control styles.</summary>

@@ -17,7 +17,7 @@ using Geometry = TekstilCAD.Core.Geometry;
 
 namespace TekstilCAD.Desktop;
 
-public class MainWindow : Window
+public partial class MainWindow : Window
 {
     private readonly DocumentSession session;
     // DocumentSession clones on every commit; this token changes only when the
@@ -60,7 +60,8 @@ public class MainWindow : Window
     private readonly TextBox selectedPieceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=64, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(3,5,3,0) };
     private SimulationQueue? machineQueue;
     private Button? machineQueueCommand;
-    private readonly TextBox machineQueueMessage = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MaxHeight=64,Width=220,Margin=new Thickness(3,2,3,3),Visibility=Visibility.Collapsed };
+    // Shares the header notice area: full width and at most two lines high, so it never becomes a tall block.
+    private readonly TextBox machineQueueMessage = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,FontSize=11,Padding=new Thickness(6,2,6,2),MinHeight=0,MaxHeight=40,Margin=new Thickness(0,4,0,0),Visibility=Visibility.Collapsed };
     internal Func<SimulationQueue> MachineQueueFactory { get; set; } = () => new SimulationQueue(AppPaths.MachineSpoolDirectory);
     internal bool MachineQueueLoading { get; private set; }
     private readonly TextBlock status = new(), metrics = new(), projectTitle = new();
@@ -71,21 +72,21 @@ public class MainWindow : Window
     private readonly ScrollViewer canvasErrorViewer = new() { MaxHeight=54, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled, Focusable=true };
     private readonly DockPanel canvasErrorPanel = new() { Visibility=Visibility.Collapsed, Margin=new Thickness(18,2,18,2) };
     private readonly ScrollViewer statusViewer = new() { MaxHeight=44, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled, Focusable=true, VerticalAlignment=VerticalAlignment.Center };
-    private readonly TextBlock saveState = new(), canvasTool = new(), pieceCount = new();
+    private readonly TextBlock saveState = new(), canvasTool = new(), canvasView = new(), pieceCount = new();
     private readonly TextBlock exportNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
     private readonly TextBlock nestingHistoryNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
-    private readonly Button nestingHistoryDetails = new() { Content="Pastal geçmişini incele…", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button nestingHistoryDetails = new() { Content="Pastal geçmişini incele…", Visibility=Visibility.Collapsed };
     private ProjectDocument? nestingHistoryDocument;
     private long nestingHistoryGeneration;
-    private readonly Button exportCancel = new() { Content="HPGL aktarımını iptal et", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button exportCancel = new() { Content="HPGL aktarımını iptal et", Visibility=Visibility.Collapsed };
     private readonly TextBlock pieceLimits = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4,4,4,10), Focusable=true };
     private readonly TextBlock gradingGeometryNotice = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4,4,4,10), Focusable=true };
     private readonly TextBox propertyDraftConflict = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MaxHeight=100,Margin=new Thickness(3,4,3,8),Visibility=Visibility.Collapsed };
     private readonly TextBlock recoveryNotice = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0) };
-    private readonly Button recoveryDetails = new() { Content="Kurtarma uyarısı ayrıntıları", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button recoveryDetails = new() { Content="Kurtarma uyarısı ayrıntıları", Visibility=Visibility.Collapsed };
     private readonly TextBlock recoveryScanNotice = new() { Visibility=Visibility.Collapsed, Foreground=StudioTheme.Warning, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0) };
-    private readonly Button recoveryScanDetails = new() { Content="Tarama hatası ayrıntıları", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
-    private readonly Button recoveryOpen = new() { Content="Kurtarma kayıtlarını incele", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button recoveryScanDetails = new() { Content="Tarama hatası ayrıntıları", Visibility=Visibility.Collapsed };
+    private readonly Button recoveryOpen = new() { Content="Kurtarma kayıtlarını incele", Visibility=Visibility.Collapsed };
     private RecoveryScanResult? recoveryScan;
     private RecoveryScanCursor? recoveryCursor;
     private bool recoveryHasMore;
@@ -157,6 +158,7 @@ public class MainWindow : Window
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfPointVertexSelection>?>? ConfirmDxfPointsForVerification { get; set; }
+    internal Func<DxfAamaLayerSuggestion,bool>? ConfirmDxfAamaRolesForVerification { get; set; }
     internal Action? BeforeDxfPointCommitForVerification { get; set; }
     internal Func<PatternPiece,int,bool>? ConfirmDeleteWithGradingForVerification { get; set; }
     internal Action<Window>? MetadataDialogSuccessForVerification { get; set; }
@@ -166,11 +168,11 @@ public class MainWindow : Window
     private DxfPreparationStamp? dxfPreparationStamp;
     private DxfImportResult? preparedDxf;
     private bool preparedDxfReflectY;
-    private readonly Button dxfReview = new() { Content="DXF önizlemesini aç", Visibility=Visibility.Collapsed, Margin=new Thickness(0,4,0,0) };
-    private readonly Button dxfCancel = new() { Content="DXF okumayı iptal et", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
+    private readonly Button dxfReview = new() { Content="DXF önizlemesini aç", Visibility=Visibility.Collapsed };
+    private readonly Button dxfCancel = new() { Content="DXF okumayı iptal et", Visibility=Visibility.Collapsed };
     private readonly TextBlock dxfNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
     private readonly TextBlock sourceHistoryNotice = new() { TextWrapping=TextWrapping.Wrap, FontSize=11, Margin=new Thickness(0,4,0,0), Focusable=true };
-    private readonly Button sourceHistoryDetails = new() { Content="DXF kaynak ve aktarım notları", Margin=new Thickness(0,4,0,0), HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly Button sourceHistoryDetails = new() { Content="DXF kaynak ve aktarım notları" };
     private double preparedDxfFactor;
     private string preparedDxfSource="";
     private DxfTextEncoding? preparedDxfEncoding;
@@ -207,78 +209,95 @@ public class MainWindow : Window
         var root = new DockPanel { LastChildFill = true }; Content = root;
 
         // Project identity and save state remain visible independently of the inspector.
-        var header = new Grid { Margin = new Thickness(22, 16, 22, 16) };
+        // The header is kept short so that the drawing canvas gets the height.
+        var header = new Grid { Margin = new Thickness(16, 8, 16, 6) };
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var brand = new StackPanel { Margin = new Thickness(0, 0, 28, 0) };
-        brand.Children.Add(new TextBlock { Text = "Mono Di Tree CAD", Foreground = StudioTheme.Accent, FontWeight = FontWeights.Bold, FontSize = 22 });
-        brand.Children.Add(new TextBlock { Text = "STUDIO  /  KALIP TASARIMI", Foreground = Muted, FontSize = 9, Margin = new Thickness(1, 3, 0, 0) });
+        var brand = new StackPanel { Margin = new Thickness(0, 0, 22, 0) };
+        brand.Children.Add(new TextBlock { Text = "Mono Di Tree CAD", Foreground = StudioTheme.Accent, FontWeight = FontWeights.Bold, FontSize = 18 });
+        // The About entry shares the line under the brand with the tagline, so the header grows neither wider nor taller.
+        var brandLine = new DockPanel { Margin = new Thickness(0, 2, 0, 0) }; brand.Children.Add(brandLine);
+        var about = AddButton(brandLine, "Hakkında", OpenAbout, "Sürüm, veri klasörü ve açık kaynak bildirimleri · F1");
+        DockPanel.SetDock(about, Dock.Right); about.Margin = new Thickness(10, 0, 0, 0);
+        about.Padding = new Thickness(9, 3, 9, 3); about.MinHeight = 26; about.FontSize = 11;
+        brandLine.Children.Add(new TextBlock { Text = "STUDIO  /  KALIP TASARIMI", Foreground = Muted, FontSize = 9, Margin = new Thickness(1, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
         header.Children.Add(brand);
-        var project = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        // The notice column stops growing on wide windows, so that an action stays near its text. The empty
+        // element makes the column exactly that wide (or as wide as the window allows) whatever the notices
+        // say, which keeps the actions in one place while texts change.
+        const double noticeColumnWidth = 780;
+        var project = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = noticeColumnWidth };
+        project.Children.Add(new FrameworkElement { Width = noticeColumnWidth });
         projectTitle.FontSize = 15; projectTitle.FontWeight = FontWeights.SemiBold; projectTitle.TextTrimming = TextTrimming.CharacterEllipsis;
         projectTitle.TextWrapping = TextWrapping.NoWrap; projectTitle.MaxHeight = 24;
-        project.Children.Add(projectTitle);
-        saveState.FontSize = 11; saveState.Margin = new Thickness(0, 5, 0, 0); project.Children.Add(saveState);
+        // Title and save state share one row. The row is only as wide as its content, so the
+        // state follows the title directly and a long title is trimmed before the state is.
+        var titleRow = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
+        titleRow.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        titleRow.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        titleRow.Children.Add(projectTitle);
+        saveState.FontSize = 11; saveState.Margin = new Thickness(14, 0, 0, 1); saveState.VerticalAlignment = VerticalAlignment.Bottom;
+        // "✓ Kaydedildi · <file name>" has no length limit. The state may take at most 60% of the row and is
+        // trimmed beyond that (the tooltip and the window title keep the full path), so a long file name
+        // cannot squeeze the project title away. The unsaved-work texts are far shorter than that share.
+        saveState.TextTrimming = TextTrimming.CharacterEllipsis; saveState.TextWrapping = TextWrapping.NoWrap;
+        project.SizeChanged += (_, e) => saveState.MaxWidth = Math.Max(160, e.NewSize.Width * .6);
+        Grid.SetColumn(saveState, 1); titleRow.Children.Add(saveState);
+        project.Children.Add(titleRow);
         // This format does not retain import provenance. Keep the limitation visible
         // after opening, editing, or saving a project without claiming that its geometry is unsafe.
         sourceHistoryNotice.Text=SourceHistoryNotice;sourceHistoryNotice.Foreground=StudioTheme.Muted;
         AutomationProperties.SetName(sourceHistoryNotice,SourceHistoryNotice);
         AutomationProperties.SetHelpText(sourceHistoryNotice,"Dışa aktarma ve simülasyon öncesinde, varsa özgün dosyayla ölçü ve yerleşimi kontrol edin. Bu bilgi doğrulanmış üretim onayı değildir.");
-        project.Children.Add(sourceHistoryNotice);
         AutomationProperties.SetName(sourceHistoryDetails,"DXF kaynak ve aktarım notlarını incele");
         sourceHistoryDetails.Click+=(_,_)=>CreateDxfSourceHistoryWindow().ShowDialog();
-        project.Children.Add(sourceHistoryDetails);
+        project.Children.Add(NoticeRow(sourceHistoryNotice,sourceHistoryDetails));
         System.Windows.Automation.AutomationProperties.SetName(nestingHistoryNotice,"Pastal geçmişi durumu");
         System.Windows.Automation.AutomationProperties.SetLiveSetting(nestingHistoryNotice,System.Windows.Automation.AutomationLiveSetting.Polite);
-        project.Children.Add(nestingHistoryNotice);
         System.Windows.Automation.AutomationProperties.SetName(nestingHistoryDetails,"Pastal geçmişini incele");
         nestingHistoryDetails.Click+=(_,_)=> { if(Document.NestingSnapshot is not null) CreateNestingHistoryWindow().ShowDialog(); };
-        project.Children.Add(nestingHistoryDetails);
+        project.Children.Add(NoticeRow(nestingHistoryNotice,nestingHistoryDetails));
         System.Windows.Automation.AutomationProperties.SetName(exportNotice,"Dışa aktarma durumu");
         System.Windows.Automation.AutomationProperties.SetLiveSetting(exportNotice,System.Windows.Automation.AutomationLiveSetting.Polite);
-        project.Children.Add(exportNotice);
+        System.Windows.Automation.AutomationProperties.SetName(exportCancel,"HPGL dışa aktarımını iptal et");
+        exportCancel.Click += (_, _) => RequestExportCancellation();
+        project.Children.Add(NoticeRow(exportNotice,exportCancel));
         System.Windows.Automation.AutomationProperties.SetLiveSetting(dxfNotice,System.Windows.Automation.AutomationLiveSetting.Polite);
-        project.Children.Add(dxfNotice);
         System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
-        project.Children.Add(dxfCancel);
         dxfCancel.Click += (_,_) => RequestDxfCancellation();
-        project.Children.Add(dxfReview);
         AutomationProperties.SetName(dxfReview,"DXF önizlemesini aç");
         dxfReview.Click += (_,_) => ReviewPreparedDxf();
-        System.Windows.Automation.AutomationProperties.SetName(exportCancel,"HPGL dışa aktarımını iptal et");
-        project.Children.Add(exportCancel);
-        exportCancel.Click += (_, _) => RequestExportCancellation();
-        project.Children.Add(recoveryNotice);
-        project.Children.Add(recoveryDetails);
+        project.Children.Add(NoticeRow(dxfNotice,dxfCancel,dxfReview));
         AutomationProperties.SetName(recoveryDetails,"Kurtarma uyarısı ayrıntıları");
-        project.Children.Add(recoveryScanNotice);
+        project.Children.Add(NoticeRow(recoveryNotice,recoveryDetails));
         AutomationProperties.SetLiveSetting(recoveryScanNotice,AutomationLiveSetting.Polite);
         AutomationProperties.SetName(recoveryScanDetails,"Kurtarma taraması hatası ayrıntıları");
-        project.Children.Add(recoveryScanDetails);
-        project.Children.Add(recoveryOpen);
+        project.Children.Add(NoticeRow(recoveryScanNotice,recoveryScanDetails,recoveryOpen));
         recoveryDetails.Click += (_, _) => MessageBox.Show(this, recoveryNotice.ToolTip as string ?? "Ayrıntı bulunmuyor.", "Kurtarma uyarısı ayrıntıları", MessageBoxButton.OK, MessageBoxImage.Information);
         recoveryScanDetails.Click += (_, _) => MessageBox.Show(this, recoveryScanNotice.ToolTip as string ?? "Ayrıntı bulunmuyor.", "Kurtarma taraması hatası", MessageBoxButton.OK, MessageBoxImage.Warning);
         recoveryOpen.Click += (_, _) => OfferRecovery();
         Grid.SetColumn(project, 1); header.Children.Add(project);
-        var mode = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(12, 8, 12, 8), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = "YEREL ÇALIŞMA  ·  mm", Foreground = Muted, FontSize = 10 } };
+        var mode = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top, Child = new TextBlock { Text = "YEREL ÇALIŞMA  ·  mm", Foreground = Muted, FontSize = 10 } };
         Grid.SetColumn(mode, 2); header.Children.Add(mode);
         DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
 
-        var commandArea = new WrapPanel { Margin = new Thickness(16, 0, 16, 12) };
+        var commandArea = new WrapPanel { Margin = new Thickness(12, 0, 12, 6) };
         var start = CommandGroup(commandArea, "BAŞLANGIÇ");
-        var design = AddButton(start, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "İstek hazırlar; kalıp oluşturmaz.");
-        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.Background;
+        var design = AddButton(start, "Kalıp isteği hazırla…", OpenDesignRequest, "İstek hazırlar; kalıp oluşturmaz.");
+        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.OnAccent;
         var files = CommandGroup(commandArea, "PROJE");
         AddButton(files, "Yeni", NewDocument, "Yeni proje · Ctrl+N");
         AddButton(files, "Aç…", Open, "Proje aç · Ctrl+O");
         projectOpenCancel=AddButton(files,"Açmayı iptal et",CancelProjectOpen,"Okuma sonucunu kullanma; mevcut çalışma korunur.");
         projectOpenCancel.Visibility=Visibility.Collapsed;
-        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
+        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.OnAccent;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
-        AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true);
-        recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
+        CompactLabel(AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true), "Güvenli kopya…");
+        recoveryRescan = AddButton(files, "Kurtarma tara", RescanRecovery, "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
+        // Slightly narrower buttons keep both groups and the two collapsed groups on one row at the minimum window width.
+        foreach (var command in start.Children.OfType<Button>().Concat(files.Children.OfType<Button>())) command.Padding = new Thickness(8);
         var exchange = CollapsibleCommands(commandArea, "Dosya aktarımı");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
@@ -334,7 +353,7 @@ public class MainWindow : Window
             var selectedTool = tool;
             var button = AddButton(tools, tool, () => { SetTool(selectedTool); if(ActiveTool==selectedTool)canvas?.Focus(); }, tool + " · " + shortcut + " (kalıp alanı odaktayken)");
             button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-            button.Padding = new Thickness(10, 10, 8, 10);
+            button.Padding = new Thickness(10, 4, 8, 4);
             var item = new Grid(); item.ColumnDefinitions.Add(new() { Width = new GridLength(24) }); item.ColumnDefinitions.Add(new()); item.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             item.Children.Add(new TextBlock { Text = glyph, FontSize = 18, VerticalAlignment = VerticalAlignment.Center });
             var label = new TextBlock { Text = tool, FontSize = 12, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(label, 1); item.Children.Add(label);
@@ -343,14 +362,14 @@ public class MainWindow : Window
             System.Windows.Automation.AutomationProperties.SetName(button, tool);
             toolButtons[tool] = button;
         }
-        AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin.");
+        CompactLabel(AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin."), "Koordinat gir…");
         AddButton(tools,"Açık çizgiyi bitir",FinishOpenDrawing,"Çoklu çizgiyi en az iki noktayla uçları birleştirmeden bitirir. Tuvalde Shift+Enter kullanılabilir.");
         tools.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 14, 3, 10) });
         selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi ve varsa köşe işaretlerini aynı konumda kopyalar; parça bilgileri, iplik yönü ve uygun serileme kuralı isteğe bağlıdır. Pastal geçmişi kopyalanmaz."));
         selectionCommands.Add(AddButton(tools, "Parçayı sil", DeleteSelectionFromKeyboard, "Seçili parçayı sil · Delete"));
-        selectionCommands.Add(AddButton(tools, "Seçili parçayı A4 PDF çıkar…", ExportSelectedA4, "Yalnız seçili parçayı gerçek boyutlu A4 inceleme sayfalarına aktarır; kaynak proje değişmez."));
+        selectionCommands.Add(CompactLabel(AddButton(tools, "Seçili parçayı A4 PDF çıkar…", ExportSelectedA4, "Yalnız seçili parçayı gerçek boyutlu A4 inceleme sayfalarına aktarır; kaynak proje değişmez."), "A4 PDF çıkar…"));
         tools.Children.Add(Label("GÖRÜNÜM", Muted, 10));
-        selectionCommands.Add(AddButton(tools, "Seçili parçayı göster", () => canvas?.FitSelectedPiece(), "Seçili parçayı çalışma alanına sığdır · G (kalıp alanı odaktayken)"));
+        selectionCommands.Add(CompactLabel(AddButton(tools, "Seçili parçayı göster", () => canvas?.FitSelectedPiece(), "Seçili parçayı çalışma alanına sığdır · G (kalıp alanı odaktayken)"), "Seçiliyi göster"));
         var navigation = new WrapPanel(); tools.Children.Add(navigation);
         void ViewButton(string glyph,string label,Action action,string hint)
         {
@@ -399,25 +418,20 @@ public class MainWindow : Window
         selectionCommands.Add(AddButton(inspector,"İplik yönü…",EditGrainline,"Seçili parçanın iplik yönü çizgisini girin veya kaldırın. SVG çizgiyi görsel olarak içerir; işaretli parçaların DXF ve HPGL çıktısı henüz desteklenmez."));
         selectionCommands.Add(AddButton(inspector, "Parametrik konturu düzenle…", EditParametricContour,
             "Bézier kontrol noktalarını veya yay merkezi/açılarını değiştirir. Kaydedilmiş analitik geometri korunur."));
-        selectionCommands.Add(AddButton(inspector, "Parametrik konturu poliline dönüştür…", FlattenParametricContour,
-            "Bézier/yay parametrelerini onaydan sonra kaldırıp mevcut örneklenmiş noktaları sabit kontur olarak tutar; geri alınabilir."));
+        selectionCommands.Add(CompactLabel(AddButton(inspector, "Parametrik konturu poliline dönüştür…", FlattenParametricContour,
+            "Bézier/yay parametrelerini onaydan sonra kaldırıp mevcut örneklenmiş noktaları sabit kontur olarak tutar; geri alınabilir."), "Poliline dönüştür…"));
         AutomationProperties.SetName(grainlineStatus,"İplik yönü durumu");
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
-        var rotateCounterclockwise=AddButton(transforms, "90° sola", () => TransformWithGrading((points,center) => Geometry.Rotate(points,-90,center),OrthogonalGradingTransform.RotateRight), "Parçayı merkezinden saat yönünün tersine döndür");
-        AutomationProperties.SetName(rotateCounterclockwise,"Parçayı saat yönünün tersine 90 derece döndür");
-        selectionCommands.Add(rotateCounterclockwise);
-        var rotateClockwise=AddButton(transforms, "90° sağa", () => TransformWithGrading((points,center) => Geometry.Rotate(points,90,center),OrthogonalGradingTransform.RotateLeft), "Parçayı merkezinden saat yönünde 90 derece döndür");
-        AutomationProperties.SetName(rotateClockwise,"Parçayı saat yönünde 90 derece döndür");
-        selectionCommands.Add(rotateClockwise);
-        selectionCommands.Add(AddButton(transforms, "Aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,true,center.X),OrthogonalGradingTransform.MirrorVertical), "Parçayı merkezinden geçen dikey eksene göre aynala"));
+        // The five orthogonal transforms come from one table (OrthogonalOps) that the
+        // command executor also reads, so a button and a typed command cannot disagree.
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateCounterclockwise));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateClockwise));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.MirrorVertical));
         selectionCommands.Add(AddButton(transforms,"Yanına aynalı parça…",OpenMirrorCopy,"Kaynağı koruyarak sağ veya sola boşluklu aynalı karşı parça oluşturur; önce önizleme sunar."));
-        var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,false,center.Y),OrthogonalGradingTransform.MirrorHorizontal), "Parçayı merkezinden geçen yatay eksene göre aynala");
-        AutomationProperties.SetName(mirrorHorizontal,"Parçayı yatay eksene göre aynala");
-        selectionCommands.Add(mirrorHorizontal);
-        var rotateHalf=AddButton(transforms,"180° döndür",()=>TransformWithGrading((points,center)=>Geometry.Rotate(points,180,center),OrthogonalGradingTransform.RotateHalf),"Parçayı merkezinden 180 derece tek işlemde döndür");
-        AutomationProperties.SetName(rotateHalf,"Parçayı merkezinden 180 derece döndür");selectionCommands.Add(rotateHalf);
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.MirrorHorizontal));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateHalf));
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
         inspector.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(5), Padding = new Thickness(12), Margin = new Thickness(3, 14, 3, 14), Child = metrics });
         snap.Margin = new Thickness(4, 4, 0, 14); inspector.Children.Add(snap);
@@ -498,23 +512,32 @@ public class MainWindow : Window
         Grid.SetColumn(inspectorShell, 2); workspace.Children.Add(inspectorShell);
 
         var canvasArea = new DockPanel();
-        var canvasHeader = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 5, 10, 5) };
+        var canvasHeader = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 2, 10, 2) };
         var viewCommands = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(viewCommands, Dock.Right); canvasHeader.Children.Add(viewCommands);
         undoCommand = AddButton(viewCommands, "↶", Undo, "Geri al · Ctrl+Z");
         redoCommand = AddButton(viewCommands, "↷", Redo, "Yinele · Ctrl+Y");
         fitCommand = AddButton(viewCommands, "Tümünü göster", () => canvas?.Fit(), "Parçaları, iplik yönlerini ve tamamlanmamış çizimi çalışma alanına sığdır · F");
         System.Windows.Automation.AutomationProperties.SetName(undoCommand, "Geri al");
         System.Windows.Automation.AutomationProperties.SetName(redoCommand, "Yinele");
-        canvasTool.Foreground = Muted; canvasTool.FontSize = 11; canvasTool.VerticalAlignment = VerticalAlignment.Center; canvasHeader.Children.Add(canvasTool);
+        canvasTool.Foreground = Muted; canvasTool.FontSize = 11; canvasTool.VerticalAlignment = VerticalAlignment.Center;
+        DockPanel.SetDock(canvasTool, Dock.Left); canvasHeader.Children.Add(canvasTool);
+        // Unit, grid spacing and zoom sit beside the title instead of on the canvas, where they covered piece labels.
+        canvasView.Foreground = Muted; canvasView.FontSize = 11; canvasView.ToolTip = "Ölçü birimi · ızgara aralığı (mm) · görünüm yakınlığı";
+        canvasHeader.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(14, 0, 8, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Child = canvasView });
         DockPanel.SetDock(canvasHeader, Dock.Top); canvasArea.Children.Add(canvasHeader);
         AutomationProperties.SetName(historyCapacityNotice,"İşlem geçmişi kapasite uyarısı");
         AutomationProperties.SetHelpText(historyCapacityNotice,"Geri alma ve yineleme geçmişi boyut ve adım sayısı ile sınırlıdır. Kalan adımları araç çubuğundan inceleyin.");
         AutomationProperties.SetLiveSetting(historyCapacityNotice,AutomationLiveSetting.Polite);
         DockPanel.SetDock(historyCapacityNotice,Dock.Top); canvasArea.Children.Add(historyCapacityNotice);
-        canvas = new CadCanvas(this); canvasArea.Children.Add(canvas);
+        canvas = new CadCanvas(this); canvasArea.Children.Add(canvas); CanvasViewChanged();
         var canvasShell = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = canvasArea };
         Grid.SetColumn(canvasShell, 1); workspace.Children.Add(canvasShell);
 
+        // Layout containers kept as fields so the optional simple view can rearrange this same tree (MainWindow.SimpleView.cs).
+        rootPanel = root; headerGrid = header; commandAreaPanel = commandArea; workspaceGrid = workspace; toolsPanel = tools; this.railScroller = railScroller;
+        inspectorPanel = inspector; canvasHeaderPanel = canvasHeader; statusBarBorder = statusBar; footerPanel = footer; taglineText = brandLine.Children.OfType<TextBlock>().First();
+        brandLinePanel = brandLine; aboutButton = about; unitsText = units; modeChip = mode; projectPanel = project; navigationPanel = navigation; viewCommandsPanel = viewCommands;
+        canvasShellBorder = canvasShell; inspectorShellBorder = inspectorShell;
         KeyDown += OnKeyDown;
         try { recoveryStore=new RecoveryStore(AppPaths.RecoveryDirectory); recoveryWriter=new RecoveryWriteCoordinator(recoveryStore); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -560,7 +583,7 @@ public class MainWindow : Window
         Closed += (_, _) => { recoveryScanCancellation.Cancel(); if(!recoveryScanRunning) { recoveryCursor?.Dispose(); recoveryCursor=null; } };
         autosaveTimer.Tick += async (_, _) => await SaveRecoveryAsync();
         autosaveTimer.Start();
-        Loaded += async (_, _) => { Refresh(); canvas.Fit(); canvas.Focus(); await BeginRecoveryScan(); };
+        Loaded += async (_, _) => { Refresh(); canvas.Fit(); if (!FocusSimpleCommandBar()) canvas.Focus(); await BeginRecoveryScan(); };
         SetTool("Seç"); Refresh();
     }
     private static TextBlock Label(string text, Brush? color = null, int size = 12) => new() { Text = text, Foreground = color ?? Ink, FontSize = size, Margin = new Thickness(4, 8, 0, 7) };
@@ -662,10 +685,40 @@ public class MainWindow : Window
         public object ConvertBack(object value,Type targetType,object parameter,CultureInfo culture)=>throw new NotSupportedException();
     }
     private static void StyleInput(TextBox box) { box.Padding = new Thickness(8); box.Margin = new Thickness(3); box.MinWidth = 0; }
+    /// <summary>Show a label that fits a narrow panel. The full command name stays the accessible
+    /// name and leads the tooltip, so nothing is lost for screen readers or on hover.</summary>
+    private static Button CompactLabel(Button button, string shortLabel)
+    {
+        var full = (string)button.Content;
+        AutomationProperties.SetName(button, full);
+        // Without an explicit help text WPF reports the tooltip, which now starts with the name; a screen
+        // reader would then say the name twice.
+        if (button.ToolTip is string hint) { AutomationProperties.SetHelpText(button, hint); button.ToolTip = full + "\n" + hint; }
+        else button.ToolTip = full;
+        button.Content = shortLabel;
+        return button;
+    }
+    /// <summary>One header notice: its wrapping text on the left and its actions on the same row to the right.
+    /// Every child keeps its own Visibility, so a notice with nothing to show takes no height.</summary>
+    private static Grid NoticeRow(TextBlock notice, params Button[] actions)
+    {
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        notice.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(notice);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var action in actions)
+        {
+            action.Margin = new Thickness(8, 4, 0, 0); action.Padding = new Thickness(9, 3, 9, 3); action.MinHeight = 26; action.FontSize = 11;
+            buttons.Children.Add(action);
+        }
+        Grid.SetColumn(buttons, 1); row.Children.Add(buttons);
+        return row;
+    }
     private static StackPanel CommandGroup(System.Windows.Controls.Panel parent, string title)
     {
-        var group = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
-        group.Children.Add(new TextBlock { Text = title, FontSize = 9, Foreground = Muted, Margin = new Thickness(5, 0, 0, 5) });
+        var group = new StackPanel { Margin = new Thickness(0, 0, 10, 0) };
+        group.Children.Add(new TextBlock { Text = title, FontSize = 9, Foreground = Muted, Margin = new Thickness(5, 0, 0, 2) });
         var commands = new StackPanel { Orientation = Orientation.Horizontal }; group.Children.Add(commands); parent.Children.Add(group); return commands;
     }
     private static StackPanel CollapsibleCommands(System.Windows.Controls.Panel parent,string title)
@@ -673,7 +726,10 @@ public class MainWindow : Window
         var commands=new StackPanel { Margin=new Thickness(4),MaxWidth=300 };
         var scroll=new ScrollViewer { Content=commands,MaxHeight=210,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(scroll,title+" işlemleri");
-        var expander=new Expander { Header=title,Content=scroll,Margin=new Thickness(3),Foreground=StudioTheme.Text,HorizontalAlignment=HorizontalAlignment.Left };
+        // The top margin puts the collapsed header on the line of the command buttons beside it (group caption
+        // plus button margin). Top alignment keeps it there when the other group opens and the row grows;
+        // bottom alignment would drop the still-collapsed header to the bottom of that taller row.
+        var expander=new Expander { Header=title,Content=scroll,Margin=new Thickness(3,22,3,8),Foreground=StudioTheme.Text,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top };
         AutomationProperties.SetName(expander,title);
         AutomationProperties.SetHelpText(expander,"İşlemleri göstermek veya gizlemek için açın.");
         parent.Children.Add(expander);
@@ -715,7 +771,9 @@ public class MainWindow : Window
             throw new InvalidOperationException("Yeni proje açıldı, ancak görünüm yenilenemedi. Önceki çalışma geri getirilmedi; ana çalışma alanını kontrol edin.",ex);
         }
     }
-    public void SetStatus(string value) { status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); }
+    // announce=false is for the cursor read-out, which rewrites the status on every mouse move and must stay silent.
+    private int statusWrites;
+    public void SetStatus(string value, bool announce = true) { statusWrites++; status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); simpleView?.StatusChanged(value, announce); }
     internal void ShowCanvasError(string message)
     {
         var changed=canvasError.Text!=message || canvasErrorPanel.Visibility!=Visibility.Visible;
@@ -755,6 +813,8 @@ public class MainWindow : Window
         recoveryDetails.Visibility=recoveryNotice.Visibility;
     }
     public void FitView() => canvas.Fit();
+    /// <summary>Called by the canvas whenever its zoom changes, to refresh the view information in the canvas title row.</summary>
+    internal void CanvasViewChanged() => canvasView.Text = canvas.ViewInfo;
     public void Select(Guid? id)
     {
         if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation()))return;
@@ -777,6 +837,7 @@ public class MainWindow : Window
         selection.Clear();selection.AddRange(ids);
         if(primary is { } value && !selection.Contains(value))selection.Add(value);
         SelectedId=primary;
+        commandBox?.OnContextChanged();
     }
     private void ApplyListSelection(IReadOnlyList<Guid> ids)
     {
@@ -1001,11 +1062,11 @@ public class MainWindow : Window
         foreach(var button in toolButtons)
         {
             button.Value.Background = button.Key == tool ? StudioTheme.Accent : StudioTheme.Surface;
-            button.Value.Foreground = button.Key == tool ? StudioTheme.Background : StudioTheme.Text;
+            button.Value.Foreground = button.Key == tool ? StudioTheme.OnAccent : StudioTheme.Text;
             button.Value.BorderBrush = button.Key == tool ? StudioTheme.Accent : StudioTheme.Border;
         }
-        canvasTool.Text = "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
-        SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool));
+        canvasTool.Text = SimpleToolHeading(tool) ?? "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
+        SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool), announce: false);
     }
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
     public void Commit(string description, Action action) => CommitObserved(description,action,null);
@@ -1216,6 +1277,7 @@ public class MainWindow : Window
         if (notchReviewExportCommand is not null) notchReviewExportCommand.IsEnabled = Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !ExportRunning && !DxfImportRunning;
         UpdateFitCommand();
         canvas?.InvalidateVisual();
+        simpleView?.OnRefreshed();
     }
     private void UpdateHistoryCapacityNotice()
     {
@@ -1347,7 +1409,7 @@ public class MainWindow : Window
         }
         Title = $"{safeTitle}{(HasUnsavedWork ? " *" : "")} — {(AppPaths.IsIsolatedPreview ? "Mono Di Tree CAD · Geliştirme Önizlemesi" : "Mono Di Tree CAD · 0.4 Önizleme")}";
         var recoveryTime=lastRecoveryAt is { } at ? $" · Son kurtarma: {at.ToString("g",CultureInfo.CurrentCulture)}" : "";
-        saveState.Text = (canvas?.HasPendingDrawing ?? false) ? "● Tamamlanmamış çizim"+recoveryTime : propertyDrafts.Count > 0 ? $"● Alan taslağı: {propertyDrafts.Count} parça{recoveryTime}" : dirty ? "● Kaydedilmemiş değişiklikler"+recoveryTime : filePath is null ? "Yeni proje · Henüz dosyaya kaydedilmedi" : "✓ Kaydedildi · " + Path.GetFileName(filePath);
+        saveState.Text = (canvas?.HasPendingDrawing ?? false) ? "● Tamamlanmamış çizim"+recoveryTime : propertyDrafts.Count > 0 ? $"● Alan taslağı: {propertyDrafts.Count} parça{recoveryTime}" : dirty ? "● Kaydedilmemiş değişiklikler"+recoveryTime : filePath is null ? "Henüz kaydedilmedi" : "✓ Kaydedildi · " + Path.GetFileName(filePath);
         saveState.Foreground = HasUnsavedWork ? StudioTheme.Warning : StudioTheme.Muted;
         saveState.ToolTip = recoveryClearFailed ? "Önceki kurtarma kaydı temizlenemedi ve korunuyor; Kaydet, yeni proje veya kapatma sırasında yeniden denenecek." : HasUnsavedWork ? "Otomatik kurtarma son başarılı kayıt zamanını gösterir; sonraki değişiklikler henüz kurtarma kaydında olmayabilir. Kalıcı kayıt için Kaydet'i kullanın." : filePath;
     }
@@ -1560,29 +1622,21 @@ public class MainWindow : Window
         {
             var piece=document.Pieces.First(p=>p.Id==change.Id);var bounds=Geometry.Bounds(piece.Points);
             var dx=change.X-bounds.MinX;var dy=change.Y-bounds.MinY;
-            List<Point2>? translated;
-            Grainline? translatedGrain;
-            List<NotchMark>? translatedNotches=null;
-            try
-            {
-                translated=null;
-                if(dx!=0 || dy!=0) (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
-                translatedGrain=translated is null ? piece.Grainline?.Clone()
-                    : GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
-            }
+            PieceTranslation moved;
+            try { moved=TranslatePiece(piece,dx,dy); }
             catch(ArgumentException ex)
             {
                 throw new InvalidDataException($"“{SafePieceName(piece.Name)} (kimlik: {piece.Id:D})” konumu güvenle uygulanamadı. Taslak korunuyor. {ex.Message}",ex);
             }
+            var translated=moved.Points;
             if(translated is not null)
             {
                 var actual=Geometry.Bounds(translated);
                 if(!TargetPositionMatches(actual.MinX,change.X) || !TargetPositionMatches(actual.MinY,change.Y))
                     throw new InvalidDataException($"“{SafePieceName(piece.Name)} (kimlik: {piece.Id:D})” için istenen konum sayısal hassasiyetle yeterince temsil edilemiyor. Taslak korunuyor; daha küçük koordinatlar kullanın.");
             }
-            var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
-            var movedRule=rule?.TranslatedFor(piece,translated!,dx,dy);
-            prepared.Add((piece,change.Name,translated,translatedNotches,translatedGrain,rule,movedRule));
+            var (rule,movedRule)=TranslateGradingRule(document,piece,translated,dx,dy);
+            prepared.Add((piece,change.Name,translated,moved.Notches,moved.Grainline,rule,movedRule));
         }
         foreach(var item in prepared)
         {
@@ -1590,6 +1644,28 @@ public class MainWindow : Window
             if(item.MovedRule is not null)document.GradingRules[document.GradingRules.IndexOf(item.Rule!)]=item.MovedRule;
             item.Piece.Name=item.Name;
         }
+    }
+    /// <summary>Piece geometry after a translation. <c>Points</c> is null when nothing moves (dx and dy both zero).</summary>
+    internal readonly record struct PieceTranslation(List<Point2>? Points,List<NotchMark>? Notches,Grainline? Grainline);
+    /// <summary>
+    /// Shared translation of one piece: contour, notch marks and grainline move together.
+    /// Used by the position-draft path (<see cref="ApplyDraftChanges"/>) and by command edits.
+    /// <see cref="ArgumentException"/> from the numeric-precision checks propagates; callers word it.
+    /// </summary>
+    internal static PieceTranslation TranslatePiece(PatternPiece piece,double dx,double dy)
+    {
+        List<Point2>? translated=null;
+        List<NotchMark>? translatedNotches=null;
+        if(dx!=0 || dy!=0) (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
+        var translatedGrain=translated is null ? piece.Grainline?.Clone()
+            : GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
+        return new(translated,translatedNotches,translatedGrain);
+    }
+    /// <summary>The grading rule that follows a moved piece (null rule or null moved rule when none applies or it became stale).</summary>
+    internal static (GradingRuleSet? Rule,GradingRuleSet? MovedRule) TranslateGradingRule(ProjectDocument document,PatternPiece piece,List<Point2>? translated,double dx,double dy)
+    {
+        var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
+        return (rule,rule?.TranslatedFor(piece,translated!,dx,dy));
     }
     // An eight-ULP bound is a representation check around the requested double,
     // not a manufacturing tolerance. In particular, signed zero only matches
@@ -1967,8 +2043,10 @@ public class MainWindow : Window
     private void Redo() => ApplyHistoryChange(true);
     private void ApplyHistoryChange(bool redo)
     {
-        if(BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation() || (redo ? session.RedoCount : session.UndoCount)==0 ||
-           !ConfirmStableDiscardPendingDrawing(redo ? "Yinelenirse" : "Geri alınırsa"))return;
+        if(BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation())return;
+        // The simple view keeps these buttons focusable when there is nothing to do, so the answer must be spoken here.
+        if((redo ? session.RedoCount : session.UndoCount)==0) { SetStatus(redo ? "Yinelenecek işlem yok." : "Geri alınacak işlem yok."); return; }
+        if(!ConfirmStableDiscardPendingDrawing(redo ? "Yinelenirse" : "Geri alınırsa"))return;
         if(BlockForActiveDrag() || BlockForLargeVertexValidation() || !(redo ? session.Redo() : session.Undo()))return;
         // The history operation has already changed the document. A later UI
         // failure must not encourage the user to undo the next history entry.
@@ -2027,7 +2105,7 @@ public class MainWindow : Window
         var cancel = AddButton(buttons, "Vazgeç", () => prompt.DialogResult = false); cancel.IsCancel = true;
         AddButton(buttons, "Kaydetmeden devam et", () => prompt.DialogResult = true);
         var save = AddButton(buttons, "Kaydet", () => { Save(); if (!HasUnsavedDocumentWork) { onSaved();prompt.DialogResult = true; } }, projectSaveAction:true);
-        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.Background; save.IsDefault = true;
+        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.OnAccent; save.IsDefault = true;
         return prompt;
     }
     private void Open()
@@ -2035,6 +2113,8 @@ public class MainWindow : Window
         if(BlockForDxfImport())return;
         if(projectOpenRunning) { SetStatus("Proje açma işlemi sürüyor.");return; }
         var dlg = new OpenFileDialog { Filter = "Mono Di Tree CAD proje (*.tcad)|*.tcad|JSON (*.json)|*.json" };
+        // Starts where the save dialog puts new projects, when that folder exists already.
+        if (AppPaths.InteractiveProjectsDirectory is { } projects && Directory.Exists(projects)) dlg.InitialDirectory = projects;
         if (dlg.ShowDialog(this) != true) return;
         _ = OpenProjectFileAsync(dlg.FileName);
     }
@@ -2735,6 +2815,46 @@ public class MainWindow : Window
                 pointSelections=selection.ToArray();
                 if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
             }
+            // Optional AAMA/ASTM numbered-layer role proposal. It is offered only
+            // when no POINT mapping was chosen, because that path builds a second
+            // marked document this proposal does not update.
+            IReadOnlyList<DxfTextileRoleSelection> roleSelections=Array.Empty<DxfTextileRoleSelection>();
+            if(pointSelections.Count==0 && (ConfirmDxfReviewForVerification is null || ConfirmDxfAamaRolesForVerification is not null))
+            {
+                DxfAamaLayerSuggestion? roleSuggestion=null;
+                DxfTextileRoleSelection[] eligibleRoles=Array.Empty<DxfTextileRoleSelection>();
+                var skippedRoleCandidates=0;
+                try
+                {
+                    roleSuggestion=DxfAamaLayerPreset.Suggest(imported);
+                    if(roleSuggestion.Proposals.Length>0)
+                    {
+                        var rolePlan=DxfTextileLayerRolePlan.Create(imported,roleSuggestion.ToSelections(),DxfTextileGrainlineMapping.CaptureFingerprint(imported));
+                        var consumedMarkers=grainSelections.Select(s=>s.MarkerId).ToHashSet();
+                        eligibleRoles=rolePlan.Candidates.Where(c=>c.Eligibility==DxfLayerRoleEligibility.Eligible && !consumedMarkers.Contains(c.Selection.PieceId)).Select(c=>c.Selection).ToArray();
+                        skippedRoleCandidates=rolePlan.Candidates.Length-eligibleRoles.Length;
+                    }
+                }
+                catch(Exception ex) when(ex is InvalidDataException or ArgumentException or InvalidOperationException) { roleSuggestion=null; }
+                if(roleSuggestion is not null && eligibleRoles.Length>0)
+                {
+                    bool acceptRoles;
+                    if(ConfirmDxfAamaRolesForVerification is { } confirmRoles)acceptRoles=confirmRoles(roleSuggestion);
+                    else
+                    {
+                        var roleText=new StringBuilder("Bu dosyada AAMA/ASTM numaralı katman adları bulundu:\n\n");
+                        foreach(var proposal in roleSuggestion.Proposals)
+                            roleText.Append(CultureInfo.InvariantCulture,$"Katman {proposal.Number} — {proposal.Meaning}: {proposal.PieceCount} parça → {(proposal.Role==DxfTextileRole.Cutting ? "Kesim" : "Yardımcı")}\n");
+                        roleText.Append(CultureInfo.InvariantCulture,$"\n{eligibleRoles.Length} parçaya önerilen rol atansın mı?");
+                        if(skippedRoleCandidates>0)roleText.Append(CultureInfo.InvariantCulture,$" {skippedRoleCandidates} parça (açık kesim konturu, mevcut rol veya iplik yönüne eşlenen çizgi) atlanır.");
+                        roleText.Append("\n\nKatman adının sayı olması dosyanın standarda uyduğunu kanıtlamaz; roller üretim onayı değildir. Hayır seçilirse rol atanmaz.");
+                        acceptRoles=MessageBox.Show(this,roleText.ToString(),"AAMA/ASTM katman rolleri",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
+                    }
+                    if(!PreparedImportMatches())return;
+                    if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+                    if(acceptRoles)roleSelections=eligibleRoles;
+                }
+            }
             bool saved,discard;
             if(DxfDiscardDecisionForVerification is { } decision) { var choice=decision();discard=choice.Accepted;saved=choice.Saved; }
             else discard=CanDiscard(out saved);
@@ -2782,6 +2902,7 @@ public class MainWindow : Window
                 var markedImport=imported with { Project=marked };
                 marked=DxfTextileGrainlineMapping.Apply(markedImport,grainSelections,DxfTextileGrainlineMapping.CaptureFingerprint(markedImport)).Project;
             }
+            if(roleSelections.Count>0 && marked is null)DxfTextileRoleMapping.ApplyToCopy(candidate,roleSelections,CancellationToken.None);
             var historyWarnings = imported.Warnings.ToList();
             if(reflectY)historyWarnings.Add("Kullanıcı seçimiyle içe aktarılan geometride Y işareti ters çevrildi; kaynak dosya değişmedi. Konum ve kapalı kontur yönü yansıtıldı; kaynakla karşılaştırın.");
             else historyWarnings.Add("Koordinatların yönü korundu; seçilen birim ölçeği dışında Y işareti değiştirilmedi. Tuvalde Y aşağı artar; kaynak görünümünü kontrol edin.");
@@ -2789,6 +2910,8 @@ public class MainWindow : Window
                 historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
             if (grainSelections.Count > 0)
                 historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
+            if(roleSelections.Count>0 && marked is null)
+                historyWarnings.Add("AAMA/ASTM numaralı katman adlarına göre önerilen parça rolleri kullanıcı onayıyla atandı; katman adı standart uyumunu kanıtlamaz. Rolleri kaynakla karşılaştırın.");
             const string pointHistory="POINT kayıtları kullanıcı seçimiyle görsel köşe işareti olarak eşlendi; kaynak POINT kimlikleri projede saklanmaz. Fiziksel çentik veya üretim onayı değildir.";
             var history=new DxfImportProvenance { SourceFileName=preparedDxfSource,
                 SourceSha256=imported.SourceSha256 ?? "", SourceByteLength=imported.SourceByteLength ?? -1,
@@ -3352,6 +3475,26 @@ public class MainWindow : Window
         if(BlockForDxfImport())return;
         EnsurePropertyDraftsApplied();
         new TextileToolsWindow(this).ShowDialog();
+    }
+    /// <summary>
+    /// Opens the textile tools on a given tab (0 grading, 1 contour editing, 2 basic nesting) with an
+    /// optional one-time value for that tab's main input. Same guards as <see cref="OpenTextileTools"/>,
+    /// and they stay first so the guard-prefix inspection of that method still describes this one.
+    /// </summary>
+    internal void OpenTextileToolsAt(int tab,string? value)
+    {
+        if(BlockForDxfImport())return;
+        EnsurePropertyDraftsApplied();
+        CreateTextileToolsAt(tab,value).ShowDialog();
+    }
+    // Built without showing so the tab and the one-time value can be checked headlessly.
+    internal TextileToolsWindow CreateTextileToolsAt(int tab,string? value)
+    {
+        // Refuse a bad tab before a window exists, so nothing is left owned by this one.
+        if(tab<0 || tab>2)throw new ArgumentOutOfRangeException(nameof(tab));
+        var window=new TextileToolsWindow(this);
+        window.ApplyOpeningRequest(tab,value);
+        return window;
     }
     internal Func<string,bool>? ConfirmMachineLossForVerification { get; set; }
     internal Action<SimulationQueue>? OpenMachineCenterForVerification { get; set; }
@@ -4219,11 +4362,20 @@ public class MainWindow : Window
         { SetStatus("Parça silinmedi · Silmek için önce Seç aracını kullanın."); return; }
         DeleteSelection();
     }
+    /// <summary>Read-only product information; no project or setting is changed.</summary>
+    private void OpenAbout() => new AboutWindow(this).ShowDialog();
+
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
         var editing = Keyboard.FocusedElement is TextBoxBase or PasswordBox or ComboBox;
         try
         {
+            if (HandleCommandBoxShortcut(Keyboard.Modifiers, e.Key))
+            { e.Handled = true; return; }
+            if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F1)
+            { OpenAbout(); e.Handled = true; return; }
+            if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F9 && simpleViewSwitching)
+            { ToggleSimpleView(); e.Handled = true; return; }
             if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.S)
             { SaveAs(); e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.Control)

@@ -133,14 +133,13 @@ public sealed class CadCanvas : FrameworkElement
         owner.PendingDrawingChanged();
     }
     private const string KeyboardHelp = "Kalıp alanı. Page Up ve Page Down ile yakınlaştırın veya uzaklaştırın; Alt ve oklarla görünümü kaydırın. Seçili parçayı oklarla 1 mm, Shift ve oklarla 10 mm, Ctrl ve oklarla 0,1 mm taşıyın. Backspace tamamlanmamış çizimin son noktasını kaldırır. Escape çizim veya sürükleme önizlemesini iptal eder. Proje işlemlerini geri almak için Ctrl+Z kullanın.";
-    private static Brush B(string s)=>(Brush)new BrushConverter().ConvertFromString(s)!;
     public CadCanvas(MainWindow owner)
     {
         this.owner=owner; Focusable=true; ClipToBounds=true;
         AutomationProperties.SetName(this,"Kalıp çalışma alanı");
         AutomationProperties.SetHelpText(this,KeyboardHelp);
         ToolTip=KeyboardHelp;
-        GotKeyboardFocus+=(_,_)=> { InvalidateVisual();if(!LargeVertexValidationRunning && !LargeCompletionRunning)owner.SetStatus(ToolGuidance(owner.ActiveTool)+" · Oklar: 1 mm · Shift+ok: 10 mm · Ctrl+ok: 0,1 mm"); };
+        GotKeyboardFocus+=(_,_)=> { InvalidateVisual();if(!LargeVertexValidationRunning && !LargeCompletionRunning)owner.SetStatus(ToolGuidance(owner.ActiveTool)+" · Oklar: 1 mm · Shift+ok: 10 mm · Ctrl+ok: 0,1 mm",announce:false); };
         LostKeyboardFocus+=(_,_)=>InvalidateVisual();
         MouseDown+=(s,e)=>Safe(()=>Down(s,e), restoreDrawingOnFailure:true); MouseMove+=(s,e)=>Safe(()=>Move(s,e));
         MouseUp+=(s,e)=>Safe(()=>Up(e)); MouseWheel+=(s,e)=>Safe(()=>Wheel(s,e));
@@ -398,7 +397,7 @@ public sealed class CadCanvas : FrameworkElement
         var newOffset=new Vector(width/2-centerX*newScale,height/2-centerY*newScale);
         if(!double.IsFinite(newScale) || !double.IsFinite(newOffset.X) || !double.IsFinite(newOffset.Y))
         { owner.SetStatus("Proje görünümü hesaplanamadı; görünüm değiştirilmedi.");return; }
-        scale=newScale;offset=newOffset;InvalidateVisual();
+        scale=newScale;offset=newOffset;InvalidateVisual();owner.CanvasViewChanged();
         owner.SetStatus(extentX*newScale>availableWidth || extentY*newScale>availableHeight
             ? "Proje ortalandı; en düşük yakınlık sınırı nedeniyle tamamı görünmeyebilir."
             : drawing.Count>0 ? "Parçalar ve tamamlanmamış çizim çalışma alanında gösteriliyor · Proje geometrisi değişmedi."
@@ -451,7 +450,7 @@ public sealed class CadCanvas : FrameworkElement
         var newOffset=new Vector(width/2-centerX*newScale,height/2-centerY*newScale);
         if(!double.IsFinite(newScale) || !double.IsFinite(newOffset.X) || !double.IsFinite(newOffset.Y))
         { owner.SetStatus("Seçili parçanın görünümü hesaplanamadı; görünüm değiştirilmedi.");return; }
-        scale=newScale;offset=newOffset;InvalidateVisual();
+        scale=newScale;offset=newOffset;InvalidateVisual();owner.CanvasViewChanged();
         owner.SetStatus(extentX*newScale>availableWidth || extentY*newScale>availableHeight
             ? "Seçili parça ortalandı; en düşük yakınlık sınırı nedeniyle tamamı görünmeyebilir."
             : "Seçili parça çalışma alanında gösteriliyor · Proje geometrisi değişmedi.");
@@ -466,7 +465,7 @@ public sealed class CadCanvas : FrameworkElement
         var world=World(center,false);
         scale=Math.Clamp(scale*(zoomIn ? 1.15 : 1/1.15),.02,30);
         offset=new(center.X-world.X*scale,center.Y-world.Y*scale);
-        InvalidateVisual();
+        InvalidateVisual();owner.CanvasViewChanged();
         owner.SetStatus($"Görünüm yakınlığı: {scale*100:0}% · Parça geometrisi değişmedi");
     }
     internal void PanView(double dx,double dy)
@@ -477,8 +476,12 @@ public sealed class CadCanvas : FrameworkElement
         InvalidateVisual();
         owner.SetStatus("Görünüm kaydırıldı · Parça geometrisi değişmedi");
     }
-    private Point Screen(Point2 p)=>new(p.X*scale+offset.X,p.Y*scale+offset.Y);
-    private Point2 World(Point p,bool snap=true) { var w=new Point2((p.X-offset.X)/scale,(p.Y-offset.Y)/scale); return snap && owner.Snap ? new(Math.Round(w.X),Math.Round(w.Y)) : w; }
+    // Grid spacing in millimetres that keeps the drawn lines between 18 and 120 DIP apart.
+    private double GridStep() { var step=10.0;while(step*scale<18)step*=5;while(step*scale>120)step/=2;return step; }
+    /// <summary>Unit, grid spacing and zoom of the current view, as shown beside the canvas title.</summary>
+    internal string ViewInfo => $"mm  /  Izgara {GridStep():0.##}  /  {scale*100:0}%";
+    private Point Screen(Point2 p)=>new(p.X*scale+offset.X,p.Y*scale+offset.Y+ghostShift);
+    private Point2 World(Point p,bool snap=true) { var w=new Point2((p.X-offset.X)/scale,(p.Y-offset.Y-ghostShift)/scale); return snap && owner.Snap ? new(Math.Round(w.X),Math.Round(w.Y)) : w; }
     private void Down(object sender,MouseButtonEventArgs e)
     {
         if(LargeVertexValidationRunning || LargeCompletionRunning) { owner.SetStatus("Doğrulama sürüyor; bekleyin veya Esc ile iptal edin.");return; }
@@ -607,7 +610,7 @@ public sealed class CadCanvas : FrameworkElement
                 var curve = new CurveSegment.CubicBezier(drawing[0], drawing[1], drawing[2], drawing[3]);
                 AddValidated(ParametricContour.Sample([curve]), false, curve);
             }
-            else owner.SetStatus(ToolGuidance(owner.ActiveTool));
+            else owner.SetStatus(ToolGuidance(owner.ActiveTool),announce:false);
             InvalidateVisual();return;
         }
         if(owner.ActiveTool=="Yay")
@@ -618,7 +621,7 @@ public sealed class CadCanvas : FrameworkElement
                 var curve = ArcSource(drawing[0], drawing[1], drawing[2]);
                 AddValidated(ParametricContour.Sample([curve]), false, curve);
             }
-            else owner.SetStatus(ToolGuidance(owner.ActiveTool));
+            else owner.SetStatus(ToolGuidance(owner.ActiveTool),announce:false);
             InvalidateVisual();return;
         }
         if(owner.ActiveTool=="Çoklu çizgi")
@@ -636,7 +639,7 @@ public sealed class CadCanvas : FrameworkElement
         else { var first=drawing[0]; if(Geometry.Distance(first,p)<.001)return;
             if(owner.ActiveTool=="Dikdörtgen") { if(Math.Abs(first.X-p.X)<.001 || Math.Abs(first.Y-p.Y)<.001)return; AddValidated([first,new(p.X,first.Y),p,new(first.X,p.Y)],true); }
             else AddValidated([first,p],false); }
-        if(drawing.Count>0)owner.SetStatus(ToolGuidance(owner.ActiveTool));
+        if(drawing.Count>0)owner.SetStatus(ToolGuidance(owner.ActiveTool),announce:false);
         InvalidateVisual();
     }
     // Match paint order: a later piece covers the selected piece's handles.
@@ -705,7 +708,7 @@ public sealed class CadCanvas : FrameworkElement
             UpdateDragPreview(pos);
             previewChanged=previousPreview is null ? dragPreview is not null : dragPreview is null || !previousPreview.SequenceEqual(dragPreview);
         }
-        if(!LargeVertexValidationRunning && !LargeCompletionRunning) owner.SetStatus($"{ToolGuidance(owner.ActiveTool)}  ·  X {cursor.X:0.##} mm  Y {cursor.Y:0.##} mm  ·  Yakınlaşma {scale*100:0}%");
+        if(!LargeVertexValidationRunning && !LargeCompletionRunning) owner.SetStatus($"{ToolGuidance(owner.ActiveTool)}  ·  X {cursor.X:0.##} mm  Y {cursor.Y:0.##} mm  ·  Yakınlaşma {scale*100:0}%",announce:false);
         if(ShouldInvalidatePointerMove(panned,previewChanged,drawing.Count>0,previousCursor,cursor))InvalidateVisual();
     }
     // A free pointer is not drawn; its coordinate text updates without rebuilding all contours.
@@ -1011,7 +1014,7 @@ public sealed class CadCanvas : FrameworkElement
     {
         if(dragId is not null || panStart is not null)
         { owner.SetStatus("Önce sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
-        var w=World(p,false);scale=Math.Clamp(scale*Math.Pow(1.15,delta/120.0),.02,30);offset=new(p.X-w.X*scale,p.Y-w.Y*scale);InvalidateVisual();
+        var w=World(p,false);scale=Math.Clamp(scale*Math.Pow(1.15,delta/120.0),.02,30);offset=new(p.X-w.X*scale,p.Y-w.Y*scale);InvalidateVisual();owner.CanvasViewChanged();
     }
     // Later pieces are drawn unselected, with opaque closed fills and 1.5-DIP
     // strokes. Use that footprint (plus half a DIP for antialiasing) only when
@@ -1032,32 +1035,35 @@ public sealed class CadCanvas : FrameworkElement
         return false;
     }
     private bool Hit(PatternPiece p,Point2 point) { if(p.Points.Count==0)return false; if(p.Closed && Geometry.PointInPolygon(point,p.Points))return true; for(var i=0;i<p.Points.Count-(p.Closed?0:1);i++) { var a=p.Points[i];var b=p.Points[(i+1)%p.Points.Count];var dx=b.X-a.X;var dy=b.Y-a.Y;var length=dx*dx+dy*dy;var t=length==0?0:Math.Clamp(((point.X-a.X)*dx+(point.Y-a.Y)*dy)/length,0,1);if(Geometry.Distance(point,new(a.X+t*dx,a.Y+t*dy))<8/scale)return true; } return false; }
+    // Set only by the simple view while the project has no piece; null in the detailed view, so nothing extra is drawn there.
+    internal string? EmptyStateTitle { get; set; }
+    internal string? EmptyStateHint { get; set; }
     protected override void OnRender(DrawingContext dc)
     {
-        base.OnRender(dc);dc.DrawRectangle(B("#0D1827"),null,new Rect(RenderSize));
-        var step=10.0;while(step*scale<18)step*=5;while(step*scale>120)step/=2;
-        var gridPen=new Pen(B("#203047"),.5);var origin=World(new Point(0,0),false);var end=World(new Point(ActualWidth,ActualHeight),false);
+        FrameGhost();
+        base.OnRender(dc);dc.DrawRectangle(StudioTheme.Canvas,null,new Rect(RenderSize));
+        var step=GridStep();
+        var gridPen=new Pen(StudioTheme.CanvasGrid,.5);var origin=World(new Point(0,0),false);var end=World(new Point(ActualWidth,ActualHeight),false);
         for(var gx=Math.Floor(origin.X/step)*step;gx<=end.X;gx+=step) {var sx=Screen(new(gx,0)).X;dc.DrawLine(gridPen,new(sx,0),new(sx,ActualHeight));}
         for(var gy=Math.Floor(origin.Y/step)*step;gy<=end.Y;gy+=step) {var sy=Screen(new(0,gy)).Y;dc.DrawLine(gridPen,new(0,sy),new(ActualWidth,sy));}
-        var zero=Screen(new(0,0));var axes=new Pen(B("#43617B"),1);dc.DrawLine(axes,new(zero.X,0),new(zero.X,ActualHeight));dc.DrawLine(axes,new(0,zero.Y),new(ActualWidth,zero.Y));
-        Brush? selectedBrush=null,normalStroke=null,selectedFill=null,normalFill=null,normalLabel=null;
-        Pen? selectedPen=null,normalPen=null;
+        var zero=Screen(new(0,0));var axes=new Pen(StudioTheme.CanvasAxis,1);dc.DrawLine(axes,new(zero.X,0),new(zero.X,ActualHeight));dc.DrawLine(axes,new(0,zero.Y),new(ActualWidth,zero.Y));
+                Pen? selectedPen=null,normalPen=null;
         foreach(var p in owner.Document.Pieces)
         {
             if(p.Points.Count==0)continue;
             // Hidden layers keep their geometry in the document but are not drawn.
             if(!LayerTools.IsPieceVisible(owner.Document,p))continue;
             var selected=owner.SelectedIds.Contains(p.Id);
-            var pen=selected ? (selectedPen ??= new Pen(selectedBrush ??= B("#FFCB70"),2.3))
-                : (normalPen ??= new Pen(normalStroke ??= B("#4DE1C1"),1.5));
+            var pen=selected ? (selectedPen ??= new Pen(StudioTheme.PieceSelected,2.3))
+                : (normalPen ??= new Pen(StudioTheme.Piece,1.5));
             var isPrimaryDrag=p.Id==dragId && dragPreview is not null;
             var hasGroupPreview=dragGroupPreviews.TryGetValue(p.Id,out var groupPreview);
             var visible=isPrimaryDrag ? dragPreview! : hasGroupPreview ? groupPreview! : p.Points;
-            var fill=p.Closed ? selected ? (selectedFill ??= B("#304947")) : (normalFill ??= B("#163D40")) : null;
+            var fill=p.Closed ? selected ? StudioTheme.PieceSelectedFill : StudioTheme.PieceFill : null;
             DrawContour(dc,visible,p.Closed,fill,pen);
             if(p.Notches is not null)
             {
-                var notchBrush=B("#FF8FAF");var notchPen=new Pen(notchBrush,2);
+                var notchBrush=StudioTheme.Notch;var notchPen=new Pen(notchBrush,2);
                 foreach(var notch in p.Notches)
                 {
                     var followsVertices=notch.VertexIndex>=0 && notch.VertexIndex<visible.Count &&
@@ -1073,29 +1079,119 @@ public sealed class CadCanvas : FrameworkElement
                 : dragGroupPreviewGrainlines.TryGetValue(p.Id,out var groupGrain) ? groupGrain : p.Grainline;
             if(grain is not null)
             {
-                var grainBrush=grain.NeedsReview ? B("#FFC468") : B("#65CFFF");
+                var grainBrush=grain.NeedsReview ? StudioTheme.GrainReview : StudioTheme.GrainOk;
                 var grainPen=new Pen(grainBrush,2) { DashStyle=grain.NeedsReview ? DashStyles.Dash : DashStyles.Solid };
                 var a=Screen(grain.Start);var b=Screen(grain.End);dc.DrawLine(grainPen,a,b);
                 dc.DrawEllipse(grainBrush,null,a,3,3);dc.DrawEllipse(grainBrush,null,b,3,3);
                 if(selected)Text(dc,grain.NeedsReview ? "İplik yönü · incele" : "İplik yönü",new Point(a.X+5,a.Y+5),grainBrush,11);
             }
-            var bounds=Geometry.Bounds(visible);var label=Screen(new(bounds.MinX,bounds.MinY)); Text(dc,CanvasPieceLabel(p.Name),new Point(label.X+7,label.Y-23),selected ? (selectedBrush ??= B("#FFCB70")) : (normalLabel ??= B("#B3D2D5")),12);
+            Text(dc,CanvasPieceLabel(p.Name),PieceLabelOrigin(visible),selected ? StudioTheme.PieceLabelSelected : StudioTheme.PieceLabel,12);
             if(selected)
             {
-                var handleBrush=selectedBrush ??= B("#FFCB70");
+                var handleBrush=StudioTheme.PieceSelected;
                 foreach(var v in visible)dc.DrawEllipse(handleBrush,null,Screen(v),3.4,3.4);
             }
         }
-        if(drawing.Count>0) { List<Point2> preview=owner.ActiveTool=="Dikdörtgen" ? [drawing[0],new(cursor.X,drawing[0].Y),cursor,new(drawing[0].X,cursor.Y)] : [..drawing,cursor]; DrawContour(dc,preview,owner.ActiveTool=="Dikdörtgen",null,new Pen(B("#FFCB70"),1.8) { DashStyle=DashStyles.Dash }); }
+        if(drawing.Count>0) { List<Point2> preview=owner.ActiveTool=="Dikdörtgen" ? [drawing[0],new(cursor.X,drawing[0].Y),cursor,new(drawing[0].X,cursor.Y)] : [..drawing,cursor]; DrawContour(dc,preview,owner.ActiveTool=="Dikdörtgen",null,new Pen(StudioTheme.DrawingPreview,1.8) { DashStyle=DashStyles.Dash }); }
         try
         {
-            if(owner.ActiveTool=="Bézier" && drawing.Count==3)DrawContour(dc,Geometry.SampleCubicBezier(drawing[0],drawing[1],drawing[2],cursor,64),false,null,new Pen(B("#4DE1C1"),2));
-            if(owner.ActiveTool=="Yay" && drawing.Count==2)DrawContour(dc,Arc(drawing[0],drawing[1],cursor),false,null,new Pen(B("#4DE1C1"),2));
+            if(owner.ActiveTool=="Bézier" && drawing.Count==3)DrawContour(dc,Geometry.SampleCubicBezier(drawing[0],drawing[1],drawing[2],cursor,64),false,null,new Pen(StudioTheme.Piece,2));
+            if(owner.ActiveTool=="Yay" && drawing.Count==2)DrawContour(dc,Arc(drawing[0],drawing[1],cursor),false,null,new Pen(StudioTheme.Piece,2));
         }
         catch(ArgumentException) { /* Incomplete preview is allowed; final input is validated. */ }
-        dc.DrawRectangle(B("#172234"),null,new Rect(12,12,185,31));Text(dc,$"mm  /  Izgara {step:0.##}  /  {scale*100:0}%",new(22,19),B("#A4B9CC"),11);
+        if(ghost is not null)DrawGhost(dc,ghost);
+        if(EmptyStateTitle is not null && ghost is null && drawing.Count==0 && !owner.Document.Pieces.Any(piece=>piece.Points.Count>0))
+        {
+            var title=Format(EmptyStateTitle,StudioTheme.Text,20);var hint=EmptyStateHint is null ? null : Format(EmptyStateHint,StudioTheme.Muted,16);
+            var top=Math.Max(8,(ActualHeight-title.Height-(hint?.Height+8 ?? 0))/2);
+            dc.DrawText(title,new Point(Math.Max(8,(ActualWidth-title.Width)/2),top));
+            if(hint is not null)dc.DrawText(hint,new Point(Math.Max(8,(ActualWidth-hint.Width)/2),top+title.Height+8));
+        }
         if(IsKeyboardFocused && ActualWidth>4 && ActualHeight>4)
-            dc.DrawRectangle(null,new Pen(B("#4DE1C1"),2),new Rect(2,2,ActualWidth-4,ActualHeight-4));
+            dc.DrawRectangle(null,new Pen(StudioTheme.Piece,2),new Rect(2,2,ActualWidth-4,ActualHeight-4));
+    }
+    // ---- command preview frame ("see, then apply"): dashed outline and measure labels, never part of the document ----
+    private TekstilCAD.Core.Commands.GhostScene? ghost;
+    /// <summary>The dashed frame currently shown, or null.</summary>
+    internal TekstilCAD.Core.Commands.GhostScene? Ghost=>ghost;
+    /// <summary>
+    /// Shows (or, with null or an empty scene, clears) the preview frame. Changes only what is drawn: never the document,
+    /// the selection or the undo history. Returns false when a frame exists but lies completely outside the visible area, in which
+    /// case the status line tells the user how to bring it into view.
+    /// </summary>
+    internal bool SetGhost(TekstilCAD.Core.Commands.GhostScene? scene)
+    {
+        var next=scene is { IsEmpty:false } ? scene : null;
+        if(ReferenceEquals(next,ghost))return true;
+        ghost=next;InvalidateVisual();
+        if(next is null) { ReleaseGhostShift();return true; }
+        var inView=GhostIsInView(next);
+        if(!inView)owner.SetStatus("Önizleme görünümün dışında; Tümünü göster düğmesine basın.");
+        return inView;
+    }
+    /// <summary>Height at the top of the canvas that a card drawn over it covers (the simple view's command preview); 0 when nothing covers it.</summary>
+    internal Func<double>? TopInset { get; set; }
+    // How far down the whole view is drawn while a preview frame would lie under the card; zero again when the preview ends.
+    private double ghostShift;
+    private void ReleaseGhostShift()=>ghostShift=0;
+    private void FrameGhost()
+    {
+        ReleaseGhostShift();
+        var inset=ghost is null ? 0 : TopInset?.Invoke() ?? 0;
+        if(inset<=0 || GhostScreenBounds(false) is not { } box)return;
+        // Just far enough that the frame and its labels clear the card, never so far that the frame's lower edge leaves the view.
+        ghostShift=Math.Max(0,Math.Min(inset+8-box.Top,ActualHeight-8-box.Bottom));
+    }
+    /// <summary>The preview frame with its label plates in canvas coordinates, as drawn (null without a frame); unclamped, labels may lie outside the canvas.</summary>
+    internal Rect? GhostScreenBounds(bool clampLabels=true)
+    {
+        if(ghost is null)return null;
+        var box=Rect.Empty;
+        foreach(var polygon in ghost.Polygons)foreach(var point in polygon.Points)box.Union(Screen(point));
+        foreach(var label in ghost.Labels)box.Union(LabelPlate(label,Format(label.Text,Brushes.White,13),clampLabels));
+        return box.IsEmpty ? null : box;
+    }
+    private Rect LabelPlate(TekstilCAD.Core.Commands.GhostLabel label,FormattedText formatted,bool clamp)
+    {
+        var at=Screen(label.Anchor);
+        double x=at.X,y=at.Y;
+        switch(label.Placement)
+        {
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Above:x-=formatted.Width/2;y-=formatted.Height+4;break;
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Below:x-=formatted.Width/2;y+=4;break;
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Left:x-=formatted.Width+6;y-=formatted.Height/2;break;
+            case TekstilCAD.Core.Commands.GhostLabelPlacement.Right:x+=6;y-=formatted.Height/2;break;
+            default:x-=formatted.Width/2;y-=formatted.Height/2;break;
+        }
+        if(clamp) { x=Math.Clamp(x,2,Math.Max(2,ActualWidth-formatted.Width-2));y=Math.Clamp(y,2,Math.Max(2,ActualHeight-formatted.Height-2)); }
+        return new Rect(x-3,y-1,formatted.Width+6,formatted.Height+2);
+    }
+    private bool GhostIsInView(TekstilCAD.Core.Commands.GhostScene scene)
+    {
+        if(scene.Bounds is not { } box || ActualWidth<1 || ActualHeight<1)return true;
+        var a=Screen(new Point2(box.MinX,box.MinY));var b=Screen(new Point2(box.MaxX,box.MaxY));
+        return new Rect(a,b).IntersectsWith(new Rect(0,0,ActualWidth,ActualHeight));
+    }
+    private void DrawGhost(DrawingContext dc,TekstilCAD.Core.Commands.GhostScene scene)
+    {
+        var danger=scene.Style==TekstilCAD.Core.Commands.GhostStyle.Danger;
+        var color=danger ? Color.FromRgb(0xFF,0x8A,0x8A) : Color.FromRgb(0x7C,0xC4,0xFF);
+        var pen=new Pen(new SolidColorBrush(color),2) { DashStyle=DashStyles.Dash,LineJoin=PenLineJoin.Round };
+        var fill=new SolidColorBrush(Color.FromArgb(0x26,color.R,color.G,color.B));
+        foreach(var polygon in scene.Polygons)
+        {
+            if(polygon.Points.Count<2)continue;
+            var figure=new PathFigure(Screen(polygon.Points[0]),[new PolyLineSegment(polygon.Points.Skip(1).Select(Screen).ToList(),true)],polygon.Closed);
+            dc.DrawGeometry(polygon.Closed ? fill : null,pen,new PathGeometry([figure]));
+        }
+        var text=new SolidColorBrush(Color.FromRgb(0xEA,0xF4,0xFF));
+        var plate=new SolidColorBrush(Color.FromArgb(0xD0,0x0D,0x18,0x27));
+        foreach(var label in scene.Labels)
+        {
+            var formatted=Format(label.Text,text,13);var bounds=LabelPlate(label,formatted,true);
+            dc.DrawRoundedRectangle(plate,null,bounds,3,3);
+            dc.DrawText(formatted,new Point(bounds.X+3,bounds.Y+1));
+        }
     }
     // The ring is 14 DIP across and the label starts 8 DIP to the right.
     // Leave ample room for the complete indexed label and font overhang so a
@@ -1105,6 +1201,24 @@ public sealed class CadCanvas : FrameworkElement
         const double margin=256;
         return point.X>=-margin && point.X<=viewport.Width+margin &&
                point.Y>=-margin && point.Y<=viewport.Height+margin;
+    }
+    // A piece name sits just above the top-left corner of its contour bounds.
+    private Point PieceLabelOrigin(IReadOnlyList<Point2> points)
+    {
+        var bounds=Geometry.Bounds(points);var corner=Screen(new(bounds.MinX,bounds.MinY));
+        return new(corner.X+7,corner.Y-23);
+    }
+    /// <summary>Rectangles, in canvas coordinates, that the committed piece name labels occupy in the current view.</summary>
+    internal IReadOnlyList<Rect> PieceLabelBounds()
+    {
+        var labels=new List<Rect>();
+        foreach(var p in owner.Document.Pieces)
+        {
+            if(p.Points.Count==0 || !LayerTools.IsPieceVisible(owner.Document,p))continue;
+            var text=Format(CanvasPieceLabel(p.Name),Brushes.Transparent,12);
+            labels.Add(new Rect(PieceLabelOrigin(p.Points),new Size(text.Width,text.Height)));
+        }
+        return labels;
     }
     // Display only: preserve the project name while keeping canvas labels bounded
     // and preventing invisible direction controls or line breaks from misleading.
@@ -1130,5 +1244,6 @@ public sealed class CadCanvas : FrameworkElement
     }
     private void DrawContour(DrawingContext dc,IReadOnlyList<Point2> points,bool closed,Brush? fill,Pen pen)
     { if(points.Count==0)return;var geometry=new StreamGeometry();using(var ctx=geometry.Open()) {ctx.BeginFigure(Screen(points[0]),fill is not null,closed);ctx.PolyLineTo(points.Skip(1).Select(Screen).ToList(),true,false);}geometry.Freeze();dc.DrawGeometry(fill,pen,geometry); }
-    private void Text(DrawingContext dc,string value,Point pos,Brush brush,int size) => dc.DrawText(new FormattedText(value,CultureInfo.CurrentCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),size,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip),pos);
+    private FormattedText Format(string value,Brush brush,int size) => new(value,CultureInfo.CurrentCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),size,brush,VisualTreeHelper.GetDpi(this).PixelsPerDip);
+    private void Text(DrawingContext dc,string value,Point pos,Brush brush,int size) => dc.DrawText(Format(value,brush,size),pos);
 }

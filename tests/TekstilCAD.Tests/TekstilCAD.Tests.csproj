@@ -18,6 +18,8 @@
     <Using Include="Xunit" />
     <None Include="../../Apple/Tests/Fixtures/mobile-simple.tcad"
           Link="Fixtures/mobile-simple.tcad" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../Apple/Tests/Fixtures/command-vectors.json"
+          Link="Fixtures/command-vectors.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

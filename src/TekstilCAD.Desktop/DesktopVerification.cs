@@ -27,7 +27,7 @@ internal static class DesktopVerification
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]
     [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool CreateHardLink(string newFileName,string existingFileName,IntPtr securityAttributes);
-    private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    internal const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
     private static bool OpenPathPreviewRunsDownward(Window window)
     {
         var preview=(FrameworkElement)window.GetType().GetField("preview",PrivateInstance)!.GetValue(window)!;
@@ -1170,6 +1170,11 @@ internal static class DesktopVerification
             VerifyPendingDrawingFailurePreservesPoints(studio,checks);
             VerifyToolGuidance(studio,checks);
             VerifyMainCommandGroups(studio,reportPath,checks);
+            VerifyAboutAndCrashLog(studio,work,reportPath,checks);
+            VerifyCompactWorkspace(studio,reportPath,checks);
+            CommandVerification.Run(studio,checks,reportPath);
+            ThemeVerification.Run(studio,work,reportPath,checks);
+            SimpleViewVerification.Run(studio,reportPath,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
@@ -1904,6 +1909,7 @@ internal static class DesktopVerification
             VerifyFourAngleQuantityPreview(studio,work,checks);
             VerifyBulkPieceAngles(studio,checks);
             VerifyNestingHistory(studio,work,checks);
+            ThemeVerification.RunAtEnd(checks);
             Check(!studio.IsVisible && !textiles.IsVisible && !machine.IsVisible && !reopenedTextiles.IsVisible, "No window shown", checks);
             Check(AppPaths.PrepareProjectsDirectory().StartsWith(work, StringComparison.OrdinalIgnoreCase),
                 "Runtime data directory isolated from installation and verification stays local", checks);
@@ -2909,7 +2915,7 @@ internal static class DesktopVerification
             && open[0]==moved && open[^1]==original[^1],
             "Ordinary vertex and open-path endpoints remain independent",checks);
     }
-    private static void Check(bool condition, string name, List<string> checks)
+    internal static void Check(bool condition, string name, List<string> checks)
     { if (!condition) throw new InvalidOperationException("Verification failed: " + name); checks.Add(name); }
     private static void VerifyHpglPreview(string work,List<string> checks)
     {
@@ -5284,6 +5290,7 @@ internal static class DesktopVerification
                 && marginWarning.ActualHeight+marginWarning.Margin.Top+marginWarning.Margin.Bottom>=marginWarning.DesiredSize.Height-.5 && FullyVisible(calculateButton,minimumRoot)
                 && FullyVisible(widthInput,minimumRoot) && FullyVisible(gapInput,minimumRoot) && FullyVisible(marginInput,minimumRoot),
                 "Minimum quantity nesting window shows full margin warning, inputs and calculation action",checks);
+            VerifyExpanderHeaderContrast(minimumRoot,"Minimum quantity nesting",checks);
             Render(window,Path.ChangeExtension(reportPath,".ProductionNestingWindow.compact.png"),1024,640);
             var choices=(ListBox)typeof(ProductionNestingWindow).GetField("choices",PrivateInstance)!.GetValue(window)!;
             var choiceItems=(System.Collections.IList)typeof(ProductionNestingWindow).GetField("choiceItems",PrivateInstance)!.GetValue(window)!;
@@ -5900,7 +5907,7 @@ internal static class DesktopVerification
         studio.Select(p2000.Id);
         Check(warning.Visibility==Visibility.Collapsed && warning.Text=="", "Selecting a smaller piece clears its previous limit notice",checks);
     }
-    private static void PumpUntil(Func<bool> done)
+    internal static void PumpUntil(Func<bool> done)
     {
         var frame=new DispatcherFrame();
         var deadline=DateTime.UtcNow.AddSeconds(15);
@@ -6145,6 +6152,40 @@ internal static class DesktopVerification
         var rows=Enumerable.Range(0,3).Select(i=>grid.ItemContainerGenerator.ContainerFromIndex(i) as DataGridRow).ToArray();
         Check(rows.All(row=>row is not null && RowVisible(row,content,gridBounds.Width)),
             "Compact grading first three rows are fully readable inside the clipped content viewport",checks);
+        VerifyExpanderHeaderContrast(content,"Grading workshop",checks);
+        // The help header and the point picker share one row; the header text must not run into the button.
+        var help=Descendants<Expander>(content).Single(e=>Equals(e.Header,"Artışları mm olarak girin · Projeye uygulayıp kaydedin"));
+        var helpText=BoundsInRoot(ExpanderHeaderText(help),content);
+        var picker=BoundsInRoot(Descendants<Button>(content).Single(b=>Equals(b.Content,"Konturdan nokta seç…")),content);
+        Check(!helpText.IntersectsWith(picker) && picker.Left-helpText.Right>=6,
+            $"Grading help header text keeps clear space before the point picker button (gap {picker.Left-helpText.Right:0.#})",checks);
+        // The read-only summary holds the piece name and its identity on two lines; the box must not cut either.
+        var summary=Descendants<TextBox>(content).Single(t=>AutomationProperties.GetName(t)=="Seçili kaynağın tam adı ve kimliği");
+        var textArea=Descendants<ScrollContentPresenter>(summary).First();
+        var visibleText=textArea.TransformToAncestor(summary).TransformBounds(new Rect(textArea.RenderSize));
+        var firstLine=summary.GetRectFromCharacterIndex(0);var lastLine=summary.GetRectFromCharacterIndex(summary.Text.Length);
+        Check(!firstLine.IsEmpty && !lastLine.IsEmpty && lastLine.Top>firstLine.Top && firstLine.Top>=visibleText.Top-.5 && lastLine.Bottom<=visibleText.Bottom+.5,
+            $"Selected source summary shows its name and identity lines unclipped (text {firstLine.Top:0.#} to {lastLine.Bottom:0.#}, box {visibleText.Top:0.#} to {visibleText.Bottom:0.#})",checks);
+    }
+    private static TextBlock ExpanderHeaderText(Expander expander)
+        => Descendants<TextBlock>(Descendants<ToggleButton>(expander).First()).First();
+    // An Expander without a themed foreground falls back to the system control text colour,
+    // which is unreadable on the dark studio background.
+    private static void VerifyExpanderHeaderContrast(FrameworkElement root,string scope,List<string> checks)
+    {
+        var ratios=Descendants<Expander>(root).Where(e=>e.IsEnabled && FullyVisible(e,root)).Select(e=>BackgroundContrast(ExpanderHeaderText(e))).ToArray();
+        Check(ratios.Length>0 && ratios.All(ratio=>ratio>=4.5),
+            $"{scope} expander header text contrasts with the window background (lowest {ratios.DefaultIfEmpty().Min():0.0}:1 of {ratios.Length})",checks);
+    }
+    private static double BackgroundContrast(TextBlock text)
+        => text.Foreground is SolidColorBrush brush ? ContrastRatio(brush.Color,((SolidColorBrush)StudioTheme.Background).Color) : 0;
+    private static double ContrastRatio(Color first,Color second)
+    {
+        // WCAG 2 relative luminance; 4.5:1 is the minimum for normal-size text.
+        static double Channel(byte value) { var c=value/255d;return c<=0.03928 ? c/12.92 : Math.Pow((c+0.055)/1.055,2.4); }
+        static double Luminance(Color c)=>0.2126*Channel(c.R)+0.7152*Channel(c.G)+0.0722*Channel(c.B);
+        var a=Luminance(first);var b=Luminance(second);
+        return (Math.Max(a,b)+0.05)/(Math.Min(a,b)+0.05);
     }
     private static void VerifyOptionalGradingMetadata(MainWindow studio,List<string> checks)
     {
@@ -6186,6 +6227,10 @@ internal static class DesktopVerification
         batchWrite.BringIntoView();root.UpdateLayout();
         Check(FullyVisible(batchWrite,root) && batchWrite.Focusable,
             "Bulk grading action remains fully reachable in the minimum-size scrolling area",checks);
+        // Text inside an expanded section inherits the Expander foreground unless it sets its own.
+        var batchText=Descendants<TextBlock>(batchOptions).Where(t=>t.Text.Length>0).Select(BackgroundContrast).ToArray();
+        Check(batchText.Length>=3 && batchText.All(ratio=>ratio>=4.5),
+            $"Expanded bulk grading options text contrasts with the window background (lowest {batchText.DefaultIfEmpty().Min():0.0}:1 of {batchText.Length})",checks);
         var interpolate=Descendants<Button>(root).Single(b=>Equals(b.Content,"İki seçili satır arasını doldur"));
         interpolate.BringIntoView();root.UpdateLayout();
         Check(FullyVisible(interpolate,root) && interpolate.Focusable,
@@ -8439,7 +8484,7 @@ internal static class DesktopVerification
     // Only known, side-effect-safe guard prefixes may precede the target guard.
     // Reject all other instructions before invoking an entry point: a regression
     // must never open a dialog during hidden verification.
-    private static bool HasSafeGuardPrefix(MethodInfo target,MethodInfo guard)
+    internal static bool HasSafeGuardPrefix(MethodInfo target,MethodInfo guard)
     {
         var safePrior=typeof(MainWindow).GetMethod("EnsureNoExport",PrivateInstance)!;
         var dxfGuard=typeof(MainWindow).GetMethod("BlockForDxfImport",PrivateInstance)!;
@@ -9196,13 +9241,14 @@ internal static class DesktopVerification
             Check(canvas.AddDrawingPointAt(new(0,0)) is null && canvas.AddDrawingPointAt(start) is null &&
                 canvas.AddDrawingPointAt(end) is null,"Arc drawing accepts center, start and end direction",checks);
             var piece=studio.Document.Pieces.Single();
-            Check(!piece.Closed && piece.Points.Count==65 &&
-                BitConverter.DoubleToInt64Bits(piece.Points[0].X)==BitConverter.DoubleToInt64Bits(start.X) &&
-                BitConverter.DoubleToInt64Bits(piece.Points[0].Y)==BitConverter.DoubleToInt64Bits(start.Y),
-                "Arc preserves the chosen start coordinate exactly",checks);
-            Check(BitConverter.DoubleToInt64Bits(piece.Points[^1].X)==BitConverter.DoubleToInt64Bits(end.X) &&
-                BitConverter.DoubleToInt64Bits(piece.Points[^1].Y)==BitConverter.DoubleToInt64Bits(end.Y),
-                "Arc preserves an exactly equal-radius end coordinate",checks);
+            // The tool stores the analytic arc; Points are its sampled preview.
+            // Centre, radius and angles cannot reproduce the clicked coordinates
+            // bit for bit, so the end points are held to 1e-9 mm, not equality.
+            Check(!piece.Closed && piece.Curves is [CurveSegment.Arc] && ParametricContour.MatchesPreview(piece) &&
+                TekstilCAD.Core.Geometry.Distance(piece.Points[0],start)<=1e-9,
+                "Arc keeps one analytic arc whose preview starts within 1e-9 mm of the chosen start",checks);
+            Check(TekstilCAD.Core.Geometry.Distance(piece.Points[^1],end)<=1e-9,
+                "Arc preview ends within 1e-9 mm of an exactly equal-radius end coordinate",checks);
             var arc=typeof(CadCanvas).GetMethod("Arc",BindingFlags.Static|BindingFlags.NonPublic)!;
             var projected=(List<Point2>)arc.Invoke(null,[new Point2(0,0),new Point2(1,0),new Point2(0,2)])!;
             Check(Math.Abs(projected[^1].Y-1)<1e-14 && projected[^1]!=new Point2(0,2),
@@ -9210,8 +9256,9 @@ internal static class DesktopVerification
             var near=(List<Point2>)arc.Invoke(null,[new Point2(0,0),new Point2(1,Math.ScaleB(1,-30)),new Point2(0,1)])!;
             Check(near[^1]!=new Point2(0,1),
                 "Arc does not treat rounded-equal radii as exactly equal",checks);
+            var drawn=studio.Document.Clone();
             Check(session.Undo() && studio.Document.Pieces.Count==0 && session.Redo() &&
-                studio.Document.Pieces.Single().Points[0]==start,"Arc start remains attached through undo and redo",checks);
+                DocumentSession.ContentEquals(drawn,studio.Document),"Arc points and analytic curve are bit-identical after undo and redo",checks);
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç"); }
     }
@@ -9284,6 +9331,208 @@ internal static class DesktopVerification
         }
         foreach(var group in groups) { group.IsExpanded=true;root.UpdateLayout();Check(group.IsExpanded && Descendants<Button>(group).Any(),"Expanded command group exposes its actions: "+AutomationProperties.GetName(group),checks);group.IsExpanded=false; }
 
+    }
+    private static void VerifyAboutAndCrashLog(MainWindow studio,string work,string reportPath,List<string> checks)
+    {
+        var root=(FrameworkElement)studio.Content;
+        var about=Descendants<Button>(root).Single(b=>Equals(b.Content,"Hakkında"));
+        foreach(var (width,height) in new[] { (1024,640),(1440,900) })
+        {
+            Render(studio,Path.ChangeExtension(reportPath,$".about-entry-{width}x{height}.png"),width,height);
+            Check(about.IsEnabled && FullyVisible(about,root),$"About entry is fully visible in the header at {width}x{height}",checks);
+        }
+        var compact=new[] { ("Koordinat gir…","Koordinatla nokta gir…"),("A4 PDF çıkar…","Seçili parçayı A4 PDF çıkar…"),("Seçiliyi göster","Seçili parçayı göster"),("Poliline dönüştür…","Parametrik konturu poliline dönüştür…"),("Güvenli kopya…","Yeni dosya olarak güvenli kopya…") };
+        Check(compact.All(pair=>Descendants<Button>(root).Count(b=>Equals(b.Content,pair.Item1) && AutomationProperties.GetName(b)==pair.Item2 &&
+            b.ToolTip is string tip && tip.StartsWith(pair.Item2+"\n",StringComparison.Ordinal) &&
+            // The help text is the hint alone, so a screen reader does not say the name twice.
+            AutomationProperties.GetHelpText(b)==tip[(pair.Item2.Length+1)..])==1),
+            "Compact panel labels keep the full command name for automation and tooltip",checks);
+
+        Check(AppInfo.Parse("0.4.0+F440BD8C59DEE153E2769D",null)==("0.4.0","f440bd8c59de") && AppInfo.Parse("0.4.0",null)==("0.4.0",null) &&
+            AppInfo.Parse("0.4.0+local",null)==("0.4.0",null) && AppInfo.Parse("0.4.0+20261115",null)==("0.4.0",null) &&
+            AppInfo.Parse(null,new Version(1,2,3,4))==("1.2.3",null) && AppInfo.Parse("  ",null)==("bilinmiyor",null),
+            "Version text separates a Git revision and ignores other build metadata",checks);
+
+        var logs=Path.Combine(work,"crash-logs");
+        var failure=new InvalidOperationException("doğrulama hatası İĞÜŞÖÇ",new ArgumentException("iç neden"));
+        var stamp=new DateTimeOffset(2026,11,15,9,30,15,250,TimeSpan.FromHours(3));
+        var log=CrashReporter.TryWriteLog(failure,"Doğrulama",logs,stamp);
+        var text=log is null ? "" : File.ReadAllText(log);
+        Check(log is not null && Path.GetDirectoryName(log)==logs && Path.GetFileName(log).StartsWith("hata-20261115-093015-250-",StringComparison.Ordinal) &&
+            text.Contains("doğrulama hatası İĞÜŞÖÇ",StringComparison.Ordinal) && text.Contains("iç neden",StringComparison.Ordinal) &&
+            text.Contains("Sürüm: "+AppInfo.DisplayVersion,StringComparison.Ordinal) && text.Contains("Kaynak: Doğrulama",StringComparison.Ordinal) &&
+            text.Contains("2026-11-15 09:30:15 +03:00",StringComparison.Ordinal),
+            "Crash log records time, version, source and the full exception chain as readable Turkish text",checks);
+        for(var i=0;i<CrashReporter.MaximumLogFiles+3;i++)CrashReporter.TryWriteLog(failure,"Doğrulama",logs,stamp.AddSeconds(i+1));
+        var kept=Directory.GetFiles(logs,"hata-*.txt").Select(Path.GetFileName).OrderBy(name=>name,StringComparer.Ordinal).ToArray();
+        Check(kept.Length==CrashReporter.MaximumLogFiles && !File.Exists(log!) && kept[^1]!.StartsWith("hata-20261115-093108-250-",StringComparison.Ordinal),
+            "Crash log housekeeping keeps only the newest files",checks);
+        var blocked=Path.Combine(work,"crash-log-blocker");File.WriteAllText(blocked,"dosya");
+        Check(CrashReporter.TryWriteLog(failure,"Doğrulama",Path.Combine(blocked,"logs"),stamp) is null && File.ReadAllText(blocked)=="dosya",
+            "Crash log failure is reported as missing without a second exception",checks);
+
+        // The notice a terminating session leaves is read once at the next start and then gone.
+        var noticeDirectory=Path.Combine(work,"crash-notice");Directory.CreateDirectory(noticeDirectory);
+        var noticeLog=CrashReporter.TryWriteLog(failure,"Doğrulama",noticeDirectory,stamp);
+        var none=CrashReporter.TakePendingNotice(noticeDirectory);
+        CrashReporter.TryLeaveNotice(noticeLog,noticeDirectory);
+        var first=CrashReporter.TakePendingNotice(noticeDirectory);var second=CrashReporter.TakePendingNotice(noticeDirectory);
+        File.WriteAllText(Path.Combine(noticeDirectory,"bekleyen-hata-bildirimi.txt"),@"..\..\AGENTS.md");
+        var forged=CrashReporter.TakePendingNotice(noticeDirectory);
+        CrashReporter.TryLeaveNotice(null,noticeDirectory);var withoutLog=CrashReporter.TakePendingNotice(noticeDirectory);
+        Check(noticeLog is not null && none==(false,null) && first==(true,noticeLog) && second==(false,null) && forged==(true,null) && withoutLog==(true,null) &&
+            CrashReporter.NoticeText(noticeLog).Contains(noticeLog!,StringComparison.Ordinal) && !CrashReporter.NoticeText(null).Contains("hata-",StringComparison.Ordinal),
+            "Crash notice is taken once at the next start and never follows a name it did not write",checks);
+
+        var window=new AboutWindow(studio);
+        try
+        {
+            var opened=new List<string>();string? copied=null;
+            window.OpenFolder=path=> { opened.Add(path);return true; };window.OpenFile=path=> { opened.Add(path);return true; };window.CopyText=value=>copied=value;
+            Check(window.VersionText.Text.Contains(AppInfo.DisplayVersion,StringComparison.Ordinal) && window.DataPath.IsReadOnly &&
+                window.DataPath.Text==AppPaths.DataDirectory,"About window shows the running version and the active data folder",checks);
+            if(Directory.Exists(AppPaths.LogsDirectory))Directory.Delete(AppPaths.LogsDirectory,true);
+            window.OpenLogs.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(opened.Count==0 && window.Status.Text=="Henüz hata günlüğü yok." && !Directory.Exists(AppPaths.LogsDirectory),
+                "About window explains a missing log folder without creating or opening anything",checks);
+            // A file that carries the folder's name is not a folder and must not be opened.
+            Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.LogsDirectory)!);File.WriteAllText(AppPaths.LogsDirectory,"klasör değil");
+            window.OpenLogs.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(opened.Count==0 && window.Status.Text=="Henüz hata günlüğü yok.","About window does not open a file that carries the log folder's name",checks);
+            File.Delete(AppPaths.LogsDirectory);
+            Directory.CreateDirectory(AppPaths.LogsDirectory);
+            window.OpenLogs.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(opened.SequenceEqual([AppPaths.LogsDirectory]) && window.Status.Text=="Windows'ta açıldı.","About window opens only the requested existing folder",checks);
+            window.CopySummary.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(copied==string.Join(Environment.NewLine,AppInfo.ProductName,AboutWindow.VersionLine(),AboutWindow.EnvironmentLine()) &&
+                copied.Contains(AppInfo.DisplayVersion,StringComparison.Ordinal) && window.Status.Text=="Sürüm bilgisi panoya kopyalandı.",
+                "Support summary is exactly the product, version and environment lines",checks);
+            window.CopyText=_=>throw new System.Runtime.InteropServices.ExternalException("pano meşgul");
+            window.CopySummary.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.Status.Text.StartsWith("Pano kullanılamadı",StringComparison.Ordinal),"Clipboard failure is explained instead of thrown",checks);
+            var content=(FrameworkElement)window.Content;
+            foreach(var (width,height,suffix) in new[] { (580,600,".about.png"),(440,380,".about-minimum.png") })
+            {
+                Render(window,Path.ChangeExtension(reportPath,suffix),width,height);
+                var close=Descendants<Button>(content).Single(b=>Equals(b.Content,"Kapat"));
+                Check(close.IsCancel && FullyVisible(close,content) && FullyVisible(window.CopySummary,content),
+                    $"About window keeps its actions visible at {width}x{height}",checks);
+            }
+        }
+        finally { window.Close(); }
+    }
+    private static void VerifyCompactWorkspace(MainWindow studio,string reportPath,List<string> checks)
+    {
+        // The header, its notices and the command bar must leave the window height to the canvas.
+        // "busy" is the state the preceding checks leave behind: unsaved changes, a DXF notice, a recovery
+        // notice with its action and the machine-history message. "clean" is a newly constructed window that
+        // was never shown: after a real launch the recovery-scan notice adds one more row, so users see a
+        // little less than the clean figures.
+        // Measured canvas heights: busy 350 px at 1024x640 and 610 px at 1440x900, clean 421 px and 681 px
+        // (before the compact layout: 179, 468, 318 and 607 px). Each floor is the measured value minus
+        // 10 px. Never lower a floor just to pass.
+        static FrameworkElement Field(MainWindow window,string name)=>(FrameworkElement)typeof(MainWindow).GetField(name,PrivateInstance)!.GetValue(window)!;
+        var notices=new (string Text,string[] Actions)[]
+        {
+            ("saveState",[]),("sourceHistoryNotice",["sourceHistoryDetails"]),("nestingHistoryNotice",["nestingHistoryDetails"]),
+            ("exportNotice",["exportCancel"]),("dxfNotice",["dxfCancel","dxfReview"]),("recoveryNotice",["recoveryDetails"]),
+            ("recoveryScanNotice",["recoveryScanDetails","recoveryOpen"]),("machineQueueMessage",[])
+        };
+        void Verify(MainWindow window,string state,int width,int height,double floor)
+        {
+            var root=(FrameworkElement)window.Content;
+            Render(window,Path.ChangeExtension(reportPath,$".compact-workspace-{state}-{width}x{height}.png"),width,height);
+            var canvas=(CadCanvas)Field(window,"canvas");
+            Check(canvas.ActualHeight>=floor,$"Canvas keeps at least {floor} px of height in the {state} state at {width}x{height}",checks);
+
+            var complete=true;
+            foreach(var (name,actions) in notices)
+            {
+                var text=Field(window,name);var shown=text.Visibility==Visibility.Visible;
+                if(shown)complete&=FullyVisible(text,root) && text.ActualHeight+text.Margin.Top+text.Margin.Bottom>=text.DesiredSize.Height-.5
+                    && (text is not TextBox box || box.ExtentHeight<=box.ViewportHeight+.5);
+                foreach(var action in actions.Select(action=>Field(window,action)).Where(action=>action.Visibility==Visibility.Visible))
+                {
+                    var bounds=BoundsInRoot(action,root);
+                    complete&=FullyVisible(action,root) && bounds.Height>=26;
+                    // An action sits on its notice's row, to the right of the text.
+                    if(shown) { var beside=BoundsInRoot(text,root);complete&=bounds.Left>=beside.Right-.5 && bounds.Top<beside.Bottom && bounds.Bottom>beside.Top; }
+                }
+            }
+            Check(complete,$"Every visible header notice is complete with its actions beside it in the {state} state at {width}x{height}",checks);
+
+            var view=(TextBlock)Field(window,"canvasView");var chip=(FrameworkElement)view.Parent;
+            var origin=canvas.TransformToAncestor(root).Transform(new Point(0,0));var area=new Rect(origin,canvas.RenderSize);
+            var labels=canvas.PieceLabelBounds().Select(label=> { label.Offset(origin.X,origin.Y);label.Intersect(area);return label; }).Where(label=>!label.IsEmpty).ToArray();
+            // The chip sits outside the canvas, so it cannot cover a label drawn inside it; at least one label
+            // must actually be reported there for that to mean anything.
+            Check(view.Text==canvas.ViewInfo && view.Text.Contains("Izgara",StringComparison.Ordinal) && FullyVisible(chip,root)
+                && !BoundsInRoot(chip,root).IntersectsWith(area) && labels.Length>0 && labels.All(label=>!label.IntersectsWith(BoundsInRoot(chip,root))),
+                $"View information stays beside the canvas title and clear of every piece label in the {state} state at {width}x{height}",checks);
+            // Render() fits the view, which refreshes the chip by itself. Zooming like the mouse wheel does
+            // must refresh it too.
+            var fitted=view.Text;canvas.ZoomAt(new Point(canvas.ActualWidth/2,canvas.ActualHeight/2),-120);
+            var zoomed=view.Text;var expected=canvas.ViewInfo;window.FitView();
+            Check(zoomed==expected && zoomed!=fitted && view.Text==canvas.ViewInfo,
+                $"View information follows a wheel zoom in the {state} state at {width}x{height}",checks);
+
+            var tools=((Dictionary<string,Button>)typeof(MainWindow).GetField("toolButtons",PrivateInstance)!.GetValue(window)!).Values;
+            Check(tools.Count==6 && tools.All(tool=>tool.ActualHeight>=32 && FullyVisible(tool,root)),
+                $"All drawing tools keep a 32 px target and are visible without scrolling in the {state} state at {width}x{height}",checks);
+        }
+        Check(Field(studio,"dxfNotice").Visibility==Visibility.Visible && Field(studio,"recoveryScanNotice").Visibility==Visibility.Visible
+            && Field(studio,"recoveryOpen").Visibility==Visibility.Visible && Field(studio,"machineQueueMessage").Visibility==Visibility.Visible
+            && ((TextBlock)Field(studio,"saveState")).Text.StartsWith("●",StringComparison.Ordinal),
+            "Busy workspace state shows unsaved work with DXF, recovery and machine-history notices together",checks);
+        Verify(studio,"busy",1024,640,340);
+        Verify(studio,"busy",1440,900,600);
+
+        var fresh=new MainWindow();StopTimer(fresh);var closed=false;fresh.Closed+=(_,_)=>closed=true;
+        try
+        {
+            _=new WindowInteropHelper(fresh).EnsureHandle();
+            var root=(FrameworkElement)fresh.Content;
+            Check(notices.SelectMany(notice=>notice.Actions.Prepend(notice.Text)).Where(name=>Field(fresh,name).Visibility==Visibility.Visible)
+                .SequenceEqual(["saveState","sourceHistoryNotice","sourceHistoryDetails"]),
+                "Clean workspace state shows only the save state and the permanent source notice",checks);
+            Verify(fresh,"clean",1024,640,411);
+            // Both collapsed groups stay on the row of the primary action at the minimum window width.
+            var primary=Descendants<Button>(root).Single(b=>Equals(b.Content,"Kalıp isteği hazırla…"));
+            var groups=Descendants<Expander>(root).Where(e=>AutomationProperties.GetName(e) is "Dosya aktarımı" or "Tekstil ve makine").ToArray();
+            Check(groups.Length==2 && groups.All(group=>FullyVisible(group,root) && BoundsInRoot(group,root).Top<BoundsInRoot(primary,root).Bottom
+                && BoundsInRoot(group,root).Bottom>BoundsInRoot(primary,root).Top),
+                "Command groups fit on one row at 1024x640",checks);
+            Verify(fresh,"clean",1440,900,671);
+
+            // Opening one command group makes the row taller; the other, still collapsed, header must stay
+            // on the line of the command buttons instead of dropping to the bottom of that row. Measured
+            // at 1440 px, where both groups stay on the button row. At 1024 px an open group is too wide
+            // for that row and the two groups wrap to the next line together, which is expected.
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-groups-collapsed-1440x900.png"),1440,900);
+            var restingTop=BoundsInRoot(groups[1],root).Top;
+            groups[0].IsExpanded=true;
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-group-open-1440x900.png"),1440,900);
+            var openedHeight=BoundsInRoot(groups[0],root).Height;var movedTop=BoundsInRoot(groups[1],root).Top;
+            Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-group-open-1024x640.png"),1024,640);
+            groups[0].IsExpanded=false;
+            Check(openedHeight>60 && Math.Abs(movedTop-restingTop)<=.5,
+                $"A collapsed command group keeps its place while the other group is open at 1440x900 (moved {movedTop-restingTop:0.#} px)",checks);
+
+            // A long file name in the save state must leave the project title readable.
+            var title=(TextBlock)Field(fresh,"projectTitle");var saved=(TextBlock)Field(fresh,"saveState");
+            var (titleText,savedText)=(title.Text,saved.Text);
+            try
+            {
+                title.Text="Uzun dosya adı denemesi";saved.Text="✓ Kaydedildi · "+new string('a',140)+".tcad";
+                Render(fresh,Path.ChangeExtension(reportPath,".compact-workspace-long-save-state-1024x640.png"),1024,640);
+                var titleBounds=BoundsInRoot(title,root);var savedBounds=BoundsInRoot(saved,root);
+                Check(title.ActualWidth>=title.DesiredSize.Width-.5 && title.ActualWidth>=120 && FullyVisible(title,root) && FullyVisible(saved,root)
+                    && savedBounds.Left>=titleBounds.Right-.5 && savedBounds.Width>=160,
+                    $"A long saved file name is trimmed and leaves the project title whole (title {title.ActualWidth:0} px, state {savedBounds.Width:0} px)",checks);
+            }
+            finally { title.Text=titleText;saved.Text=savedText; }
+        }
+        finally { StopTimer(fresh);fresh.Close();PumpUntil(()=>closed); }
     }
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
@@ -14419,7 +14668,7 @@ internal static class DesktopVerification
         viewer.ScrollToVerticalOffset(0);root.UpdateLayout();
         return reachable;
     }
-    private static bool FullyVisible(FrameworkElement element,FrameworkElement root)
+    internal static bool FullyVisible(FrameworkElement element,FrameworkElement root)
     {
         var bounds=BoundsInRoot(element,root);var visible=VisibleBoundsInRoot(element,root);
         return bounds.Width>0 && bounds.Height>0 && !visible.IsEmpty
@@ -14437,9 +14686,9 @@ internal static class DesktopVerification
         return bounds.Width>0 && bounds.Height>0 && !visible.IsEmpty
             && visible.Height>=bounds.Height-.5 && visible.Width>=Math.Min(bounds.Width,gridWidth)-1;
     }
-    private static Rect BoundsInRoot(FrameworkElement element,FrameworkElement root)
+    internal static Rect BoundsInRoot(FrameworkElement element,FrameworkElement root)
         => ReferenceEquals(element,root)?new Rect(root.RenderSize):element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
-    private static Rect VisibleBoundsInRoot(FrameworkElement element,FrameworkElement root)
+    internal static Rect VisibleBoundsInRoot(FrameworkElement element,FrameworkElement root)
     {
         var visible=BoundsInRoot(element,root);
         visible.Intersect(new Rect(root.RenderSize));
@@ -14457,7 +14706,7 @@ internal static class DesktopVerification
         }
         return visible;
     }
-    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    internal static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
@@ -14466,7 +14715,7 @@ internal static class DesktopVerification
             foreach (var descendant in Descendants<T>(child)) yield return descendant;
         }
     }
-    private static void Render(Window window, string path, int width, int height)
+    internal static void Render(Window window, string path, int width, int height)
     {
         var content = (FrameworkElement)window.Content;
         content.Measure(new Size(width, height)); content.Arrange(new Rect(0, 0, width, height)); content.UpdateLayout();
@@ -14483,8 +14732,8 @@ internal static class DesktopVerification
         using var stream = new FileStream(path, FileMode.Create, FileAccess.Write);
         encoder.Save(stream);
     }
-    private static void StopTimer(MainWindow window) => (typeof(MainWindow).GetField("autosaveTimer", PrivateInstance)?.GetValue(window) as DispatcherTimer)?.Stop();
-    private static void Invoke(MainWindow target, string method, params object[] args)
+    internal static void StopTimer(MainWindow window) => (typeof(MainWindow).GetField("autosaveTimer", PrivateInstance)?.GetValue(window) as DispatcherTimer)?.Stop();
+    internal static void Invoke(MainWindow target, string method, params object[] args)
     {
         var member = typeof(MainWindow).GetMethod(method, PrivateInstance) ?? throw new MissingMethodException(method);
         try { member.Invoke(target, args); }

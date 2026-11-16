@@ -6,6 +6,12 @@
 
 `src/TekstilCAD.Patterns/TekstilCAD.Patterns.csproj` içinde **Clipper2 2.0.0** NuGet bağımlılığı bulunur (Boost Software License 1.0). `src/TekstilCAD.Patterns/THIRD_PARTY_NOTICES.txt` ve `CLIPPER2-LICENSE.txt` kaynakta mevcuttur ve proje yayın çıktısına kopyalanacak şekilde tanımlıdır. Bu bildirimlerin gerçek yükleyici/ZIP çıktısında bulunduğu ayrıca doğrulanmalıdır. Diğer modüllerdeki bağımlılık envanteri yayın paketinde yeniden kontrol edilmelidir. .NET ve Windows WPF çerçevesi kullanılır. .NET runtime ve WPF depoları MIT lisansını belirtir: [.NET runtime lisansı](https://github.com/dotnet/runtime/blob/main/LICENSE.TXT), [WPF lisansı](https://github.com/dotnet/wpf/blob/main/LICENSE.TXT). Dağıtılan runtime'ın üçüncü taraf bildirimleri de korunmalıdır.
 
+`src/TekstilCAD.Nesting/TekstilCAD.Nesting.csproj` da aynı **Clipper2 2.0.0** paketini kullanır (sparrow sonucunun bağımsız çakışma/aralık denetimi için). Yayın paketinde bildirim dosyasının bu modül için de bulunduğu doğrulanmalıdır.
+
+### Harici, paketlenmeyen araç: sparrow
+
+`SparrowNesting` adaptörü **sparrow** pastal sezgiselini ayrı bir süreç olarak çalıştırır; kaynak kodu veya ikili dosyası depoya ve dağıtıma dahil değildir. sparrow MIT lisanslıdır (https://github.com/JeroenGar/sparrow), bağlı olduğu **jagua-rs** Mozilla Public License 2.0'dır (https://github.com/JeroenGar/jagua-rs). İkili dosya ürünle birlikte dağıtılırsa her iki LICENSE metni ve sparrow'un Rust bağımlılıklarının bildirimleri pakete eklenmeli; jagua-rs dosyaları değiştirilirse MPL-2.0 gereği değişen dosyaların kaynağı sunulmalıdır. Bu bir hukuki inceleme değildir.
+
 Uno, Skia, SQLite ve PostgreSQL doğrudan mevcut derlemeye dahil değildir. Bunlar tercih/gelecek seçenekleridir; seçilecek kesin paket ve sürümlerin lisansı eklenmeden önce incelenmelidir. WearCAD kaynak kodu veya arayüz varlığı kullanılmaz.
 
 ## Test bağımlılıkları

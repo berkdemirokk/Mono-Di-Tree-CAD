@@ -22,7 +22,9 @@ public sealed class TextileToolsWindow : Window
     private readonly ObservableCollection<GradeRow> rows = [];
     private readonly DataGrid grades = new() { AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, SelectionUnit=DataGridSelectionUnit.FullRow, SelectionMode=DataGridSelectionMode.Extended, MinHeight=80, RowHeight=34, ColumnHeaderHeight=32, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock sourceInfo = new() { TextWrapping=TextWrapping.Wrap, MaxHeight=44, TextTrimming=TextTrimming.CharacterEllipsis, VerticalAlignment=VerticalAlignment.Center };
-    private readonly TextBox sourceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=42, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(16,3,0,0) };
+    // The themed TextBox insets its text by the padding twice. With the default 7 px only 12 px of a
+    // 17 px line fit under MaxHeight; 1 px leaves room for both the name and the identity line.
+    private readonly TextBox sourceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=42, Padding=new Thickness(9,1,9,1), VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(16,3,0,0) };
     private readonly TextBlock result = new() { TextWrapping=TextWrapping.Wrap, Text="Artışları girip yeni bedeni oluşturun veya diğer araç sekmelerini kullanın." };
     private readonly List<(Button Button,Func<bool> Available)> commands = [];
     private bool refreshingSource;
@@ -222,6 +224,18 @@ public sealed class TextileToolsWindow : Window
             if(!CommitGradeEdit()) { e.Cancel=true;ShowGradeEditError();return; }
             if(HasUnsavedGradeRules()&&!ConfirmDiscardGradeRules())e.Cancel=true;
         };
+    }
+    /// <summary>
+    /// Selects a tab (0 grading, 1 contour editing, 2 basic nesting) and, when given, fills that tab's main
+    /// input once (tab 1: seam allowance mm, tab 2: fabric width mm). Nothing is started or applied.
+    /// </summary>
+    internal void ApplyOpeningRequest(int tab,string? value)
+    {
+        if(workshopTabs is null || tab<0 || tab>=workshopTabs.Items.Count)throw new ArgumentOutOfRangeException(nameof(tab));
+        workshopTabs.SelectedIndex=tab;
+        if(value is null)return;
+        if(tab==1 && offsetAllowance is not null)offsetAllowance.Text=value;
+        else if(tab==2)basicWidth.Text=value;
     }
     private bool CommitGradeEdit() => grades.CommitEdit(DataGridEditingUnit.Cell,true) && grades.CommitEdit(DataGridEditingUnit.Row,true);
     internal void RequestVertexMoveCancellation()
@@ -564,7 +578,7 @@ public sealed class TextileToolsWindow : Window
         help.Content=new TextBlock { Text="ΔX / ΔY bir beden adımındaki mm değişimidir. Her beden aynı seçili temel parçadan hesaplanır. Artışları projeye uygulayın, ardından ana pencereden projeyi kaydedin. Uygulanmamış hücreler atölye kapanınca kaybolur. Köşe işaretleri yeni bedende aynı indeksli noktalara taşınır; görsel işaretler fiziksel çentik veya kesim komutu değildir. Her bedende konumlarını kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,6,0,6) };
         var gradeHeader=new StackPanel { Orientation=Orientation.Horizontal };gradeHeader.Children.Add(help);
         var pickGradePoint=Button(gradeHeader,"Konturdan nokta seç…",SelectGradePoint,()=>HasPiece()&&!rulesNeedReset);
-        pickGradePoint.Margin=new Thickness(0,0,0,2);pickGradePoint.Padding=new Thickness(10,3,10,3);
+        pickGradePoint.Margin=new Thickness(8,0,0,2);pickGradePoint.Padding=new Thickness(10,3,10,3);
         AutomationProperties.SetHelpText(pickGradePoint,"Kontur önizlemesinden bir nokta seçip serileme tablosundaki satırına gidin. Artışlar değiştirilmez.");
         layout.Children.Add(gradeHeader);
         foreach(var (title,property,readOnly) in new[] { ("Nokta","Index",true),("X · mm","X",true),("Y · mm","Y",true),("ΔX · mm","Dx",false),("ΔY · mm","Dy",false) })
@@ -1456,7 +1470,67 @@ public sealed class TextileToolsWindow : Window
         AutomationProperties.SetHelpText(basicMargin,"Aynı pay sol, sağ, başlangıç ve bitiş kenarlarına uygulanır. Sıfır kenar payı eklemez.");
         var arrange=Button(panel,"Tüm proje parçalarını yerleştir",()=> BasicNestingTaskForVerification=CalculateBasicNestingAsync(),
             ()=>workspace.Document.Pieces.Count>0&&workspace.Document.Pieces.All(p=>p.Closed)&&IsNumber(basicWidth.Text,out var w)&&w>0&&IsNumber(basicGap.Text,out var g)&&g>=0&&IsNumber(basicMargin.Text,out var m)&&m>=0);
-        arrange.ToolTip=placementImpact;AutomationProperties.SetHelpText(arrange,placementImpact);return Scroll(panel);
+        arrange.ToolTip=placementImpact;AutomationProperties.SetHelpText(arrange,placementImpact);
+        Heading(panel,"Gerçek şekilli yerleşim tahmini · deneysel");
+        Note(panel,"Parçaların çevre kutuları yerine gerçek konturlarını kullanan deneysel bir yerleşimin boyunu raf yöntemiyle karşılaştırır. Parçalar döndürülmez. Proje değiştirilmez; sonuç yalnız bilgi amaçlıdır, en iyi yerleşim veya üretim onayı değildir. Yukarıdaki en, boşluk ve kenar payı kullanılır.");
+        Button(panel,"Raf yöntemiyle karşılaştır",()=> TrueShapeComparisonTaskForVerification=CompareTrueShapeNestingAsync(),
+            ()=>workspace.Document.Pieces.Count>0&&workspace.Document.Pieces.Count<=TrueShapeNesting.MaximumPieces&&workspace.Document.Pieces.All(p=>p.Closed)&&IsNumber(basicWidth.Text,out var w)&&w>0&&IsNumber(basicGap.Text,out var g)&&g>=0&&IsNumber(basicMargin.Text,out var m)&&m>=0);
+        return Scroll(panel);
+    }
+    internal Task? TrueShapeComparisonTaskForVerification { get; private set; }
+    /// <summary>Read-only estimate; the document is never changed by this comparison.</summary>
+    internal async Task CompareTrueShapeNestingAsync()
+    {
+        if(basicNestingBusy || gradeBusy || offsetBusy || vertexMoveBusy || toolReviewRequired)return;
+        var started=false;
+        try
+        {
+            var width=Number(basicWidth.Text);var gap=Number(basicGap.Text);var margin=Number(basicMargin.Text);
+            var snapshot=workspace.Document.Clone();
+            basicNestingCancellation=new CancellationTokenSource();var token=basicNestingCancellation.Token;
+            basicNestingBusy=true;started=true;source.IsEnabled=false;grades.IsEnabled=false;
+            if(workshopTabs is not null)workshopTabs.IsEnabled=false;
+            cancelBasicNesting.Visibility=Visibility.Visible;cancelBasicNesting.IsEnabled=true;RefreshCommands();
+            result.Foreground=StudioTheme.Muted;result.Text="Gerçek şekilli yerleşim tahmini hesaplanıyor. İptal isteyebilirsiniz; proje değiştirilmeyecek.";
+            var comparison=await Task.Run(()=>
+            {
+                var shelf=NestingEngine.Arrange(snapshot.Pieces,width,gap,double.PositiveInfinity,margin,token);
+                // Coarser steps keep the bounded search usable on larger jobs.
+                foreach(var step in new[] { 5.0,10.0,20.0,40.0 })
+                {
+                    token.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var shaped=TrueShapeNesting.Arrange(snapshot.Pieces,width,gap,margin,false,step,token);
+                        // The shelf method also keeps the margin at the start and end of the fabric.
+                        return (Shelf:shelf.UsedLength,Shaped:(double?)(shaped.UsedLength+2*margin),Step:step);
+                    }
+                    catch(TrueShapeSearchLimitException) { }
+                }
+                return (Shelf:shelf.UsedLength,Shaped:(double?)null,Step:0.0);
+            });
+            if(windowClosed)return;
+            token.ThrowIfCancellationRequested();
+            if(comparison.Shaped is not { } shapedLength)
+            { result.Foreground=StudioTheme.Warning;result.Text=$"Raf yöntemi boyu {MeasurementInput.Format(comparison.Shelf)} mm. Gerçek şekilli tahmin bu iş için arama sınırını aştı; daha küçük parça grubuyla deneyin. Proje değiştirilmedi."; }
+            else if(shapedLength<comparison.Shelf)
+                Success($"Raf yöntemi boyu {MeasurementInput.Format(comparison.Shelf)} mm  ·  Gerçek şekilli tahmin {MeasurementInput.Format(shapedLength)} mm (%{(comparison.Shelf-shapedLength)/comparison.Shelf*100:0.#} daha kısa, {comparison.Step:0} mm arama adımı). Deneysel tahmindir; iplik yönü ve işaretler değerlendirilmedi, parçalar döndürülmedi. Proje değiştirilmedi.");
+            else
+                Success($"Raf yöntemi boyu {MeasurementInput.Format(comparison.Shelf)} mm  ·  Gerçek şekilli tahmin {MeasurementInput.Format(shapedLength)} mm. Bu parçalarda deneysel yöntem daha kısa boy bulmadı. Proje değiştirilmedi.");
+        }
+        catch(OperationCanceledException) when(basicNestingCancellation?.IsCancellationRequested==true)
+        { if(!windowClosed) { result.Foreground=StudioTheme.Warning;result.Text="Gerçek şekilli tahmin iptal edildi; proje değiştirilmedi."; } }
+        catch(Exception ex)
+        { if(!windowClosed) { result.Foreground=StudioTheme.Danger;result.Text="Gerçek şekilli tahmin hesaplanamadı: "+ex.Message; } }
+        finally
+        {
+            if(started)
+            {
+                basicNestingBusy=false;basicNestingCancellation?.Dispose();basicNestingCancellation=null;
+                cancelBasicNesting.Visibility=Visibility.Collapsed;cancelBasicNesting.IsEnabled=false;
+                if(!windowClosed) { source.IsEnabled=true;grades.IsEnabled=true;if(workshopTabs is not null)workshopTabs.IsEnabled=true;RefreshCommands(); }
+            }
+        }
     }
     internal async Task CalculateBasicNestingAsync()
     {

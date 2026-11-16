@@ -126,6 +126,35 @@ public sealed class ParametricCurvePersistenceTests
         finally { File.Delete(path); }
     }
 
+    // The desktop arc tool turns its three clicks into centre, radius and
+    // angles with this arithmetic. Polar parameters cannot reproduce the
+    // clicked Cartesian points bit for bit, so the end points are held to a
+    // tolerance; only the points sampled from the stored arc are exact.
+    [Theory]
+    [InlineData(0, 0, 1, 1, -1, 1)]
+    [InlineData(350.5, 720.25, 458.5, 864.25, 206.5, 828.25)]
+    [InlineData(-5000, 5000, -5000, 0, 0, 5000)]
+    public void ArcFromClickedPointsStaysWithinToleranceAndSurvivesUndoRedo(
+        double cx, double cy, double sx, double sy, double ex, double ey)
+    {
+        Point2 center = new(cx, cy), start = new(sx, sy), end = new(ex, ey);
+        var a = Math.Atan2(start.Y - center.Y, start.X - center.X);
+        var b = Math.Atan2(end.Y - center.Y, end.X - center.X);
+        var arc = new CurveSegment.Arc(center, Geometry.Distance(center, start), a, (b - a + 2 * Math.PI) % (2 * Math.PI));
+        var drawn = Sample(arc);
+        var piece = drawn.Pieces[0];
+        Assert.InRange(Geometry.Distance(piece.Points[0], start), 0, 1e-9);
+        Assert.InRange(Geometry.Distance(piece.Points[^1], end), 0, 1e-9);
+        Assert.True(ParametricContour.MatchesPreview(piece));
+
+        var session = new DocumentSession(new ProjectDocument { Name = drawn.Name });
+        Assert.True(session.Execute(d => d.Pieces.Add(piece.Clone()), ProjectStorage.Validate));
+        Assert.True(session.Undo());
+        Assert.Empty(session.Document.Pieces);
+        Assert.True(session.Redo());
+        Assert.True(DocumentSession.ContentEquals(drawn, session.Document));
+    }
+
     [Fact]
     public void LegacyPolylineRemainsInItsOriginalUnversionedFormat()
     {

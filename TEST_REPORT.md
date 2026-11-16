@@ -1,6 +1,16 @@
-# Test raporu — 31 Ekim 2026
+# Test raporu
 
-## Son kaydedilmiş kanıt
+## Güncel durum (15 Kasım 2026)
+
+- GitHub Actions API ile 15 Kasım 2026'da kontrol edildi: **"Windows build and test"** iş akışı `main` dalında `f440bd8` commit'inde 15 Kasım 2026'da başarıyla tamamlandı. Bu çalışmadaki test sayısı bu raporda bilinmiyor; sayı uydurulmamıştır.
+- **"Upload iOS to TestFlight"** iş akışı `fix/ios-library-save-conflicts-20261114` dalında (`521f559`) 15 Kasım 2026'da ve `main` dalında (`b6785ae`) 14 Kasım 2026'da başarıyla tamamlandı. Bu yalnız derleme, imzalama ve App Store Connect'e yükleme adımlarının bittiğini gösterir.
+- İş akışı başarısı gerçek cihaz, gerçek kullanıcı, ekran okuyucu, fabrika veya fiziksel plotter kabulü **değildir**.
+- 9 Kasım 2026 sonrasındaki commit'ler (katman düzeltmeleri, parametrik eğri çekirdeği, sürüm 9 `.tcad` zarfı, parametrik kontrol penceresi, iOS sürüm 9 önizlemesi ve kayıt çakışması düzeltmeleri) bu Windows makinesinde yerel olarak test edilmedi; Smart App Control ilkesi yeni derlenen DLL'leri engellediği için bu değişikliklerin otomatik test kanıtı yalnız CI'ye dayanır. Masaüstü `--verify` bu commit'ler için yerelde çalıştırılmadı.
+- Son yerel tam test sayımı aşağıdaki 9 Kasım 2026 (`58a4d27`) kaydıdır ve sonraki kodu temsil etmez.
+
+## Tarihsel kayıtlar
+
+### 31 Ekim – 10 Kasım 2026 yerel kanıt (önceki "Son kaydedilmiş kanıt")
 
 - 10 Kasım 2026'da kaynak sürümünde katman sistemi iki düzeltme yapıldı ve `dotnet build TekstilCAD.slnx -c Release --nologo` 0 hata ile tamamlandı:
   1. Etkisiz katman görünüm/kilit/isim değişikliği (değer zaten istenen değerdeyse) artık listeyi materialize etmez ve projeyi sessizce sürüm 8'e yükseltmez (`LayerTools.SetVisible`/`SetLocked`/`Rename` erken dönüş).
@@ -15,9 +25,9 @@
 - Yaklaşık 08:01 yerel saatte Release derlemesi 0 uyarı/0 hata ile tamamlandı ve penceresiz masaüstü doğrulamasında 744 kontrol geçti (`work/dxf-retry-position-build.log`, `work/dxf-retry-position.json`). Bunlar gerçek kullanıcı, ekran okuyucu, fabrika veya fiziksel plotter kabul testi değildir.
 - Dosya temelli ölçümler ve tarayıcı/ekran görüntüleri yalnız belirtilen senaryoları kapsar. Uygulama ticari üretime hazır veya sertifikalı değildir.
 
-## Tarihsel ilk sürüm kanıtı — mevcut sonucu temsil etmez
+### Tarihsel ilk sürüm kanıtı — mevcut sonucu temsil etmez
 
-### O zamanki doğrulanmış sonuçlar
+#### O zamanki doğrulanmış sonuçlar
 
 - .NET SDK 10.0.403, Windows 11 x64.
 - `dotnet build TekstilCAD.slnx -c Release`: 0 uyarı / 0 hata.
@@ -28,7 +38,7 @@
 - `TekstilCAD.Studio.dll --verify ...`: 12 arka plan kontrolü PASS. Pencere göstermeden yükle/ekle/undo/redo, geçersiz işlemi geri döndürme, kanvas hata işleme, gerçek SaveTo ile kayıt/açma, WPF render ve iki araç penceresi oluşturma/layout kontrol edildi.
 - İlk sürümde görünür UI üzerinde dikdörtgen çizimi ve undo görüldü; kayıt diyaloğu açıldı. Diyalogdan kayıt tamamlanmadı, tam UI kabul testi sayılmaz.
 
-### O zamanki inceleme düzeltmeleri
+#### O zamanki inceleme düzeltmeleri
 
 A11 sayısal taşma -> koordinat alanı ve sonlu sonuç sınırları.
 A23 yol sonu boşluk/nokta takma adları -> paylaşılan yazma koruması; guard-only testleri.
@@ -37,18 +47,18 @@ A24/A25/A26 isim ve işlem bütçeleri -> girdi kontrolleri ve regresyon testler
 A30 kanvas InvalidDataException kaçışı -> yakalama ve arka plan regresyon kontrolü.
 Makine simülasyonu değiştirilmiş dosya -> Failed durumunun kalıcılaştırılması düzeltildi.
 
-### Tamamlanmamış doğrulamalar
+#### Tamamlanmamış doğrulamalar
 
 Fiziksel makine, gerçek üretim kesimi, tam AAMA/ASTM, mobil, ödeme, kurulum imzası, tüm UI diyalogları, geniş veri/performance korpusu doğrulanmadı. Pencere göstermeyen render kontrolü etkileşimli kullanıcı kabulünün yerine geçmez.
 
-## Tarihsel paket doğrulaması — 001f866dfb1a
+### Tarihsel paket doğrulaması — 001f866dfb1a
 
 001f866dfb1a kaynak checkpointi için Windows x64 self-contained ZIP ve kaynak ZIP oluşturuldu. Kaynak arşivi 67 dosya içeriyor; bin/obj/.tools/work veya gizli anahtar yok. ZIP üyeleri ve SHA256 değerleri doğrulandı. Kaynak ZIP'i ayrı temiz klasöre açılıp 0 hata/uyarıyla derlendi; 156 test yeniden geçti. Windows ZIP'i ayrıca açılarak SDK bağımsız EXE --verify modu çalıştırıldı: exit 0, 12 kontrol PASS, görünür pencere yok. Paketler outputs klasöründe; ayrıntılı arşiv kanıtı work/archive-verification.json.
 
-## Tarihsel 0.2 arayüz sürümü
+### Tarihsel 0.2 arayüz sürümü
 
 Release derlemesi 0 hata/0 uyarı. 156 xUnit testi yeniden geçti. Pencere göstermeyen masaüstü doğrulamasında 20 kontrol geçti: komut aktifliği, belge değişiminde önceki kayıt yolunun temizlenmesi, serileme düğmesinin gerçek belge oluşturması, yerel makine işi/özet doğrulaması ve uygulama veri dizini yalıtımı dahil. 1440x900 ve1024x640 çalışma alanı ile serileme/makine ekranları render edilip görsel incelendi. Serileme ana eylemi varsayılan boyutta sabit alana taşındı; metin/teal zıtlığı düzeltildi. Etkileşimli klavye/OS diyalog kabulü ve tam üretim sertifikasyonu hâlâ ayrı iş.
 
-## 0.3 geliştirme önizlemesi — 31 Ekim 2026
+### 0.3 geliştirme önizlemesi — 31 Ekim 2026
 15 uzman ajan dalgalar halinde çalıştı (aynı anda en çok üç alt ajan). Belge oturumu/savepoint, no-op redo, tam hassasiyetli ölçüler, atomik kayıt çakışması, oturum kilitli kurtarma, temel bedenden ardışık serileme, klavyeyle hareket, seçili parça çıktısı, gerçek çıktı önizlemesi, kuyruk yeniden yükleme ve HPGL nokta çakışması koruması eklendi/düzeltildi. İçe aktarım özeti belge değiştirilmeden gösteriliyor; kompakt serileme tablosu okunabilir.
 Release: 0 uyarı / 0 hata. Regresyon: 267 geçti / 0 başarısız / 0 atlanan. Gizli masaüstü ve kaynak/render incelemesi PASS; ayrıntılı kontroller docs/implementation-2026-10-31/IMPLEMENTATION_RECORD.json. Gerçek etkileşimli UI, bağımsız OS süreç çökmesi, fiziksel cihaz ve fabrika kabulü doğrulanmadı. Serileme kural taslakları henüz projede saklanmıyor. Bu sürüm satışa hazır değildir. Önceki denetim sonuçları tarihsel kanıttır.
