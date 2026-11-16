@@ -28,7 +28,7 @@ public partial class MainWindow
         private TextBlock? railCaption, railHint, footerNote, scaleWarning, nextStep, cardName, cardEmpty;
         private StackPanel? cardPiece;
         private Button? widthTile, heightTile, positionTile;
-        private bool switchMounted, switchPermanent;
+        private bool switchMounted, switchPermanent, built;
         private int textScale = 100;
         private readonly Dictionary<string, UIElement> toolIcons = [];
 
@@ -59,8 +59,9 @@ public partial class MainWindow
 
         private void Build()
         {
-            if (commandBar is not null) return;
-            commandBar = CommandBarFactory(w);
+            if (built) return;
+            var bar = CommandBarFactory(w);
+            commandBar = bar;
             // Region under the header: [command box + help row] [Aç] [Kaydet] [Tüm araçlar].
             var row = new Grid { MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Center };
             row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
@@ -97,6 +98,7 @@ public partial class MainWindow
             DockPanel.SetDock(scaleWarning, Dock.Right);
 
             BuildSideCard();
+            built = true;
         }
 
         private Button Primary(string text, string name, string tip, double minWidth, Action action)
@@ -176,7 +178,20 @@ public partial class MainWindow
             if (IsAttached) return;
             Build();
             IsAttached = true;
+            try { AttachCore(); }
+            catch
+            {
+                // A failed attach must not leave a half-built layer behind.
+                IsAttached = false;
+                try { recorder.Restore(); } catch (Exception) { /* the original failure is the one to report */ }
+                throw;
+            }
+        }
+
+        private void AttachCore()
+        {
             var r = recorder;
+            r.Set(w.unitsText, AutomationProperties.NameProperty, "");
 
             // Header: same instances, calmer.
             r.Set(w.headerGrid, FrameworkElement.MarginProperty, new Thickness(16, 6, 16, 4));

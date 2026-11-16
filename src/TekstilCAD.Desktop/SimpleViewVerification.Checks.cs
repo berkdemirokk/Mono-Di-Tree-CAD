@@ -24,9 +24,29 @@ internal static partial class SimpleViewVerification
         Render(fresh, Temp("roundtrip-classic"), 1440, 900);
         var after = Capture(root);
         var canvas = F<CadCanvas>(fresh, "canvas");
-        Check(changed && !fresh.IsSimpleView && ReferenceEquals(fresh.Content, root) && SameFingerprint(before, after) && canvas.EmptyStateTitle is null,
+        Check(changed && !fresh.IsSimpleView && ReferenceEquals(fresh.Content, root) && SameFingerprint(before, after) && canvas.EmptyStateTitle is null && canvas.EmptyStateHint is null
+            && InteractiveRoundTrip(),
             "Switching to the simple view and back restores every touched property and the same control instances", checks);
     });
+
+    // The interactive path: the switch button is mounted, a piece is selected and the view is switched twice.
+    private static bool InteractiveRoundTrip() { var ok = false; WithFresh(fresh =>
+    {
+        fresh.EnableViewSwitching();
+        var root = (FrameworkElement)fresh.Content;
+        fresh.Select(fresh.Document.Pieces[0].Id);
+        Render(fresh, Temp("roundtrip-interactive"), 1440, 900);
+        var before = Capture(root);
+        var canvas = F<CadCanvas>(fresh, "canvas");
+        var same = true;
+        for (var cycle = 0; cycle < 2; cycle++)
+        {
+            Simple(fresh, true); Render(fresh, Temp("roundtrip-interactive"), 1024, 640);
+            Simple(fresh, false); Render(fresh, Temp("roundtrip-interactive"), 1440, 900);
+            same &= SameFingerprint(before, Capture(root)) && canvas.EmptyStateTitle is null && canvas.EmptyStateHint is null && !fresh.IsSimpleView;
+        }
+        ok = same;
+    }); return ok; }
 
     private static void VerifyHeaderNotices(string reportPath, List<string> checks) => WithFresh(fresh =>
     {

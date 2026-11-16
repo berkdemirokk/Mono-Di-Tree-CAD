@@ -41,7 +41,15 @@ internal sealed class ViewRecorder
 
     internal void Restore()
     {
-        for (var i = restores.Count - 1; i >= 0; i--) restores[i]();
+        // Every entry runs even if one throws; the list is always cleared so a later attach starts clean.
+        var pending = restores.ToArray();
         restores.Clear();
+        Exception? first = null;
+        for (var i = pending.Length - 1; i >= 0; i--)
+        {
+            try { pending[i](); }
+            catch (Exception ex) { first ??= ex; }
+        }
+        if (first is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
     }
 }

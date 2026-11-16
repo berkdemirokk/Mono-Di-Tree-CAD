@@ -138,12 +138,18 @@ internal static partial class SimpleViewVerification
                 list.Add(fe.MinWidth); list.Add(fe.MinHeight); list.Add(fe.ToolTip as string); list.Add(fe.Focusable); list.Add(fe.LayoutTransform);
                 list.Add(DockPanel.GetDock(fe)); list.Add(AutomationProperties.GetLiveSetting(fe));
             }
-            if (element is Control control) { list.Add(control.FontSize); list.Add(control.Background); list.Add(control.Foreground); list.Add(control.Padding); }
-            if (element is TextBlock text) { list.Add(text.FontSize); list.Add(text.Text); list.Add(text.Foreground); list.Add(text.TextWrapping); }
+            if (element is FrameworkElement shape)
+            {
+                list.Add(shape.MaxWidth); list.Add(shape.MaxHeight); list.Add(shape.Opacity); list.Add(shape.HorizontalAlignment); list.Add(shape.VerticalAlignment);
+                list.Add(AutomationProperties.GetHelpText(shape)); list.Add(shape.ToolTip);
+            }
+            if (element is Border border) { list.Add(border.Padding); list.Add(border.Background); list.Add(border.CornerRadius); }
+            if (element is Control control) { list.Add(control.FontSize); list.Add(control.FontWeight); list.Add(control.Background); list.Add(control.Foreground); list.Add(control.Padding); }
+            if (element is TextBlock text) { list.Add(text.FontSize); list.Add(text.FontWeight); list.Add(text.Text); list.Add(text.Foreground); list.Add(text.TextWrapping); list.Add(text.Padding); }
             if (element is ContentControl { Content: string content }) list.Add(content);
             if (element is Grid grid)
             {
-                foreach (var column in grid.ColumnDefinitions) { list.Add(column); list.Add(column.Width); }
+                foreach (var column in grid.ColumnDefinitions) { list.Add(column); list.Add(column.Width); list.Add(column.MinWidth); }
                 foreach (var row in grid.RowDefinitions) { list.Add(row); list.Add(row.Height); }
             }
             if (element is ItemsControl) return;
