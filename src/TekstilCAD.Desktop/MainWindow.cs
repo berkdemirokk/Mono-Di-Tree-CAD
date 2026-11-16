@@ -17,7 +17,7 @@ using Geometry = TekstilCAD.Core.Geometry;
 
 namespace TekstilCAD.Desktop;
 
-public class MainWindow : Window
+public partial class MainWindow : Window
 {
     private readonly DocumentSession session;
     // DocumentSession clones on every commit; this token changes only when the
@@ -285,13 +285,13 @@ public class MainWindow : Window
         var commandArea = new WrapPanel { Margin = new Thickness(12, 0, 12, 6) };
         var start = CommandGroup(commandArea, "BAŞLANGIÇ");
         var design = AddButton(start, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "İstek hazırlar; kalıp oluşturmaz.");
-        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.Background;
+        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.OnAccent;
         var files = CommandGroup(commandArea, "PROJE");
         AddButton(files, "Yeni", NewDocument, "Yeni proje · Ctrl+N");
         AddButton(files, "Aç…", Open, "Proje aç · Ctrl+O");
         projectOpenCancel=AddButton(files,"Açmayı iptal et",CancelProjectOpen,"Okuma sonucunu kullanma; mevcut çalışma korunur.");
         projectOpenCancel.Visibility=Visibility.Collapsed;
-        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
+        var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.OnAccent;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
         CompactLabel(AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true), "Güvenli kopya…");
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
@@ -424,19 +424,14 @@ public class MainWindow : Window
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
-        var rotateCounterclockwise=AddButton(transforms, "90° sola", () => TransformWithGrading((points,center) => Geometry.Rotate(points,-90,center),OrthogonalGradingTransform.RotateRight), "Parçayı merkezinden saat yönünün tersine döndür");
-        AutomationProperties.SetName(rotateCounterclockwise,"Parçayı saat yönünün tersine 90 derece döndür");
-        selectionCommands.Add(rotateCounterclockwise);
-        var rotateClockwise=AddButton(transforms, "90° sağa", () => TransformWithGrading((points,center) => Geometry.Rotate(points,90,center),OrthogonalGradingTransform.RotateLeft), "Parçayı merkezinden saat yönünde 90 derece döndür");
-        AutomationProperties.SetName(rotateClockwise,"Parçayı saat yönünde 90 derece döndür");
-        selectionCommands.Add(rotateClockwise);
-        selectionCommands.Add(AddButton(transforms, "Aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,true,center.X),OrthogonalGradingTransform.MirrorVertical), "Parçayı merkezinden geçen dikey eksene göre aynala"));
+        // The five orthogonal transforms come from one table (OrthogonalOps) that the
+        // command executor also reads, so a button and a typed command cannot disagree.
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateCounterclockwise));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateClockwise));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.MirrorVertical));
         selectionCommands.Add(AddButton(transforms,"Yanına aynalı parça…",OpenMirrorCopy,"Kaynağı koruyarak sağ veya sola boşluklu aynalı karşı parça oluşturur; önce önizleme sunar."));
-        var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,false,center.Y),OrthogonalGradingTransform.MirrorHorizontal), "Parçayı merkezinden geçen yatay eksene göre aynala");
-        AutomationProperties.SetName(mirrorHorizontal,"Parçayı yatay eksene göre aynala");
-        selectionCommands.Add(mirrorHorizontal);
-        var rotateHalf=AddButton(transforms,"180° döndür",()=>TransformWithGrading((points,center)=>Geometry.Rotate(points,180,center),OrthogonalGradingTransform.RotateHalf),"Parçayı merkezinden 180 derece tek işlemde döndür");
-        AutomationProperties.SetName(rotateHalf,"Parçayı merkezinden 180 derece döndür");selectionCommands.Add(rotateHalf);
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.MirrorHorizontal));
+        selectionCommands.Add(AddOrthogonalButton(transforms,OrthogonalOps.RotateHalf));
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
         inspector.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(5), Padding = new Thickness(12), Margin = new Thickness(3, 14, 3, 14), Child = metrics });
         snap.Margin = new Thickness(4, 4, 0, 14); inspector.Children.Add(snap);
@@ -538,6 +533,11 @@ public class MainWindow : Window
         var canvasShell = new Border { Background = StudioTheme.Surface, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), ClipToBounds = true, Child = canvasArea };
         Grid.SetColumn(canvasShell, 1); workspace.Children.Add(canvasShell);
 
+        // Layout containers kept as fields so the optional simple view can rearrange this same tree (MainWindow.SimpleView.cs).
+        rootPanel = root; headerGrid = header; commandAreaPanel = commandArea; workspaceGrid = workspace; toolsPanel = tools; this.railScroller = railScroller;
+        inspectorPanel = inspector; canvasHeaderPanel = canvasHeader; statusBarBorder = statusBar; footerPanel = footer; taglineText = brandLine.Children.OfType<TextBlock>().First();
+        brandLinePanel = brandLine; aboutButton = about; unitsText = units; modeChip = mode; projectPanel = project; navigationPanel = navigation; viewCommandsPanel = viewCommands;
+        canvasShellBorder = canvasShell; inspectorShellBorder = inspectorShell;
         KeyDown += OnKeyDown;
         try { recoveryStore=new RecoveryStore(AppPaths.RecoveryDirectory); recoveryWriter=new RecoveryWriteCoordinator(recoveryStore); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -583,7 +583,7 @@ public class MainWindow : Window
         Closed += (_, _) => { recoveryScanCancellation.Cancel(); if(!recoveryScanRunning) { recoveryCursor?.Dispose(); recoveryCursor=null; } };
         autosaveTimer.Tick += async (_, _) => await SaveRecoveryAsync();
         autosaveTimer.Start();
-        Loaded += async (_, _) => { Refresh(); canvas.Fit(); canvas.Focus(); await BeginRecoveryScan(); };
+        Loaded += async (_, _) => { Refresh(); canvas.Fit(); if (!FocusSimpleCommandBar()) canvas.Focus(); await BeginRecoveryScan(); };
         SetTool("Seç"); Refresh();
     }
     private static TextBlock Label(string text, Brush? color = null, int size = 12) => new() { Text = text, Foreground = color ?? Ink, FontSize = size, Margin = new Thickness(4, 8, 0, 7) };
@@ -1059,10 +1059,10 @@ public class MainWindow : Window
         foreach(var button in toolButtons)
         {
             button.Value.Background = button.Key == tool ? StudioTheme.Accent : StudioTheme.Surface;
-            button.Value.Foreground = button.Key == tool ? StudioTheme.Background : StudioTheme.Text;
+            button.Value.Foreground = button.Key == tool ? StudioTheme.OnAccent : StudioTheme.Text;
             button.Value.BorderBrush = button.Key == tool ? StudioTheme.Accent : StudioTheme.Border;
         }
-        canvasTool.Text = "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
+        canvasTool.Text = SimpleToolHeading(tool) ?? "KALIP ALANI   /   " + tool.ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
         SetStatus(canvas is null ? $"{tool} · Koordinatlar mm" : canvas.ToolGuidance(tool));
     }
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
@@ -1274,6 +1274,7 @@ public class MainWindow : Window
         if (notchReviewExportCommand is not null) notchReviewExportCommand.IsEnabled = Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !ExportRunning && !DxfImportRunning;
         UpdateFitCommand();
         canvas?.InvalidateVisual();
+        simpleView?.OnRefreshed();
     }
     private void UpdateHistoryCapacityNotice()
     {
@@ -1618,29 +1619,21 @@ public class MainWindow : Window
         {
             var piece=document.Pieces.First(p=>p.Id==change.Id);var bounds=Geometry.Bounds(piece.Points);
             var dx=change.X-bounds.MinX;var dy=change.Y-bounds.MinY;
-            List<Point2>? translated;
-            Grainline? translatedGrain;
-            List<NotchMark>? translatedNotches=null;
-            try
-            {
-                translated=null;
-                if(dx!=0 || dy!=0) (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
-                translatedGrain=translated is null ? piece.Grainline?.Clone()
-                    : GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
-            }
+            PieceTranslation moved;
+            try { moved=TranslatePiece(piece,dx,dy); }
             catch(ArgumentException ex)
             {
                 throw new InvalidDataException($"“{SafePieceName(piece.Name)} (kimlik: {piece.Id:D})” konumu güvenle uygulanamadı. Taslak korunuyor. {ex.Message}",ex);
             }
+            var translated=moved.Points;
             if(translated is not null)
             {
                 var actual=Geometry.Bounds(translated);
                 if(!TargetPositionMatches(actual.MinX,change.X) || !TargetPositionMatches(actual.MinY,change.Y))
                     throw new InvalidDataException($"“{SafePieceName(piece.Name)} (kimlik: {piece.Id:D})” için istenen konum sayısal hassasiyetle yeterince temsil edilemiyor. Taslak korunuyor; daha küçük koordinatlar kullanın.");
             }
-            var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
-            var movedRule=rule?.TranslatedFor(piece,translated!,dx,dy);
-            prepared.Add((piece,change.Name,translated,translatedNotches,translatedGrain,rule,movedRule));
+            var (rule,movedRule)=TranslateGradingRule(document,piece,translated,dx,dy);
+            prepared.Add((piece,change.Name,translated,moved.Notches,moved.Grainline,rule,movedRule));
         }
         foreach(var item in prepared)
         {
@@ -1648,6 +1641,28 @@ public class MainWindow : Window
             if(item.MovedRule is not null)document.GradingRules[document.GradingRules.IndexOf(item.Rule!)]=item.MovedRule;
             item.Piece.Name=item.Name;
         }
+    }
+    /// <summary>Piece geometry after a translation. <c>Points</c> is null when nothing moves (dx and dy both zero).</summary>
+    internal readonly record struct PieceTranslation(List<Point2>? Points,List<NotchMark>? Notches,Grainline? Grainline);
+    /// <summary>
+    /// Shared translation of one piece: contour, notch marks and grainline move together.
+    /// Used by the position-draft path (<see cref="ApplyDraftChanges"/>) and by command edits.
+    /// <see cref="ArgumentException"/> from the numeric-precision checks propagates; callers word it.
+    /// </summary>
+    internal static PieceTranslation TranslatePiece(PatternPiece piece,double dx,double dy)
+    {
+        List<Point2>? translated=null;
+        List<NotchMark>? translatedNotches=null;
+        if(dx!=0 || dy!=0) (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
+        var translatedGrain=translated is null ? piece.Grainline?.Clone()
+            : GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
+        return new(translated,translatedNotches,translatedGrain);
+    }
+    /// <summary>The grading rule that follows a moved piece (null rule or null moved rule when none applies or it became stale).</summary>
+    internal static (GradingRuleSet? Rule,GradingRuleSet? MovedRule) TranslateGradingRule(ProjectDocument document,PatternPiece piece,List<Point2>? translated,double dx,double dy)
+    {
+        var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
+        return (rule,rule?.TranslatedFor(piece,translated!,dx,dy));
     }
     // An eight-ULP bound is a representation check around the requested double,
     // not a manufacturing tolerance. In particular, signed zero only matches
@@ -2085,7 +2100,7 @@ public class MainWindow : Window
         var cancel = AddButton(buttons, "Vazgeç", () => prompt.DialogResult = false); cancel.IsCancel = true;
         AddButton(buttons, "Kaydetmeden devam et", () => prompt.DialogResult = true);
         var save = AddButton(buttons, "Kaydet", () => { Save(); if (!HasUnsavedDocumentWork) { onSaved();prompt.DialogResult = true; } }, projectSaveAction:true);
-        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.Background; save.IsDefault = true;
+        save.Background = StudioTheme.Accent; save.Foreground = StudioTheme.OnAccent; save.IsDefault = true;
         return prompt;
     }
     private void Open()
@@ -3454,6 +3469,26 @@ public class MainWindow : Window
         EnsurePropertyDraftsApplied();
         new TextileToolsWindow(this).ShowDialog();
     }
+    /// <summary>
+    /// Opens the textile tools on a given tab (0 grading, 1 contour editing, 2 basic nesting) with an
+    /// optional one-time value for that tab's main input. Same guards as <see cref="OpenTextileTools"/>,
+    /// and they stay first so the guard-prefix inspection of that method still describes this one.
+    /// </summary>
+    internal void OpenTextileToolsAt(int tab,string? value)
+    {
+        if(BlockForDxfImport())return;
+        EnsurePropertyDraftsApplied();
+        CreateTextileToolsAt(tab,value).ShowDialog();
+    }
+    // Built without showing so the tab and the one-time value can be checked headlessly.
+    internal TextileToolsWindow CreateTextileToolsAt(int tab,string? value)
+    {
+        // Refuse a bad tab before a window exists, so nothing is left owned by this one.
+        if(tab<0 || tab>2)throw new ArgumentOutOfRangeException(nameof(tab));
+        var window=new TextileToolsWindow(this);
+        window.ApplyOpeningRequest(tab,value);
+        return window;
+    }
     internal Func<string,bool>? ConfirmMachineLossForVerification { get; set; }
     internal Action<SimulationQueue>? OpenMachineCenterForVerification { get; set; }
     private void OpenMachineCenter()
@@ -4330,6 +4365,8 @@ public class MainWindow : Window
         {
             if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F1)
             { OpenAbout(); e.Handled = true; return; }
+            if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F9 && simpleViewSwitching)
+            { ToggleSimpleView(); e.Handled = true; return; }
             if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.S)
             { SaveAs(); e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.Control)

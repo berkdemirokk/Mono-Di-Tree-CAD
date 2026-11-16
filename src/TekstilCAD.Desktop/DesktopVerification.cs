@@ -27,7 +27,7 @@ internal static class DesktopVerification
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]
     [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool CreateHardLink(string newFileName,string existingFileName,IntPtr securityAttributes);
-    private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    internal const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
     private static bool OpenPathPreviewRunsDownward(Window window)
     {
         var preview=(FrameworkElement)window.GetType().GetField("preview",PrivateInstance)!.GetValue(window)!;
@@ -1172,7 +1172,9 @@ internal static class DesktopVerification
             VerifyMainCommandGroups(studio,reportPath,checks);
             VerifyAboutAndCrashLog(studio,work,reportPath,checks);
             VerifyCompactWorkspace(studio,reportPath,checks);
+            CommandVerification.Run(studio,checks);
             ThemeVerification.Run(studio,work,reportPath,checks);
+            SimpleViewVerification.Run(studio,reportPath,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
@@ -2913,7 +2915,7 @@ internal static class DesktopVerification
             && open[0]==moved && open[^1]==original[^1],
             "Ordinary vertex and open-path endpoints remain independent",checks);
     }
-    private static void Check(bool condition, string name, List<string> checks)
+    internal static void Check(bool condition, string name, List<string> checks)
     { if (!condition) throw new InvalidOperationException("Verification failed: " + name); checks.Add(name); }
     private static void VerifyHpglPreview(string work,List<string> checks)
     {
@@ -5905,7 +5907,7 @@ internal static class DesktopVerification
         studio.Select(p2000.Id);
         Check(warning.Visibility==Visibility.Collapsed && warning.Text=="", "Selecting a smaller piece clears its previous limit notice",checks);
     }
-    private static void PumpUntil(Func<bool> done)
+    internal static void PumpUntil(Func<bool> done)
     {
         var frame=new DispatcherFrame();
         var deadline=DateTime.UtcNow.AddSeconds(15);
@@ -8482,7 +8484,7 @@ internal static class DesktopVerification
     // Only known, side-effect-safe guard prefixes may precede the target guard.
     // Reject all other instructions before invoking an entry point: a regression
     // must never open a dialog during hidden verification.
-    private static bool HasSafeGuardPrefix(MethodInfo target,MethodInfo guard)
+    internal static bool HasSafeGuardPrefix(MethodInfo target,MethodInfo guard)
     {
         var safePrior=typeof(MainWindow).GetMethod("EnsureNoExport",PrivateInstance)!;
         var dxfGuard=typeof(MainWindow).GetMethod("BlockForDxfImport",PrivateInstance)!;
@@ -14666,7 +14668,7 @@ internal static class DesktopVerification
         viewer.ScrollToVerticalOffset(0);root.UpdateLayout();
         return reachable;
     }
-    private static bool FullyVisible(FrameworkElement element,FrameworkElement root)
+    internal static bool FullyVisible(FrameworkElement element,FrameworkElement root)
     {
         var bounds=BoundsInRoot(element,root);var visible=VisibleBoundsInRoot(element,root);
         return bounds.Width>0 && bounds.Height>0 && !visible.IsEmpty
@@ -14684,9 +14686,9 @@ internal static class DesktopVerification
         return bounds.Width>0 && bounds.Height>0 && !visible.IsEmpty
             && visible.Height>=bounds.Height-.5 && visible.Width>=Math.Min(bounds.Width,gridWidth)-1;
     }
-    private static Rect BoundsInRoot(FrameworkElement element,FrameworkElement root)
+    internal static Rect BoundsInRoot(FrameworkElement element,FrameworkElement root)
         => ReferenceEquals(element,root)?new Rect(root.RenderSize):element.TransformToAncestor(root).TransformBounds(new Rect(element.RenderSize));
-    private static Rect VisibleBoundsInRoot(FrameworkElement element,FrameworkElement root)
+    internal static Rect VisibleBoundsInRoot(FrameworkElement element,FrameworkElement root)
     {
         var visible=BoundsInRoot(element,root);
         visible.Intersect(new Rect(root.RenderSize));
@@ -14704,7 +14706,7 @@ internal static class DesktopVerification
         }
         return visible;
     }
-    private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
+    internal static IEnumerable<T> Descendants<T>(DependencyObject parent) where T : DependencyObject
     {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
         {
@@ -14713,7 +14715,7 @@ internal static class DesktopVerification
             foreach (var descendant in Descendants<T>(child)) yield return descendant;
         }
     }
-    private static void Render(Window window, string path, int width, int height)
+    internal static void Render(Window window, string path, int width, int height)
     {
         var content = (FrameworkElement)window.Content;
         content.Measure(new Size(width, height)); content.Arrange(new Rect(0, 0, width, height)); content.UpdateLayout();
@@ -14730,8 +14732,8 @@ internal static class DesktopVerification
         using var stream = new FileStream(path, FileMode.Create, FileAccess.Write);
         encoder.Save(stream);
     }
-    private static void StopTimer(MainWindow window) => (typeof(MainWindow).GetField("autosaveTimer", PrivateInstance)?.GetValue(window) as DispatcherTimer)?.Stop();
-    private static void Invoke(MainWindow target, string method, params object[] args)
+    internal static void StopTimer(MainWindow window) => (typeof(MainWindow).GetField("autosaveTimer", PrivateInstance)?.GetValue(window) as DispatcherTimer)?.Stop();
+    internal static void Invoke(MainWindow target, string method, params object[] args)
     {
         var member = typeof(MainWindow).GetMethod(method, PrivateInstance) ?? throw new MissingMethodException(method);
         try { member.Invoke(target, args); }

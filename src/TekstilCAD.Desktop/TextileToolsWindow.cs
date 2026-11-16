@@ -225,6 +225,18 @@ public sealed class TextileToolsWindow : Window
             if(HasUnsavedGradeRules()&&!ConfirmDiscardGradeRules())e.Cancel=true;
         };
     }
+    /// <summary>
+    /// Selects a tab (0 grading, 1 contour editing, 2 basic nesting) and, when given, fills that tab's main
+    /// input once (tab 1: seam allowance mm, tab 2: fabric width mm). Nothing is started or applied.
+    /// </summary>
+    internal void ApplyOpeningRequest(int tab,string? value)
+    {
+        if(workshopTabs is null || tab<0 || tab>=workshopTabs.Items.Count)throw new ArgumentOutOfRangeException(nameof(tab));
+        workshopTabs.SelectedIndex=tab;
+        if(value is null)return;
+        if(tab==1 && offsetAllowance is not null)offsetAllowance.Text=value;
+        else if(tab==2)basicWidth.Text=value;
+    }
     private bool CommitGradeEdit() => grades.CommitEdit(DataGridEditingUnit.Cell,true) && grades.CommitEdit(DataGridEditingUnit.Row,true);
     internal void RequestVertexMoveCancellation()
     {
