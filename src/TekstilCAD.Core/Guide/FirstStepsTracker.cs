@@ -65,7 +65,7 @@ public sealed class FirstStepsTracker : IEquatable<FirstStepsTracker>
         "Ölçüsünü değiştirin",
         "Parçayı taşıyın",
         "Son işlemi geri alın",
-        "Çalışmayı kaydedin",
+        "Projeyi kaydedin",
         "Kaydettiğiniz dosyayı yeniden açın",
     ];
 

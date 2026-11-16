@@ -194,7 +194,7 @@ internal static partial class SimpleViewVerification
     {
         var root = (FrameworkElement)fresh.Content;
         var simpleNames = new[] { "Komut kutusu", "Komut çubuğu", "Sıradaki adım ve seçili parça", "Projeyi kaydet", "Proje aç", "Ayrıntılı görünüme geç", "Basit görünüme geç" };
-        var simpleTexts = new[] { "Fareyle çiz", "Bu çizim üretim veya kesim onayı değildir", "Ayrıntılı görünüm", "Basit görünüm", "Tüm araçlar" };
+        var simpleTexts = new[] { "Fareyle çiz", "Bu çizim üretim veya kesim onayı değildir", "Ayrıntılı görünüme geç", "Basit görünüme geç", "Tüm araçlar" };
         var found = Descendants<FrameworkElement>(root).Any(e => simpleNames.Contains(AutomationProperties.GetName(e))
             || e is TextBlock { Text: var t } && simpleTexts.Contains(t) || e is ContentControl { Content: string c } && simpleTexts.Contains(c));
         var commandArea = F<FrameworkElement>(fresh, "commandAreaPanel"); var tagline = F<FrameworkElement>(fresh, "taglineText");

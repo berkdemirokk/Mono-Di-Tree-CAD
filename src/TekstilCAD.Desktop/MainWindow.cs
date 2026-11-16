@@ -772,7 +772,8 @@ public partial class MainWindow : Window
         }
     }
     // announce=false is for the cursor read-out, which rewrites the status on every mouse move and must stay silent.
-    public void SetStatus(string value, bool announce = true) { status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); simpleView?.StatusChanged(value, announce); }
+    private int statusWrites;
+    public void SetStatus(string value, bool announce = true) { statusWrites++; status.Text = value; status.ToolTip = value; statusViewer.ScrollToTop(); simpleView?.StatusChanged(value, announce); }
     internal void ShowCanvasError(string message)
     {
         var changed=canvasError.Text!=message || canvasErrorPanel.Visibility!=Visibility.Visible;
@@ -1408,7 +1409,7 @@ public partial class MainWindow : Window
         }
         Title = $"{safeTitle}{(HasUnsavedWork ? " *" : "")} — {(AppPaths.IsIsolatedPreview ? "Mono Di Tree CAD · Geliştirme Önizlemesi" : "Mono Di Tree CAD · 0.4 Önizleme")}";
         var recoveryTime=lastRecoveryAt is { } at ? $" · Son kurtarma: {at.ToString("g",CultureInfo.CurrentCulture)}" : "";
-        saveState.Text = (canvas?.HasPendingDrawing ?? false) ? "● Tamamlanmamış çizim"+recoveryTime : propertyDrafts.Count > 0 ? $"● Alan taslağı: {propertyDrafts.Count} parça{recoveryTime}" : dirty ? "● Kaydedilmemiş değişiklikler"+recoveryTime : filePath is null ? "Yeni proje · Henüz dosyaya kaydedilmedi" : "✓ Kaydedildi · " + Path.GetFileName(filePath);
+        saveState.Text = (canvas?.HasPendingDrawing ?? false) ? "● Tamamlanmamış çizim"+recoveryTime : propertyDrafts.Count > 0 ? $"● Alan taslağı: {propertyDrafts.Count} parça{recoveryTime}" : dirty ? "● Kaydedilmemiş değişiklikler"+recoveryTime : filePath is null ? "Henüz kaydedilmedi" : "✓ Kaydedildi · " + Path.GetFileName(filePath);
         saveState.Foreground = HasUnsavedWork ? StudioTheme.Warning : StudioTheme.Muted;
         saveState.ToolTip = recoveryClearFailed ? "Önceki kurtarma kaydı temizlenemedi ve korunuyor; Kaydet, yeni proje veya kapatma sırasında yeniden denenecek." : HasUnsavedWork ? "Otomatik kurtarma son başarılı kayıt zamanını gösterir; sonraki değişiklikler henüz kurtarma kaydında olmayabilir. Kalıcı kayıt için Kaydet'i kullanın." : filePath;
     }

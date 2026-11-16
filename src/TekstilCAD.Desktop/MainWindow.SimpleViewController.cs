@@ -107,7 +107,7 @@ public partial class MainWindow
             // Above the workspace, so a preview card that grows past the region is drawn and clicked over the canvas.
             System.Windows.Controls.Panel.SetZIndex(commandRegion, 1);
 
-            switchButton = new Button { Content = "Ayrıntılı görünüm", MinHeight = 40, Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(10, 0, 0, 0), FontSize = 14, Cursor = Cursors.Hand };
+            switchButton = new Button { Content = "Ayrıntılı görünüme geç", MinHeight = 40, Padding = new Thickness(12, 3, 12, 3), Margin = new Thickness(10, 0, 0, 0), FontSize = 14, Cursor = Cursors.Hand };
             AutomationProperties.SetName(switchButton, "Ayrıntılı görünüme geç");
             AutomationProperties.SetAcceleratorKey(switchButton, "F9");
             switchButton.ToolTip = "Yoğun, ayrıntılı ekran · F9";
@@ -120,8 +120,8 @@ public partial class MainWindow
             themeButton.Click += (_, _) => w.SetStatus(InterfaceSettings.ToggleTheme());
 
             railCaption = new TextBlock { Text = "Fareyle çiz", FontSize = 14, Foreground = StudioTheme.Muted, Margin = new Thickness(4, 4, 0, 4) };
-            railHint = new TextBlock { Text = "Çizerken: Enter kapatır · Esc vazgeçer", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 8, 0, 0), Focusable = true };
-            AutomationProperties.SetName(railHint, "Çizerken: Enter konturu kapatır, Esc çizimden vazgeçer");
+            railHint = new TextBlock { Text = "Çizerken: Enter şekli kapatır · Esc çizimi iptal eder", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 8, 0, 0), Focusable = true };
+            AutomationProperties.SetName(railHint, "Çizerken: Enter şekli kapatır, Esc çizimi iptal eder");
 
             footerNote = new TextBlock { Text = "Bu çizim üretim veya kesim onayı değildir", FontSize = 13, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, MaxWidth = 280, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Focusable = true };
             AutomationProperties.SetName(footerNote, "Bu çizim üretim veya kesim onayı değildir");
@@ -216,7 +216,7 @@ public partial class MainWindow
             r.Set(w.sourceHistoryDetails, ContentControl.ContentProperty, "Kaynak ve aktarım notları");
             if (w.modeChip.Child is TextBlock modeText)
             {
-                r.Set(modeText, TextBlock.TextProperty, "Yerel çalışma  ·  mm");
+                r.Set(modeText, TextBlock.TextProperty, "Bu bilgisayarda  ·  mm");
                 r.Set(modeText, TextBlock.FontSizeProperty, 13d);
             }
             foreach (var button in Descendants<Button>(w.projectPanel))
@@ -324,7 +324,7 @@ public partial class MainWindow
         {
             if (switchMounted)
             {
-                r.Set(switchButton!, ContentControl.ContentProperty, "Ayrıntılı görünüm");
+                r.Set(switchButton!, ContentControl.ContentProperty, "Ayrıntılı görünüme geç");
                 r.Set(switchButton!, AutomationProperties.NameProperty, "Ayrıntılı görünüme geç");
                 r.Set(switchButton!, FrameworkElement.ToolTipProperty, "Yoğun, ayrıntılı ekran · F9");
                 return;
@@ -341,7 +341,7 @@ public partial class MainWindow
             Build();
             switchPermanent = true;
             if (IsAttached || switchMounted) return;
-            switchButton!.Content = "Basit görünüm";
+            switchButton!.Content = "Basit görünüme geç";
             AutomationProperties.SetName(switchButton, "Basit görünüme geç");
             switchButton.ToolTip = "Sade, açık ekran · F9";
             var index = w.brandLinePanel.Children.IndexOf(w.taglineText);
@@ -456,7 +456,7 @@ public partial class MainWindow
             r.Set(w.status, AutomationProperties.NameProperty, "Uygulama durumu");
             r.Set(w.unitsText, TextBlock.FontSizeProperty, 13d);
             r.Set(w.unitsText, TextBlock.TextWrappingProperty, TextWrapping.Wrap);
-            r.Set(w.unitsText, FrameworkElement.MaxWidthProperty, 330d);
+            r.Set(w.unitsText, FrameworkElement.MaxWidthProperty, 352d);
             r.Set(w.unitsText, UIElement.FocusableProperty, true);
             r.Add(w.footerPanel, footerNote!, 1);
         }
@@ -546,8 +546,8 @@ public partial class MainWindow
             w.grainlineStatus.Visibility = selected?.Grainline is not null ? Visibility.Visible : Visibility.Collapsed;
 
             w.unitsText.Text = w.snap.IsChecked == true
-                ? "Ölçü birimi: milimetre (mm) · Fareyle çizerken 1 mm adımlarla"
-                : "Ölçü birimi: milimetre (mm) · Fareyle çizerken serbest";
+                ? "Ölçü birimi: milimetre (mm) · Fareyle çizerken 1 mm'lik adımlarla"
+                : "Ölçü birimi: milimetre (mm) · Fareyle çizerken adım sınırı yok";
             AutomationProperties.SetName(w.unitsText, w.unitsText.Text);
 
             var unsaved = w.HasUnsavedWork;

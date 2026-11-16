@@ -48,19 +48,19 @@ enum Refusals {
     static let moveExample = "25 sağa taşı"
     static let rotateExample = "90 sağa döndür"
     static let undoExample = "geri al"
-    static let templateNotUnderstood = "Bu yazı anlaşılmadı: “{yazı}”. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al"
+    static let templateNotUnderstood = "“{yazı}” anlaşılamadı. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al"
     static let templateNumberMissing = "Kaç milimetre? Örnek: {örnek}"
-    static let templateNoSelection = "Önce bir parça seçin. Parçaya tıklayın ya da ön bedeni seç yazın."
-    static let templateNoPieces = "Henüz parça yok. Önce çizin. Örnek: 120 x 80 dikdörtgen"
+    static let templateNoSelection = "Önce bir parça seçin. Parçaya tıklayın ya da “ön bedeni seç” yazın."
+    static let templateNoPieces = "Henüz parça yok. Önce bir parça çizin. Örnek: 120 x 80 dikdörtgen"
     static let templateOutOfRange = "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen"
     static let templateAmbiguousNumber = "{sayı} iki türlü okunabilir. {a} mm için {a} yazın; {b} mm için {b} yazın."
     static let templateUnitQuestion = "{yazı}: milimetre mi, santimetre mi?"
-    static let templateDrawingInProgress = "Önce çizimi bitirin (Enter) ya da Esc ile vazgeçin."
+    static let templateDrawingInProgress = "Önce çizimi bitirin (Enter) ya da iptal edin (Esc)."
     static let templateLockedLayer = "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın."
     static let templateBusyWithFile = "Şu anda bir dosya işlemi sürüyor. Bitince yeniden deneyin."
-    static let templateNotRectangle = "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni ölçüde dikdörtgen çizmek için yazın: 95 x 80 dikdörtgen"
-    static let templateExtraData = "Bu parçada iplik yönü, köşe işareti, serileme kuralı veya eğri bilgisi var; ölçüsü yazıyla değiştirilemez. Tüm araçlar bölümünden düzenleyin."
-    static let templateCurvedPiece = "Bu parça eğri ayarlarını koruyor; taşımadan önce Tüm araçlar bölümünde “Eğriyi sabit çizgiye çevir…” yapın."
+    static let templateNotRectangle = "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni bir dikdörtgen için şunu yazın: 95 x 80 dikdörtgen"
+    static let templateExtraData = "Bu parçada iplik yönü, köşe işareti, serileme kuralı ya da eğri ayarı var; ölçüsü yazıyla değiştirilemez. Parçayı silip yeni ölçüyle çizebilirsiniz."
+    static let templateCurvedPiece = "Bu parçada eğri ayarı var; taşımak için önce Tüm araçlar bölümündeki “Eğriyi sabit çizgiye çevir…” işlemini yapın. Eğri düzenleme özelliği bundan sonra kalkar; Geri al ile dönebilirsiniz."
     static let templateAngle = "Şimdilik yalnız 90, 180 ve 270 derece döndürülebilir. Örnek: 90 sağa döndür"
     static let templateMultipleSelected = "Birden fazla parça seçili. Tek parça seçin ya da “Birden fazla parçayı taşı…” kullanın."
     static let templateNameNotFound = "“{ad}” adında parça bulunamadı. Örnek: {gerçek ad} seç"
@@ -68,20 +68,20 @@ enum Refusals {
     static let templateTwoJobs = "Bu yazı iki ayrı iş gibi okunuyor. Tek iş yazın. Örnek: 120 x 80 dikdörtgen"
     static let templateTwoMeaningsFlip = "“ters çevir” aynalamak da döndürmek de olabilir. Örnek: aynala · 90 sağa döndür"
     static let templateTwoMeaningsGrow = "“büyüt” görünümü mü, parça ölçüsünü mü? Örnek: yakınlaştır · genişliği 95 yap"
-    static let templateTooManyPoints = "Bu parça 4096 noktadan fazla. Bu işlem için Ayrıntılı görünümdeki düğmeyi kullanın."
+    static let templateTooManyPoints = "Bu parçada 4096'dan fazla nokta var. Bu işlemi Ayrıntılı görünümdeki ilgili düğmeyle yapın."
     static let templateNothingToUndo = "Geri alınacak işlem yok. Önce bir şey yazıp uygulayın. Örnek: 120 x 80 dikdörtgen"
     static let templateNothingToRedo = "Yinelenecek işlem yok."
-    static let templateTwoMeasuresNeeded = "Dikdörtgen için iki ölçü gerekir: en ve boy. Örnek: 120 x 80 dikdörtgen"
-    static let templateAreaDrafts = "Önce alan taslaklarını uygulayın ya da temizleyin. Ayrıntılı görünümde “Alan taslaklarını temizle” düğmesi var."
-    static let templateRecoveryRunning = "Kurtarma işlemi bitmeden değişiklik yapılamaz. Üstteki kurtarma uyarısındaki düğmeyi kullanın."
+    static let templateTwoMeasuresNeeded = "Dikdörtgen için iki ölçü gerekir: genişlik ve yükseklik. Örnek: 120 x 80 dikdörtgen"
+    static let templateAreaDrafts = "Önce Ayrıntılı görünümdeki yarım kalmış ad ve konum kutularını uygulayın ya da temizleyin (“Alan taslaklarını temizle” düğmesi)."
+    static let templateRecoveryRunning = "Kurtarma işlemi bitmeden değişiklik yapılamaz. Üstteki kurtarma uyarısının düğmesini kullanın."
     static let templatePreviewStale = "Parça değişti; önizleme yenilendi. Enter ile uygulayın."
     static let templateTooLong = "Yazı çok uzun (en fazla 200 karakter). Kısaltın. Örnek: 120 x 80 dikdörtgen"
     static let templateEmptyName = "Yeni ad boş olamaz. Örnek: adı ön beden olsun"
     static let templateNoChange = "Ölçü zaten {ölçü}. Değişiklik yok."
-    static let templateNegativeNumber = "Negatif ölçü yazılamaz. Yön için sağa, sola, yukarı veya aşağı yazın. Örnek: 25 sola taşı"
-    static let templateNamedPieceMove = "Önce parçayı seçin: ön bedeni seç. Sonra: 25 sağa taşı"
+    static let templateNegativeNumber = "Ölçü eksi (−) olamaz. Yön için sağa, sola, yukarı ya da aşağı yazın. Örnek: 25 sola taşı"
+    static let templateNamedPieceMove = "Önce parçayı seçin: “ön bedeni seç”. Sonra: “25 sağa taşı”."
     static let templateExecutionFailed = "İşlem tamamlanamadı: {neden}. Hiçbir şey değişmedi."
-    static let templateRefreshFailed = "Ekran yenileniyor; işlem yapıldı. Komutu yeniden yazmayın."
+    static let templateRefreshFailed = "İşlem yapıldı ama ekran yenilenemedi. Aynı komutu yeniden yazmayın; gerekirse Geri al'ı kullanın."
 
     /// All templates in catalogue order. `needsExample` is false only where the specification lists no example or button.
     static let catalogue: [RefusalTemplate] = [
@@ -129,7 +129,7 @@ enum Refusals {
 
     /// R01. The typed text is echoed unless it contains a word the product never says (then it is shown as “…”).
     static func unrecognized(_ typed: String, didYouMean: RefusalButton? = nil) -> CommandRefusal {
-        let shown = TurkishText.containsForbiddenWord(typed) ? "…" : typed
+        let shown = TurkishText.containsForbiddenWord(typed) ? "…" : shortened(typed)
         var list: [RefusalButton] = []
         if let didYouMean { list.append(didYouMean) }
         list.append(RefusalButton(rectangleExample))
@@ -138,6 +138,11 @@ enum Refusals {
         return CommandRefusal(code: notUnderstood,
                               message: TurkishText.replaceOrdinal(templateNotUnderstood, "{yazı}", shown),
                               buttons: list)
+    }
+
+    /// The typed text as the R01 message echoes it: at most 40 characters, then an ellipsis.
+    private static func shortened(_ typed: String) -> String {
+        typed.count <= 40 ? typed : String(typed.prefix(40)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     /// R02. `example` is a complete working command such as "25 sağa taşı" or "150 çizgi".
@@ -264,7 +269,7 @@ enum Refusals {
     }
 
     static func hasExtraData() -> CommandRefusal {
-        CommandRefusal(code: extraData, message: templateExtraData, buttons: buttons("Tüm araçlar"))
+        CommandRefusal(code: extraData, message: templateExtraData, buttons: buttons("sil"))
     }
 
     static func hasCurves() -> CommandRefusal {

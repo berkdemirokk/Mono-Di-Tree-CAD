@@ -130,7 +130,7 @@ public partial class MainWindow
             AutomationProperties.SetName(notice, "İşlem geçmişi kapasite uyarısı");
 
             // Both texts are polite live regions: the count while there are hits, the "no result" sentence when there are none.
-            emptyResult = new TextBlock { Text = "Bu sözle eşleşen araç bulunamadı. Başka bir söz deneyin; örneğin: kopyala, ayna, kaydet.", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 14, 0, 0), Visibility = Visibility.Collapsed, Focusable = true };
+            emptyResult = new TextBlock { Text = "Bu yazıyla eşleşen araç yok. Başka bir sözcük deneyin; örnek: dikiş payı", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 14, 0, 0), Visibility = Visibility.Collapsed, Focusable = true };
             AutomationProperties.SetLiveSetting(emptyResult, AutomationLiveSetting.Polite);
             resultCount = new TextBlock { FontSize = 14, Foreground = StudioTheme.Muted, Margin = new Thickness(2, 10, 0, 0), Visibility = Visibility.Collapsed, Focusable = true };
             AutomationProperties.SetLiveSetting(resultCount, AutomationLiveSetting.Polite);

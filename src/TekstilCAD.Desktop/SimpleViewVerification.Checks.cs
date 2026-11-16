@@ -102,13 +102,13 @@ internal static partial class SimpleViewVerification
             var footer = F<FrameworkElement>(fresh, "footerPanel");
             var units = F<TextBlock>(fresh, "unitsText");
             var note = Descendants<TextBlock>(footer).Single(t => t.Text == "Bu çizim üretim veya kesim onayı değildir");
-            ok &= units.Text == "Ölçü birimi: milimetre (mm) · Fareyle çizerken 1 mm adımlarla" && FullyVisible(units, root) && FullyVisible(note, root)
+            ok &= units.Text == "Ölçü birimi: milimetre (mm) · Fareyle çizerken 1 mm'lik adımlarla" && FullyVisible(units, root) && FullyVisible(note, root)
                 && units.Focusable && note.Focusable && units.FontSize >= 12 && note.FontSize >= 12
                 && units.ActualHeight >= units.DesiredSize.Height - .5 && note.ActualHeight >= note.DesiredSize.Height - .5;
         }
         F<CheckBox>(fresh, "snap").IsChecked = false;
         Invoke(fresh, "Refresh");
-        ok &= F<TextBlock>(fresh, "unitsText").Text == "Ölçü birimi: milimetre (mm) · Fareyle çizerken serbest";
+        ok &= F<TextBlock>(fresh, "unitsText").Text == "Ölçü birimi: milimetre (mm) · Fareyle çizerken adım sınırı yok";
         Check(ok, "Simple view shows the unit text and the production note in the footer", checks);
     });
 

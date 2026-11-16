@@ -34,19 +34,19 @@ internal static class CommandCatalogueData
             "Kalıp isteği hazırla…", ["elbise isteği yaz", "kalıp isteği hazırla"],
             ["istek", "elbise", "tarif", "model fikri"]));
         all.Add(D("start.new", GStart, "Yeni proje başlat",
-            "Boş bir çalışma başlatır; kaydedilmemiş işiniz varsa önce sorar.",
+            "Boş bir proje başlatır; kaydedilmemiş işiniz varsa önce sorar.",
             "Yeni", ["yeni proje", "boş sayfa"],
             ["sıfırdan başla", "temiz sayfa", "yeni kalıp", "yeni iş"]));
-        all.Add(D("start.open", GStart, "Proje aç…",
+        all.Add(D("start.open", GStart, "Projeyi aç…",
             "Daha önce kaydettiğiniz bir projeyi dosyadan açar.",
             "Aç…", ["proje aç", "dünkü işi getir"],
             ["dosya aç", "kayıtlı işi aç", "getir"]));
         all.Add(D("start.save", GStart, "Projeyi kaydet",
-            "Çalışmanızı dosyaya yazar; ilk kayıtta dosya adı sorulur.",
+            "Projenizi dosyaya yazar; ilk kayıtta dosya adı sorulur.",
             "Kaydet", ["kaydet", "projeyi kaydet"],
             ["sakla", "dosyaya yaz", "kaydet"]));
         all.Add(D("start.save-as", GStart, "Başka adla kaydet…",
-            "Çalışmayı yeni bir ad vererek ayrı bir dosyaya kaydeder.",
+            "Projeyi yeni bir ad vererek ayrı bir dosyaya kaydeder.",
             "Farklı kaydet…", ["farklı kaydet", "başka adla kaydet"],
             ["yeni isimle kaydet", "adını değiştirerek kaydet"]));
         all.Add(D("start.save-copy", GStart, "Yedek kopya kaydet…",
@@ -84,7 +84,7 @@ internal static class CommandCatalogueData
             "Yay", ["yay aracı", "yay çiz"],
             ["yarım daire", "kemer", "daire parçası"]));
         all.Add(D("draw.coordinate", GDraw, "Yerini yazarak nokta ekle…",
-            "Önce bir çizim aracı seçin; sonra noktanın yerini X ve Y değerleriyle milimetre olarak yazarsınız.",
+            "Önce bir çizim aracı seçin; sonra noktanın yerini soldan ve yukarıdan milimetre olarak yazarsınız.",
             "Koordinatla nokta gir…", ["koordinat gir", "koordinatla çiz"],
             ["x y değeri", "tam yerini yaz", "ölçüyle nokta", "koordinat"]));
         all.Add(D("draw.finish-open", GDraw, "Çizgiyi kapatmadan bitir",
@@ -92,7 +92,7 @@ internal static class CommandCatalogueData
             "Açık çizgiyi bitir", ["çizimi açık bırak", "açık bitir"],
             ["açık bırak", "çizimi bitir"]));
         all.Add(F("draw.rectangle", GDraw, "Ölçü yazarak dikdörtgen çiz",
-            "En ve boyu yazarsınız, program sizin için dikdörtgen bir parça çizer.",
+            "Genişliği ve yüksekliği yazarsınız, program sizin için dikdörtgen bir parça çizer.",
             ["120 x 80 dikdörtgen", "kare 100", "12 x 8 cm dikdörtgen"],
             "kare", "kutu", "en boy"));
         all.Add(F("draw.line", GDraw, "Ölçü yazarak çizgi çiz",
@@ -110,7 +110,7 @@ internal static class CommandCatalogueData
             ["döndür", "90 derece döndür", "çeyrek tur"],
             "çevir", "tur at", "açı"));
         all.Add(F("piece.resize", GPiece, "Parçanın ölçüsünü değiştir",
-            "Dikdörtgen bir parçanın genişliğini ya da boyunu yazıyla değiştirir.",
+            "Dikdörtgen bir parçanın genişliğini ya da yüksekliğini yazıyla değiştirir.",
             ["genişliği 95 yap", "boyu 60 yap", "95 x 60 yap"],
             "büyüt", "küçült", "genişlet", "daralt", "ölçü", "boyutunu değiştir"));
         all.Add(F("piece.rename", GPiece, "Parçanın adını değiştir",
@@ -214,7 +214,7 @@ internal static class CommandCatalogueData
             "Makine simülatörü…", ["makine dosyası hazırla", "simülatörü aç"],
             ["makine", "simülatör", "deneme dosyası"]));
 
-        // ---- Başka programlarla alışveriş ----
+        // ---- Dosya alma ve verme ----
         all.Add(D("exchange.import", GExchange, "DXF dosyası al…",
             "Başka bir programdan DXF dosyası alır; ölçü birimini siz seçersiniz, onaylayana kadar projeniz değişmez.",
             "DXF al…", ["dxf al", "dxf aç", "içe aktar"],
