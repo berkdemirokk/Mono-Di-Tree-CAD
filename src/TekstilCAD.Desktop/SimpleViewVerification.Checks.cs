@@ -95,7 +95,7 @@ internal static partial class SimpleViewVerification
         }
         F<CheckBox>(fresh, "snap").IsChecked = false;
         Invoke(fresh, "Refresh");
-        ok &= F<TextBlock>(fresh, "unitsText").Text == "Ölçü birimi: milimetre (mm) · Fareyle çizerken serbest";
+        ok &= F<TextBlock>(fresh, "unitsText").Text == "Ölçü birimi: milimetre (mm) · Fareyle çizerken adım sınırı yok";
         Check(ok, "Simple view shows the unit text and the production note in the footer", checks);
     });
 
