@@ -4313,6 +4313,8 @@ public partial class MainWindow : Window
         var editing = Keyboard.FocusedElement is TextBoxBase or PasswordBox or ComboBox;
         try
         {
+            if (HandleCommandBoxShortcut(Keyboard.Modifiers, e.Key))
+            { e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F1)
             { OpenAbout(); e.Handled = true; return; }
             if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.S)

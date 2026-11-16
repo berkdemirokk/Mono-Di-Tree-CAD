@@ -1172,7 +1172,7 @@ internal static class DesktopVerification
             VerifyMainCommandGroups(studio,reportPath,checks);
             VerifyAboutAndCrashLog(studio,work,reportPath,checks);
             VerifyCompactWorkspace(studio,reportPath,checks);
-            CommandVerification.Run(studio,checks);
+            CommandVerification.Run(studio,checks,reportPath);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);

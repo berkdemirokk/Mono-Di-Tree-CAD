@@ -20,7 +20,7 @@ internal static partial class CommandVerification
 {
     private const BindingFlags Private=BindingFlags.NonPublic|BindingFlags.Instance;
 
-    internal static void Run(MainWindow studio,List<string> checks)
+    internal static void Run(MainWindow studio,List<string> checks,string? reportPath=null)
     {
         // The table first: a regression there fails a check before any button is clicked (AddButton turns an
         // exception in a click into a message box, which would hang a headless run instead of failing it).
@@ -29,6 +29,7 @@ internal static partial class CommandVerification
         VerifyPositionDraftsKeepTheirDocuments(checks);
         VerifyExecutor(checks);
         VerifyPlanExecution(checks);
+        VerifyCommandBox(checks,reportPath);
         VerifyOpenTextileToolsAt(checks);
     }
 

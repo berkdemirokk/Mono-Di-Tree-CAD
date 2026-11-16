@@ -68,10 +68,10 @@ internal static partial class CommandVerification
         {
             var piece=MarkedPiece();var rule=RuleFor(piece);
             window.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });window.Select(piece.Id);
-            var outcome=window.ApplyCommand(PlanOf(window,"25 mm sağa 10 mm aşağı taşı"));
+            var outcome=window.ApplyCommand(PlanOf(window,"25 sağa 10 yukarı taşı"));
             var current=window.Document.Pieces.Single();
-            Check(outcome.Result==CommandResult.Applied && current.Points.SequenceEqual(Rectangle.Select(p=>new Point2(p.X+25,p.Y+10)))
-                && current.Notches is { Count:2 } marks && marks[0].Position==new Point2(25,10) && current.Grainline is { } grain && grain.Start==new Point2(30,12)
+            Check(outcome.Result==CommandResult.Applied && current.Points.SequenceEqual(Rectangle.Select(p=>new Point2(p.X+25,p.Y-10)))
+                && current.Notches is { Count:2 } marks && marks[0].Position==new Point2(25,-10) && current.Grainline is { } grain && grain.Start==new Point2(30,-8)
                 && window.Document.GradingRules.Single().SourcePoints.SequenceEqual(current.Points) && outcome.Caveats is { Count:>0 },
                 "Command executor “taşı” moves contour, marks, grainline and rule together and keeps the caveat",checks);
             var moved=window.ApplyCommand(PlanOf(window,"x 100 y 50 konumuna taşı"));
