@@ -196,7 +196,8 @@ enum Refusals {
     /// R15a. With no real names the buttons are empty (the parser reports R03 for a project without pieces instead).
     static func nameNotFoundFor(_ typedName: String, _ realNames: [String], _ verb: String) -> CommandRefusal {
         let first = realNames.first ?? "ön beden"
-        var message = TurkishText.replaceOrdinal(templateNameNotFound, "{ad}", typedName)
+        let shown = TurkishText.containsForbiddenWord(typedName) ? "…" : typedName
+        var message = TurkishText.replaceOrdinal(templateNameNotFound, "{ad}", shown)
         message = TurkishText.replaceOrdinal(message, "{gerçek ad}", first)
         let list = realNames.prefix(3).map { RefusalButton($0, fill: $0 + " " + verb) }
         return CommandRefusal(code: nameNotFound, message: message, buttons: list)

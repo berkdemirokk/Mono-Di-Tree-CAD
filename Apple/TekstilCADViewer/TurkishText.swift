@@ -201,8 +201,27 @@ enum TurkishText {
         var sb: [UInt16] = []
         sb.reserveCapacity(composed.count)
         var pendingSpace = false
-        for raw in composed {
-            var c = raw
+        var index = 0
+        while index < composed.count {
+            var c = composed[index]
+            // Surrogates: a valid pair is kept whole; an unpaired half is treated as a space.
+            if c >= 0xD800 && c <= 0xDFFF {
+                let isHigh = c <= 0xDBFF
+                if isHigh && index + 1 < composed.count && composed[index + 1] >= 0xDC00 && composed[index + 1] <= 0xDFFF {
+                    if pendingSpace {
+                        sb.append(0x20)
+                        pendingSpace = false
+                    }
+                    sb.append(c)
+                    sb.append(composed[index + 1])
+                    index += 2
+                } else {
+                    pendingSpace = !sb.isEmpty
+                    index += 1
+                }
+                continue
+            }
+            index += 1
             // ’ ‘ ´ ` ʼ ′ -> '
             let apostropheLike = c == 0x2019 || c == 0x2018 || c == 0xB4 || c == 0x60 || c == 0x2BC || c == 0x2032
             if apostropheLike { c = 0x27 }
@@ -351,6 +370,21 @@ enum TurkishText {
         result += String(decoding: whole, as: UTF8.self)
         if !fraction.isEmpty { result += "," + String(decoding: fraction, as: UTF8.self) }
         return result
+    }
+
+    /// Same as C# FormatNumber(decimal): rounded to 6 decimals (half away from zero), Turkish comma, no trailing zeros.
+    static func formatDecimal(_ value: Decimal) -> String {
+        var source = value
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &source, 6, .plain)
+        var text = rounded.description
+        if text.contains("e") || text.contains("E") || text == "NaN" { return formatNumber(DecimalMath.toDouble(rounded)) }
+        if text.contains(".") {
+            while text.hasSuffix("0") { text.removeLast() }
+            if text.hasSuffix(".") { text.removeLast() }
+        }
+        if text == "-0" || text.isEmpty { text = "0" }
+        return text.replacingOccurrences(of: ".", with: ",")
     }
 
     // MARK: Forbidden words

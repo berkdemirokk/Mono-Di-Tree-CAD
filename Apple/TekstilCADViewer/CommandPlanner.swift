@@ -182,7 +182,7 @@ enum CommandPlanner {
             return windowsOnly("Aynalama")
         case .view(let action):
             switch action {
-            case .detailedView, .textLarger, .textSmaller, .themeDark, .themeLight:
+            case .detailedView, .allTools, .textLarger, .textSmaller, .themeDark, .themeLight:
                 return windowsOnly("Bu ayar")
             default:
                 return elsewhere("Görünüm komutla değişmez; çizim ekrana sığdırılır. Parçaları taşımak için: 25 sağa taşı")

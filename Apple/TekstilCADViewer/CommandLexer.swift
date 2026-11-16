@@ -26,6 +26,7 @@ extension CommandParser {
         var hazardWhole = ""
         var unit: LengthUnit?
         var numberEnd = 0        // end of the numeric part itself, before any unit word or suffix
+        var hasWordSuffix = false // a number written in words whose last word carries an ending ("beşlik")
 
         init(kind: TokKind, text: String = "", start: Int, end: Int) {
             self.kind = kind
@@ -41,8 +42,14 @@ extension CommandParser {
     static let maxIntegerDigits = 9
     static let maxFractionDigits = 6
 
-    // Glued endings that may follow a number without an apostrophe ("100e 150").
-    static let gluedNumberSuffixes: Set<String> = ["e", "a", "ye", "ya", "lik", "luk"]
+    // Glued endings that may follow a number without an apostrophe ("100e 150", "2yi").
+    static let gluedNumberSuffixes: Set<String> = ["e", "a", "ye", "ya", "lik", "luk", "i", "u", "yi", "yu"]
+
+    // Case and derivation endings accepted after an apostrophe; any other letters after an apostrophe are an ordinary word.
+    static let apostropheSuffixes: Set<String> = [
+        "e", "a", "ye", "ya", "i", "u", "yi", "yu", "in", "un", "nin", "nun", "ni", "nu", "de", "da", "den", "dan", "te", "ta",
+        "ten", "tan", "le", "la", "yle", "yla", "ile", "lik", "luk", "si", "su", "ler", "lar",
+    ]
 
     /// Splits the folded text into words, numbers and separators. Never traps.
     static func lex(_ folded: [UInt16]) -> [Tok] {
@@ -68,7 +75,14 @@ extension CommandParser {
                 tokens.append(Tok(kind: .sep, text: "x", start: i, end: i + 1))
                 i += 1
             case 0x2C: // ,
-                tokens.append(Tok(kind: .sep, text: ",", start: i, end: i + 1))
+                // ",5" (a separator right before a digit and not after one) is neither a pair separator nor a number.
+                let beforeDigit = i + 1 < n && TurkishText.isDigit(folded[i + 1])
+                let afterDigit = i > 0 && TurkishText.isDigit(folded[i - 1])
+                let commaKind: TokKind = (beforeDigit && !afterDigit) ? .junk : .sep
+                tokens.append(Tok(kind: commaKind, text: ",", start: i, end: i + 1))
+                i += 1
+            case 0x2E where i + 1 < n && TurkishText.isDigit(folded[i + 1]) && (i == 0 || !TurkishText.isDigit(folded[i - 1])):
+                tokens.append(Tok(kind: .junk, text: ".", start: i, end: i + 1))
                 i += 1
             case 0x2D, 0x2212, 0x2013: // - − –
                 i = lexDash(folded, i, &tokens)
@@ -100,7 +114,11 @@ extension CommandParser {
                 return lexNumber(folded, i + 1, &tokens, negative: true, signStart: i)
             }
         }
-        return i + 1 // a hyphen inside a word or before a letter is just white space
+        // A hyphen between two letters ("sol-kol") is white space. Anywhere else it may be a lost minus sign: refuse.
+        if TurkishText.isLetter(prev) && TurkishText.isLetter(next) { return i + 1 }
+        if next == 0x2D || next == 0x2212 || next == 0x2013 { return i + 1 } // the last dash of a run decides
+        tokens.append(Tok(kind: .junk, text: "-", start: i, end: i + 1))
+        return i + 1
     }
 
     static func lexWord(_ folded: [UInt16], _ from: Int, _ tokens: inout [Tok]) -> Int {
@@ -127,11 +145,13 @@ extension CommandParser {
             var j = i + 1
             while j < n && TurkishText.isLetter(folded[j]) { j += 1 }
             let suffix = TurkishText.string(TurkishText.sub(folded, i + 1, j))
-            let isUnit = UnitParser.tryParseUnitWord(text) != nil
-            if previousIsNumber || isUnit {
-                tokens.append(Tok(kind: .joiner, text: suffix, start: i, end: j))
+            if apostropheSuffixes.contains(suffix) {
+                let isUnit = UnitParser.tryParseUnitWord(text) != nil
+                if previousIsNumber || isUnit {
+                    tokens.append(Tok(kind: .joiner, text: suffix, start: i, end: j))
+                }
+                i = j
             }
-            i = j
         }
         return i
     }
@@ -203,8 +223,11 @@ extension CommandParser {
         if i + 1 < n && folded[i] == 0x27 && TurkishText.isLetter(folded[i + 1]) {
             var j = i + 1
             while j < n && TurkishText.isLetter(folded[j]) { j += 1 }
-            tokens.append(Tok(kind: .joiner, text: TurkishText.string(TurkishText.sub(folded, i + 1, j)), start: i, end: j))
-            return j
+            let suffix = TurkishText.string(TurkishText.sub(folded, i + 1, j))
+            if apostropheSuffixes.contains(suffix) {
+                tokens.append(Tok(kind: .joiner, text: suffix, start: i, end: j))
+                return j
+            }
         }
 
         // Letters glued to the number: "120x80", "12cm", "100e".

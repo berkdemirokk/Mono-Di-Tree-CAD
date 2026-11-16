@@ -59,7 +59,8 @@ extension CommandParser {
         let norm = TurkishText.normalize16(trimmed)
         if norm.isEmpty { return refuse(Refusals.unrecognized("")) }
         let folded = TurkishText.fold16(norm)
-        let state = ParseState(norm: norm, folded: folded, names: context.pieceNames)
+        let names = context.pieceNames.filter { !isNullOrWhiteSpace($0) }
+        let state = ParseState(norm: norm, folded: folded, names: names)
         let lexed = lex(folded)
 
         // 1. Rename claims the whole line: "adı Ön Beden olsun".
@@ -75,7 +76,7 @@ extension CommandParser {
         if let named = tryNamedPiece(state) { return named }
 
         // 5. Everything else is built from numbers, units, directions and keywords.
-        state.items = buildItems(state.raw)
+        state.items = buildItems(state.raw, norm)
         if tryMultiPhrase(state) { return refuse(Refusals.twoJobsRefusal()) }
         let classified = classify(state)
         return state.unitAssumed ? classified.withUnitAssumed() : classified
@@ -87,21 +88,22 @@ extension CommandParser {
 
     static func tryRename(_ s: ParseState, _ lexed: [Tok]) -> ParseResult? {
         var index = 0
-        while index < lexed.count && lexed[index].kind == .word && fillerWords.contains(lexed[index].text) { index += 1 }
+        while index < lexed.count && lexed[index].kind == .word && isRenamePrefixWord(lexed[index].text) { index += 1 }
         if index >= lexed.count { return nil }
         let label = lexed[index]
         if label.kind != .word || !renameLabels.contains(label.text) { return nil }
 
+        // Every rename form ends in a verb ("olsun", "yap", ...); a line that does not is something else
+        // ("isim kartını sil" names a piece). Polite fillers after the verb ("lütfen") are ignored.
         var endIndex = lexed.count - 1
+        while endIndex > index && lexed[endIndex].kind == .word && fillerWords.contains(lexed[endIndex].text) { endIndex -= 1 }
         var nameEnd = s.norm.count
-        if endIndex > index && lexed[endIndex].kind == .word && renameVerbs.contains(lexed[endIndex].text) {
+        if endIndex == index { return refuse(Refusals.emptyNameRefusal()) }
+        if lexed[endIndex].kind != .word || !renameVerbs.contains(lexed[endIndex].text) { return nil }
+        nameEnd = lexed[endIndex].start
+        endIndex -= 1
+        if endIndex > index && lexed[endIndex].kind == .word && lexed[endIndex].text == "olarak" {
             nameEnd = lexed[endIndex].start
-            endIndex -= 1
-            if endIndex > index && lexed[endIndex].kind == .word && lexed[endIndex].text == "olarak" {
-                nameEnd = lexed[endIndex].start
-            }
-        } else if endIndex == index {
-            return refuse(Refusals.emptyNameRefusal())
         }
 
         let from = label.end
@@ -124,6 +126,15 @@ extension CommandParser {
         if !hasLetterOrDigit { return refuse(Refusals.emptyNameRefusal()) }
         if name.count > maxNameLength { return refuse(Refusals.unrecognized(TurkishText.string(s.norm))) }
         return ParseResult.understood(.rename(TurkishText.string(name)))
+    }
+
+    static func isRenamePrefixWord(_ text: String) -> Bool {
+        return fillerWords.contains(text) || text == "parcanin" || text == "parcamin"
+    }
+
+    static func isNullOrWhiteSpace(_ text: String) -> Bool {
+        for u in text.utf16 where !TurkishText.isWhiteSpace(u) { return false }
+        return true
     }
 
     // ================================================================================================================
@@ -164,10 +175,18 @@ extension CommandParser {
     // ================================================================================================================
 
     static func tryNamedPiece(_ s: ParseState) -> ParseResult? {
-        let raw = s.raw
+        var raw = s.raw
+        if raw.count >= 3 {
+            let lastTok = raw[raw.count - 1]
+            let prevTok = raw[raw.count - 2]
+            let prevIsVerb = prevTok.kind == .word && (deleteVerbs.contains(prevTok.text) || selectVerbs.contains(prevTok.text))
+            if lastTok.kind == .word && trailingVerbs.contains(lastTok.text) && prevIsVerb {
+                raw.removeLast() // "kolu sil yap"
+            }
+        }
         if raw.count < 2 { return nil }
         let verb: Tok
-        let nameTokens: [Tok]
+        var nameTokens: [Tok]
         let first = raw[0]
         let last = raw[raw.count - 1]
         if last.kind == .word && (deleteVerbs.contains(last.text) || selectVerbs.contains(last.text)) {
@@ -179,6 +198,8 @@ extension CommandParser {
         } else {
             return nil
         }
+        // An ending glued to the last word ("ön beden 2'yi") is not part of the name.
+        while let lastTok = nameTokens.last, lastTok.kind == .joiner { nameTokens.removeLast() }
         guard let firstName = nameTokens.first, let lastName = nameTokens.last else { return nil }
 
         let isDelete = deleteVerbs.contains(verb.text)
@@ -198,39 +219,46 @@ extension CommandParser {
         return ParseResult.understood(.select(.named, name: resolved.query))
     }
 
-    /// Finds the pieces a typed name refers to. Matching is the search box's: lower case with Turkish rules, the typed
-    /// text appearing inside the name, plus diacritic folding. A single exactly equal name wins as typed; otherwise the
-    /// typed text is tried as written and then without its object suffix ("ön bedeni" -> "ön beden").
-    static func resolvePieceName(_ phrase: [UInt16], _ names: [String]) -> (matches: [String], query: String) {
-        let typedLower16 = TurkishText.trim(TurkishText.toLower16(phrase))
-        let typedFold = TurkishText.fold16(typedLower16)
-        let strippedLower = stripObjectSuffix(typedLower16, typedFold)
-        let strippedFold = TurkishText.fold16(strippedLower)
-        let typedLower = TurkishText.string(typedLower16)
-        if typedFold.isEmpty { return ([], typedLower) }
+    /// The piece names a name query refers to, by the parser's own rule (see `resolvePieceName`). Returns every match
+    /// (none, one or several); the caller asks when it is not exactly one.
+    static func findPieces(_ query: String?, _ pieceNames: [String]?) -> [String] {
+        guard let query, !isNullOrWhiteSpace(query), let pieceNames else { return [] }
+        let names = pieceNames.filter { !isNullOrWhiteSpace($0) }
+        return resolvePieceName(TurkishText.units(query), names).matches
+    }
 
-        let foldedNames = names.map { TurkishText.fold16(TurkishText.units($0)) }
+    static func replaceHyphens(_ units: [UInt16]) -> [UInt16] {
+        return units.map { $0 == 0x2D ? 0x20 : $0 }
+    }
+
+    /// Finds the pieces a typed name refers to. A single exactly equal name wins as typed; otherwise the typed text is
+    /// tried as written and then without its ending: the accusative ("kolu" -> "kol"), with the softened last letter
+    /// ("eteği" -> "etek", "cebi" -> "cep") and the "-yi" form. The first form that matches decides.
+    static func resolvePieceName(_ phrase: [UInt16], _ names: [String]) -> (matches: [String], query: String) {
+        let typedLower16 = TurkishText.trim(TurkishText.toLower16(replaceHyphens(phrase)))
+        let typedFold = TurkishText.fold16(typedLower16)
+        let typedLower = TurkishText.string(typedLower16)
+        if typedFold.count < 2 || names.isEmpty { return ([], typedLower) }
+
+        let foldedNames = names.map { TurkishText.fold16(replaceHyphens(TurkishText.units($0))) }
 
         var exact: [String] = []
         for i in 0..<names.count where foldedNames[i] == typedFold { exact.append(names[i]) }
         if exact.count == 1 { return (exact, typedLower) }
 
-        var typedHits: [String] = []
-        for i in 0..<names.count where TurkishText.containsOrdinal(foldedNames[i], typedFold) { typedHits.append(names[i]) }
-        if !typedHits.isEmpty { return (typedHits, typedLower) }
-
-        if !strippedFold.isEmpty && strippedFold != typedFold {
-            var strippedHits: [String] = []
-            for i in 0..<names.count where TurkishText.containsOrdinal(foldedNames[i], strippedFold) {
-                strippedHits.append(names[i])
-            }
-            if !strippedHits.isEmpty { return (strippedHits, TurkishText.string(strippedLower)) }
+        for candidate in nameCandidates(typedLower16, typedFold) {
+            let key = TurkishText.fold16(candidate)
+            if key.count < 2 { continue }
+            var hits: [String] = []
+            for i in 0..<names.count where TurkishText.containsOrdinal(foldedNames[i], key) { hits.append(names[i]) }
+            if !hits.isEmpty { return (hits, TurkishText.string(candidate)) }
         }
         return ([], typedLower)
     }
 
-    /// Removes the accusative ending of the last word ("kolu" -> "kol", "ön bedeni" -> "ön beden").
-    static func stripObjectSuffix(_ lower: [UInt16], _ folded: [UInt16]) -> [UInt16] {
+    /// The typed name as written, then without its Turkish ending, most likely stem first.
+    static func nameCandidates(_ lower: [UInt16], _ folded: [UInt16]) -> [[UInt16]] {
+        var result: [[UInt16]] = [lower]
         var space = -1
         var k = folded.count - 1
         while k >= 0 {
@@ -238,21 +266,36 @@ extension CommandParser {
             k -= 1
         }
         let word = TurkishText.sub(folded, space + 1, folded.count)
-        var cut = 0
-        if let lastUnit = word.last {
-            let endsWithIOrU = lastUnit == 0x69 || lastUnit == 0x75
-            let endsWithY = word.count >= 2 && word[word.count - 2] == 0x79
-            if word.count > 3 && endsWithY && endsWithIOrU { cut = 2 }
-            else if word.count > 2 && endsWithIOrU { cut = 1 }
+        guard let lastUnit = word.last else { return result }
+        let endsWithIOrU = lastUnit == 0x69 || lastUnit == 0x75
+        if word.count > 2 && endsWithIOrU {
+            let one = TurkishText.sub(lower, 0, lower.count - 1)
+            result.append(one)
+            if let last = one.last {
+                var softened: UInt16 = 0
+                switch last {
+                case 0x62: softened = 0x70        // b -> p
+                case 0x64: softened = 0x74        // d -> t
+                case 0x11F, 0x67: softened = 0x6B // ğ, g -> k
+                default: softened = 0
+                }
+                if softened != 0 { result.append(TurkishText.sub(one, 0, one.count - 1) + [softened]) }
+            }
         }
-        return cut == 0 ? lower : TurkishText.sub(lower, 0, lower.count - cut)
+        if word.count > 3 {
+            let prev = word[word.count - 2]
+            let endsYi = prev == 0x79 && endsWithIOrU   // yi, yu
+            let endsNi = prev == 0x6E && endsWithIOrU   // ni, nu
+            if endsYi || endsNi { result.append(TurkishText.sub(lower, 0, lower.count - 2)) } // "payı" -> "pay", "kartını" -> "kartı"
+        }
+        return result
     }
 
     // ================================================================================================================
     // Items: merged words, numbers, units
     // ================================================================================================================
 
-    static func buildItems(_ raw: [Tok]) -> [Tok] {
+    static func buildItems(_ raw: [Tok], _ norm: [UInt16]) -> [Tok] {
         // 1. Word sequences that read as one ("yarım tur", "saat yönünde", "alt üst").
         var merged: [Tok] = []
         merged.reserveCapacity(raw.count)
@@ -280,7 +323,12 @@ extension CommandParser {
         }
 
         // 2. Number words ("yüz yirmi", "bir buçuk", "on iki virgül beş").
-        let texts: [String] = merged.map { $0.kind == .word ? $0.text : "" }
+        var texts: [String] = merged.map { $0.kind == .word ? $0.text : "" }
+        // "on" is ten, but "ön" folds to the same letters: only a word typed without the umlaut is a number.
+        for k in 0..<merged.count where texts[k] == "on" {
+            let typed = TurkishText.toLower16(TurkishText.sub(norm, merged[k].start, merged[k].end))
+            if typed != Array("on".utf16) { texts[k] = "" }
+        }
         var numbered: [Tok] = []
         numbered.reserveCapacity(merged.count)
         i = 0
@@ -294,6 +342,7 @@ extension CommandParser {
                 tok.numberEnd = last.end
                 tok.value = match.value
                 tok.fromWords = true
+                tok.hasWordSuffix = match.hasSuffix
                 tok.overflow = match.tooLarge
                 numbered.append(tok)
                 if match.hasSuffix {
@@ -531,6 +580,16 @@ extension CommandParser {
                                                        numberStart: digitsStart, numberLength: textLength))
         }
         if s.items.contains(where: { $0.isNumber && $0.negative }) { return refuse(Refusals.negativeNumberRefusal()) }
+
+        // Two numbers side by side are a pair only when both are written in digits or form a compound
+        // ("1 santim 2 milim"). Words ("yüz yirmi seksen") could be split in more than one way: refuse instead of guessing.
+        var pairIndex = 0
+        while pairIndex + 1 < s.items.count {
+            let a = s.items[pairIndex]
+            let b = s.items[pairIndex + 1]
+            if a.isNumber && b.isNumber && (a.fromWords || b.fromWords) && a.unit == nil { return unrecognized(s) }
+            pairIndex += 1
+        }
         return nil
     }
 
@@ -617,10 +676,22 @@ extension CommandParser {
 
         if rules.askUnit && !anyExplicit && list.allSatisfy({ DecimalMath.toDouble($0.value) < unitQuestionBelow }) {
             let end = list.map { $0.numberEnd }.max() ?? 0
-            let head = TurkishText.string(TurkishText.sub(s.norm, 0, end))
-            let tail = TurkishText.string(TurkishText.sub(s.norm, end, s.norm.count))
+            // The unit goes right after the last number; an ending glued to it ("10'luk", "beşlik") is dropped so the
+            // fill text parses.
+            func with(_ unit: String) -> String {
+                if let number = s.items.first(where: { $0.isNumber && $0.numberEnd == end }), number.hasWordSuffix {
+                    let before = TurkishText.string(TurkishText.sub(s.norm, 0, number.start))
+                    let after = TurkishText.string(TurkishText.sub(s.norm, number.end, s.norm.count))
+                    return before + TurkishText.formatDecimal(number.value) + " " + unit + after
+                }
+                var rest = end
+                if let joiner = s.raw.first(where: { $0.kind == .joiner && $0.start == end }) { rest = joiner.end }
+                let before = TurkishText.string(TurkishText.sub(s.norm, 0, end))
+                let after = TurkishText.string(TurkishText.sub(s.norm, rest, s.norm.count))
+                return before + " " + unit + after
+            }
             let typed = TurkishText.string(s.norm)
-            return (nil, refuse(Refusals.unitQuestionFor(typed, head + " mm" + tail, head + " cm" + tail)))
+            return (nil, refuse(Refusals.unitQuestionFor(typed, with("mm"), with("cm"))))
         }
 
         var result: [Double] = []
@@ -807,6 +878,8 @@ extension CommandParser {
             guard let meas = toMeas(pair.group) else { return unrecognized(s) }
             measures.append(meas)
         }
+        // Two distances with a unit on only one of them ("25 sağa 1 cm yukarı") could mean either unit for the other: refuse.
+        if measures.count == 2 && measures.filter({ $0.unit != nil }).count == 1 { return unrecognized(s) }
         let resolved = resolveMeasures(s, measures, MeasureRules())
         if let bad = resolved.refusal { return bad }
         guard let values = resolved.values, values.count == pairs.count else { return unrecognized(s) }
@@ -1102,7 +1175,7 @@ extension CommandParser {
     // ---- Plausible prefixes ("120 x", "dikdört", "20 sağ"): the refusal is kept but flagged incomplete ----------------
 
     static let incompleteCodes: Set<String> = [
-        Refusals.notUnderstood, Refusals.numberMissing, Refusals.twoMeasuresNeeded, Refusals.emptyName,
+        Refusals.notUnderstood, Refusals.numberMissing, Refusals.twoMeasuresNeeded, Refusals.emptyName, Refusals.namedPieceMove,
     ]
 
     /// Endings tried after the typed text to see whether it could become a working command.
@@ -1110,15 +1183,21 @@ extension CommandParser {
         "", " 120 80", " 120 x 80", " 80", " 80 dikdörtgen", " 100 çizgi", " 100", " 10 sağa taşı", " 10 yukarı", " 5 aşağı",
         " santim yukarı", " santim sağa", " mm sağa", " milim sağa", " cm", " mm", " 50 konumuna taşı", " pastal", " payı",
         " 80 yap", " seç", " sil", " olsun", " yap", " tema", " 3 adım geri", " adım geri", " geri", " 60 yap",
-        " 2 yap", " kaydır", " aracı", " 90 derece", " döndür", " beden büyüt", " 10 çizgi",
+        " 2 yap", " kaydır", " aracı", " 90 derece", " döndür", " beden büyüt", " 10 çizgi", " x 80 dikdörtgen", " çarpı seksen dikdörtgen",
+        " dikdörtgen", " yukarı", " aşağı", " sağa", " konumuna taşı", " üst aynala", " aynala", " santim aşağı", "0 yukarı", "0 konumuna taşı", "0 çizgi", "0 sağa",
     ]
 
     static let endings: [[UInt16]] = endingTexts.map { Array($0.utf16) }
 
+    static let phraseKeyUnits: [[UInt16]] = phrases.keys.map { Array($0.utf16) }
+
     /// Known words plus the unit words and the "did you mean" words, sorted ordinally (UTF-16 order).
     static let prefixVocabulary: [[UInt16]] = {
         var all = CommandParser.knownWords
-        for unit in ["mm", "milim", "milimetre", "cm", "santim", "santimetre", "metre"] { all.insert(unit) }
+        let extraWords = ["mm", "milim", "milimetre", "cm", "santim", "santimetre", "metre", "tur", "bucuk", "yarim", "virgul",
+                          "sifir", "bir", "iki", "uc", "dort", "bes", "alti", "yedi", "sekiz", "dokuz", "on", "yirmi", "otuz", "kirk", "elli", "altmis",
+                          "yetmis", "seksen", "doksan", "yuz", "bin"]
+        for unit in extraWords { all.insert(unit) }
         for key in CommandParser.didYouMeanByFolded.keys { all.insert(key) }
         let arrays = all.map { Array($0.utf16) }
         return arrays.sorted { $0.lexicographicallyPrecedes($1) }
@@ -1131,6 +1210,21 @@ extension CommandParser {
         let norm = TurkishText.normalize16(trimmed)
         guard let last = norm.last else { return false }
         if norm == [0x3F] { return false }
+
+        let foldedNorm = TurkishText.fold16(norm)
+        for key in phraseKeyUnits where key.starts(with: foldedNorm) { return true }
+
+        // "adı olsun" already ends in its verb: the empty name is final, not unfinished typing.
+        if code == Refusals.emptyName {
+            var lastSpace = -1
+            var k = foldedNorm.count - 1
+            while k >= 0 {
+                if foldedNorm[k] == 0x20 { lastSpace = k; break }
+                k -= 1
+            }
+            let lastWord = TurkishText.string(TurkishText.sub(foldedNorm, lastSpace + 1, foldedNorm.count))
+            if renameVerbs.contains(lastWord) { return false }
+        }
 
         var bases: [[UInt16]] = [norm]
         if last == 0x27 {

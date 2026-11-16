@@ -14,7 +14,7 @@ enum MirrorAxis: Equatable { case vertical, horizontal }
 enum ViewAction: Equatable {
     case fitAll, fitSelected, zoomIn, zoomOut
     case panLeft, panRight, panUp, panDown
-    case detailedView, textLarger, textSmaller, themeDark, themeLight
+    case detailedView, allTools, textLarger, textSmaller, themeDark, themeLight
 }
 
 enum DrawingTool: Equatable { case select, line, polyline, rectangle, bezier, arc }

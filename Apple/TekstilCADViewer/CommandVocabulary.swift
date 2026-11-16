@@ -50,9 +50,9 @@ extension CommandParser {
     static let mirrorWords = wordSet("aynala")
     static let mirrorModifiers = wordSet("dikey", "yatay", "sagsol", "altust", "yukariasagi", "eksene", "eksen", "gore", "eksenine")
 
-    static let deleteVerbs = wordSet("sil", "kaldir")
-    static let selectVerbs = wordSet("sec")
-    static let selectedPieceWords = wordSet("parca", "parcayi", "secili", "seciliyi", "secileni", "parcasini", "bunu")
+    static let deleteVerbs = wordSet("sil", "kaldir", "silin", "siliniz", "kaldirin")
+    static let selectVerbs = wordSet("sec", "secin", "seciniz")
+    static let selectedPieceWords = wordSet("parca", "parcayi", "parcanin", "secili", "seciliyi", "secileni", "parcasini", "bunu")
 
     static let renameLabels = wordSet("adi", "adini", "ismi", "ismini", "isim", "ad")
     static let renameVerbs = wordSet("olsun", "yap", "degistir", "koy", "yaz", "et", "ver")
@@ -72,15 +72,15 @@ extension CommandParser {
     static let drawAllowed: Set<String> = unionOf([rectWords, squareWords, lineWords, orientationWords,
                                                    widthLabels, heightLabels, wordSet("kenar", "kenari"), glueWords])
 
-    static let moveAllowed: Set<String> = unionOf([moveVerbs, positionMarkers, xLabels, yLabels, glueWords,
+    static let moveAllowed: Set<String> = unionOf([moveVerbs, positionMarkers, xLabels, yLabels, glueWords, selectedPieceWords,
                                                    wordSet("al", "git", "saga", "sag", "sola", "sol", "yukari", "yukariya", "asagi", "asagiya")])
 
-    static let rotateAllowed: Set<String> = unionOf([rotateWords, glueWords,
+    static let rotateAllowed: Set<String> = unionOf([rotateWords, glueWords, selectedPieceWords,
                                                      wordSet("cevir", "saga", "sola", "tersyone")])
 
-    static let mirrorAllowed: Set<String> = unionOf([mirrorWords, mirrorModifiers, glueWords])
+    static let mirrorAllowed: Set<String> = unionOf([mirrorWords, mirrorModifiers, glueWords, selectedPieceWords])
 
-    static let resizeAllowed: Set<String> = unionOf([widthLabels, heightLabels, bothLabels, glueWords])
+    static let resizeAllowed: Set<String> = unionOf([widthLabels, heightLabels, bothLabels, glueWords, selectedPieceWords])
 
     static let undoAllowed: Set<String> = unionOf([undoWords, wordSet("al", "ve")])
 
@@ -180,7 +180,7 @@ extension CommandParser {
         }
         // C# ViewAction.AllTools has no Swift counterpart (the iPhone has no "all tools" panel); the nearest
         // meaning is the detailed view, so these three phrases are kept (they still count as known words).
-        add(.view(.detailedView), ["tum araclar", "araclar", "tum aletler"])
+        add(.view(.allTools), ["tum araclar", "araclar", "tum aletler"])
         add(.view(.detailedView),
             ["ayrintili gorunum", "uzman gorunumu", "tum dugmeler", "ayrintili gorunume gec", "uzman gorunum"])
         add(.view(.textLarger), ["yaziyi buyut"])
