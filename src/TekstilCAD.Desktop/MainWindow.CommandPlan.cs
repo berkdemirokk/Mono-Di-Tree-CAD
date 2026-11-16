@@ -181,6 +181,15 @@ public partial class MainWindow
 
     // ---- plans that do not edit the project ----------------------------------------------------------------------------
 
+    /// <summary>Plans whose buttons are not gated by an unfinished recovery restore: they never edit or select pieces.</summary>
+    private static bool DoesNotTouchProject(Plan plan) => plan.Command switch
+    {
+        HandoffCommand h => h.Target is HandoffTarget.RecoveryScan or HandoffTarget.About,
+        ViewCommand v => v.Action is ViewAction.ThemeDark or ViewAction.ThemeLight or ViewAction.TextLarger or ViewAction.TextSmaller
+            or ViewAction.AllTools or ViewAction.DetailedView,
+        _ => false,
+    };
+
     private CommandOutcome ApplyOtherPlan(Plan plan)
     {
         CommandOutcome Refuse(string guard)=>new(CommandResult.Refused,status.Text,guard);
@@ -191,7 +200,7 @@ public partial class MainWindow
         { SetStatus(ex.Message);return new(CommandResult.Refused,ex.Message,CommandGuards.MutationReview); }
         if(plan.Kind==PlanKind.CancelPreview)return new(CommandResult.Done,"Önizleme kapatıldı. Hiçbir şey değişmedi.");
         if(plan.Kind==PlanKind.Help)return new(CommandResult.Done,"Örnek listesi açıldı; birine tıklayınca kutuya yazılır, siz Enter'a basmadan uygulanmaz.",OpensExamples:true);
-        if(BlockForIncompleteRecovery())return Refuse(CommandGuards.Recovery);
+        if(!DoesNotTouchProject(plan) && BlockForIncompleteRecovery())return Refuse(CommandGuards.Recovery);
         if(plan.Stamp.Check(CommandView(),CommandSelection())!=StampState.Current)
         {
             SetStatus($"{plan.ActionName} yapılmadı · {Refusals.TemplatePreviewStale}");
@@ -306,6 +315,13 @@ public partial class MainWindow
                     var shown=ApplyDetailedView("Katmanlar Ayrıntılı görünümde yönetilir; katman seçimi bölümü açıldı.");
                     if(shown.Result==CommandResult.Done)layerList.Focus();
                     return shown;
+                }
+                if(hand.Target==HandoffTarget.RecoveryScan && recoveryRescan is not { IsEnabled:true })
+                {
+                    // The button is disabled while a scan runs or when there is no recovery store: the box must not claim a scan started.
+                    const string busy="Kurtarma taraması şu an başlatılamıyor; çalışıyor ya da kurtarma deposu yok.";
+                    SetStatus(busy);
+                    return new(CommandResult.Refused,busy,CommandGuards.PendingWork);
                 }
                 if(HandoffRouteFor(hand) is not { } route)break;
                 return RunHandoff("Handoff."+hand.Target,route.Run,route.Done);
