@@ -445,7 +445,7 @@ private struct AreaChoiceButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(selected ? .semibold : .regular))
-            .foregroundStyle(selected ? Color.white : AppTheme.accent)
+            .foregroundStyle(selected ? AppTheme.onAccent : AppTheme.accent)
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .background(selected ? AppTheme.accent

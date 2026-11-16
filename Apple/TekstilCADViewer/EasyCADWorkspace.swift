@@ -484,13 +484,13 @@ struct EasyCADWorkspace: View {
     private var coachTip: some View {
         if document.pieces.isEmpty {
             CoachTip(systemImage: "1.circle.fill", title: "Başlamak için bir şekil ekle",
-                     text: "Aşağıdan Dikdörtgen, Çizgi, Daire ya da Üçgen seç. Ölçüleri sonra kendin yazarsın.")
+                     text: "Dikdörtgen, Çizgi, Daire ya da Üçgen ekle düğmelerinden birine dokun. Ölçüleri sonra kendin yazarsın.")
         } else if selectedIndex == nil {
             CoachTip(systemImage: "hand.tap.fill", title: "Düzenlemek için parçaya dokun",
                      text: "Çizimdeki bir parçaya dokun ya da aşağıdaki Parça seç menüsünü kullan.")
         } else {
             CoachTip(systemImage: "ruler", title: "Ölçüleri milimetre olarak yaz",
-                     text: "Kutulara yaz ve uygula. Parçayı parmağınla sürükleyebilirsin. Bitince en alttan kaydet.")
+                     text: "Kutulara yaz ve uygula ya da parçayı parmağınla sürükle (yakınlaştırılmışken kenar çizgisinden tut). Bitince Projeyi kaydet'e dokun.")
         }
     }
 
@@ -507,6 +507,10 @@ struct EasyCADWorkspace: View {
         #endif
         return wideByShape
     }
+
+    /// The keyboard only shrinks the drawing when it sits above the tools; beside them (iPad,
+    /// landscape) the drawing keeps its height, so zoom, controls and hints stay.
+    private var keyboardCramps: Bool { keyboardVisible && !isWide }
 
     /// Share of the width the drawing gets beside the tools.
     private static let wideCanvasShare: CGFloat = 0.6
@@ -760,7 +764,7 @@ struct EasyCADWorkspace: View {
                 .accessibilityAddTraits(.isHeader)
             Toggle("5 mm'lik adımlarla sürükle", isOn: $snapToFiveMillimeters)
                 .font(.caption)
-            Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir.")
+            Text("Bir parçaya dokunarak seç. Parmağınla sürükleyerek yerini değiştir; yakınlaştırılmışken parçayı kenar çizgisinden tut.")
                 .font(.caption).foregroundStyle(AppTheme.muted)
             Picker("Parça seç", selection: Binding(
                 get: { selectedID },
@@ -898,7 +902,7 @@ struct EasyCADWorkspace: View {
                 liveZoom = 1
                 // The drawing gets smaller with the keyboard up; a zoomed view would point at
                 // places that are no longer on screen.
-                if keyboardVisible { viewport = DraftViewport() }
+                if keyboardCramps { viewport = DraftViewport() }
             }
             .onChange(of: document.pieces.isEmpty) { isEmpty in
                 if isEmpty { viewport = DraftViewport() }
@@ -979,6 +983,8 @@ struct EasyCADWorkspace: View {
             .sheet(item: $shareFile) { file in
                 ActivityShareSheet(url: file.url) { completed in
                     shareFile = nil
+                    // The share target has its own copy by now; drop the per-share temporary folder.
+                    try? FileManager.default.removeItem(at: file.url.deletingLastPathComponent())
                     if completed { success = "Dosya paylaşıldı." }
                 }
                 .presentationDetents([.medium, .large])
@@ -1049,7 +1055,7 @@ struct EasyCADWorkspace: View {
         }
         // The margin leaves room for the measurement tags around the selected piece; the zoom
         // buttons' corner is kept free so they never sit on top of the drawing at fit.
-        let corner = keyboardVisible ? CGSize.zero : zoomControlsFitFootprint
+        let corner = keyboardCramps ? CGSize.zero : zoomControlsFitFootprint
         return DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY, inset: 30,
                               keepingClear: corner)
     }
@@ -1353,6 +1359,9 @@ struct EasyCADWorkspace: View {
             .modifier(PinchZoom(
                 changed: { scale, start in
                     pinching = true
+                    // A one-finger pan that turns into a pinch is dropped, so its translation is
+                    // not added again when the drag ends.
+                    if panning { panning = false; livePan = .zero }
                     // A piece that is being dragged keeps its scale until it is dropped.
                     guard draggedPieceID == nil else { return }
                     if pinchAnchor == nil, let start, start.x.isFinite, start.y.isFinite {
@@ -1373,7 +1382,9 @@ struct EasyCADWorkspace: View {
             .onChange(of: geometry.size) { canvasSize = $0 }
         }
         .clipped()
-        .frame(height: canvasHeight)
+        // Beside the tools the drawing takes whatever height is left; a height computed from the
+        // measured area could grow with the text under it and feed back into the measurement.
+        .frame(minHeight: isWide ? 160 : canvasHeight, maxHeight: isWide ? .infinity : canvasHeight)
         .frame(maxWidth: .infinity)
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
@@ -1391,7 +1402,7 @@ struct EasyCADWorkspace: View {
             if document.pieces.isEmpty {
                 VStack(spacing: 4) {
                     Text("Kalıbını oluştur").font(.headline)
-                    Text("Aşağıdan bir şekil ekle. Ölçüler milimetredir.")
+                    Text("Bir şekil ekleyerek başla. Ölçüler milimetredir.")
                         .font(.subheadline).foregroundStyle(AppTheme.muted)
                         .multilineTextAlignment(.center)
                 }
@@ -1400,10 +1411,10 @@ struct EasyCADWorkspace: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if !document.pieces.isEmpty && !keyboardVisible { zoomControls }
+            if !document.pieces.isEmpty && !keyboardCramps { zoomControls }
         }
         .overlay(alignment: .top) {
-            if showPanHint && !viewport.isFit && !keyboardVisible { panHint }
+            if showPanHint && !viewport.isFit && !keyboardCramps { panHint }
         }
         .onChange(of: viewport.isFit) { isFit in
             if !isFit && !panHintSeen { showPanHint = true }

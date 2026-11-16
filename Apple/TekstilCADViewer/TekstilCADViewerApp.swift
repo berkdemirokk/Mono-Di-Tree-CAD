@@ -157,7 +157,7 @@ private struct ContentView: View {
     }
 
     private func announce(_ text: String) {
-        #if canImport(UIKit)
+        #if os(iOS)
         UIAccessibility.post(notification: .announcement, argument: text)
         #endif
     }
@@ -350,6 +350,8 @@ private struct ContentView: View {
             if arguments.contains("--ui-test-reset-draft") {
                 CADLocalDraftStore.discard()
                 CADProjectLibrary.resetTestLibrary()
+                // One-time hints must not depend on which test ran before.
+                UserDefaults.standard.removeObject(forKey: "workshop.panHintSeen")
             }
             if arguments.contains("--ui-test-unreadable-draft") {
                 CADLocalDraftStore.writeUnreadableDraftForTesting()
