@@ -20,12 +20,12 @@ internal static partial class SimpleViewVerification
     private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
 
     // Simple view canvas floors. Written from the first CI render minus 10 px; never lowered just to pass.
-    // First CI render: clean 377 px at 1024x640 and 637 px at 1440x900 (floors 367 and 627); busy 243 px at 1024x640 (floor 233).
-    // The busy 1440x900 floor is provisional until its first CI measurement.
+    // First CI render: clean 377 px at 1024x640 and 637 px at 1440x900 (floors 367 and 627); busy 243 px at 1024x640 and 503 px at 1440x900 with a heavier busy set;
+    // the busy floors are provisional until measured with the classic busy set (CI).
     private const double Floor1024 = 367;
     private const double Floor1440 = 627;
-    private const double BusyFloor1024 = 233;
-    private const double BusyFloor1440 = 480;
+    private const double BusyFloor1024 = 250;
+    private const double BusyFloor1440 = 500;
 
     internal static void Run(MainWindow studio, string reportPath, List<string> checks)
     {
@@ -83,16 +83,18 @@ internal static partial class SimpleViewVerification
         foreach (var action in actionFields) F<Button>(window, action).Visibility = Visibility.Visible;
     }
 
-    // The classic "busy" composition: unsaved work, a DXF notice, a recovery warning, a recovery scan notice, the machine message.
+    // The classic "busy" composition (DesktopVerification.VerifyCompactWorkspace): unsaved work, a DXF notice with its actions, a recovery scan notice
+    // with its open action, the machine message. "every" adds the recovery warning, the scan error details, the export and the pastal notices.
     private static void MakeBusy(MainWindow window, bool every)
     {
         typeof(MainWindow).GetField("dirty", Private)!.SetValue(window, true);
         Notice(window, "DXF hazır. Proje henüz değiştirilmedi; önizlemeyi açarak ölçüleri kontrol edin.", "dxfNotice", "dxfCancel", "dxfReview");
-        Notice(window, "Otomatik kurtarma kaydı bulundu; çalışmanızı kontrol edin.", "recoveryNotice", "recoveryDetails");
-        Notice(window, "Kurtarma taraması başka kayıtlar buldu.", "recoveryScanNotice", "recoveryScanDetails", "recoveryOpen");
+        Notice(window, "Kurtarma taraması başka kayıtlar buldu.", "recoveryScanNotice", "recoveryOpen");
         Notice(window, "Makine simülatörü hazırlanıyor; fiziksel makine bağlantısı yok.", "machineQueueMessage");
         if (every)
         {
+            Notice(window, "Otomatik kurtarma kaydı bulundu; çalışmanızı kontrol edin.", "recoveryNotice", "recoveryDetails");
+            Notice(window, "Kurtarma taraması başka kayıtlar buldu.", "recoveryScanNotice", "recoveryScanDetails", "recoveryOpen");
             Notice(window, "Dışa aktarma sürüyor; dosya yalnız inceleme içindir.", "exportNotice", "exportCancel");
             Notice(window, "Pastal geçmişi üretim onayı değildir.", "nestingHistoryNotice", "nestingHistoryDetails");
         }
