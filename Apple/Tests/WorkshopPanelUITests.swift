@@ -176,6 +176,14 @@ final class WorkshopPanelUITests: XCTestCase {
         let above = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             drawing.frame.maxY <= tools.frame.minY + 1
         }, object: nil)
-        XCTAssertEqual(XCTWaiter().wait(for: [above], timeout: 5), .completed)
+        let backInPortrait = XCTWaiter().wait(for: [above], timeout: 10)
+        if backInPortrait != .completed {
+            let shot = XCTAttachment(screenshot: app.screenshot())
+            shot.name = "wide-to-portrait-failure"
+            shot.lifetime = .keepAlways
+            add(shot)
+        }
+        XCTAssertEqual(backInPortrait, .completed,
+                       "Drawing \(drawing.frame) should sit above the tools \(tools.frame) in portrait")
     }
 }

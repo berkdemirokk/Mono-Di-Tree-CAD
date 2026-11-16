@@ -77,6 +77,23 @@ jobs:
           path: ${{ runner.temp }}/iphone-screenshots
           if-no-files-found: warn
           retention-days: 7
+      # The tour writes its own PNG files, so the fallback above never exports the
+      # screenshots XCTest keeps for failing tests. Export them separately on failure.
+      - name: Export failure attachments
+        if: failure()
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/iphone-failures"
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/iPhoneTests.xcresult" --output-path "$RUNNER_TEMP/iphone-failures" --only-failures || true
+          ls -la "$RUNNER_TEMP/iphone-failures"
+      - name: Save failure attachments
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-failures
+          path: ${{ runner.temp }}/iphone-failures
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Save test results
         if: always()
         uses: actions/upload-artifact@v4
