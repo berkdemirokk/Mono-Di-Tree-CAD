@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using static TekstilCAD.Core.Commands.CommandPlannerText;
 
 namespace TekstilCAD.Core.Commands;
@@ -118,6 +120,31 @@ internal sealed partial class PlannerContext
     }
 
     private static Bounds2 BoundsOf(PatternPiece piece) => Geometry.Bounds(piece.Points);
+
+    /// <summary>
+    /// Gives the piece a new id derived from the stamp digest and the command numbers instead of the random one the operation drew,
+    /// so planning the same command on the same content twice gives the same plan. The id is unique in the document.
+    /// </summary>
+    private static Guid Reid(ProjectDocument edited, Guid oldId, string seed)
+    {
+        var piece = edited.Pieces.First(p => p.Id == oldId);
+        for (var salt = 0; ; salt++)
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(seed + "|" + salt));
+            var id = new Guid(hash.AsSpan(0, 16));
+            if (id == Guid.Empty || edited.Pieces.Any(p => p.Id == id)) continue;
+            piece.Id = id;
+            return id;
+        }
+    }
+
+    /// <summary>The bounding box, or null when the piece has no usable points (a command that does not need it must not fail on it).</summary>
+    private static Bounds2? SafeBounds(PatternPiece piece)
+    {
+        if (piece.Points is not { Count: > 0 }) return null;
+        try { return Geometry.Bounds(piece.Points); }
+        catch (ArgumentException) { return null; }
+    }
 
     /// <summary>Maps a refusal of a core operation to its R-code. Texts of the operations are already complete Turkish sentences.</summary>
     private static Refusal MapFailure(PieceOperationResult result)
