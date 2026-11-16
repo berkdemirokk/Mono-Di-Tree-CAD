@@ -52,6 +52,13 @@ internal static class CommandPlannerText
     internal static string LowerFirst(string text) =>
         text.Length == 0 || (text.Length > 1 && char.IsUpper(text[1])) ? text : char.ToLower(text[0], CultureInfo.GetCultureInfo("tr-TR")) + text[1..];
 
+    /// <summary>Text for a one-line sentence: control characters and line breaks become spaces, runs of spaces collapse, long text is shortened.</summary>
+    internal static string OneLine(string? text, int max = 60)
+    {
+        var clean = string.Join(" ", new string((text ?? "").Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return clean.Length <= max ? clean : clean[..max].TrimEnd() + "…";
+    }
+
     /// <summary>The sentence appended to a preview whose number had no unit.</summary>
     internal const string UnitAssumedSentence = "Birim yazmadınız; milimetre sayıldı.";
 }

@@ -106,7 +106,7 @@ internal sealed partial class PlannerContext
     /// <summary>R03: no pieces at all, or pieces but none selected (the buttons select the first three by name).</summary>
     private Refusal NothingSelected() => Doc.Pieces.Count == 0
         ? Refusals.NoPiecesYet()
-        : Refusals.NoPieceSelected(Doc.Pieces.Take(3).Select(p => p.Name ?? ""));
+        : Refusals.NoPieceSelected(Doc.Pieces.Select(p => OneLine(p.Name, 40)).Where(n => n.Length > 0).Take(3));
 
     /// <summary>The selected piece for an edit: guards, then selection, then the layer lock.</summary>
     private bool TryEditTarget(out PatternPiece piece, out PlanResult refusal)
