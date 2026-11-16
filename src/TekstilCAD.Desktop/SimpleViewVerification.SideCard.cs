@@ -98,6 +98,9 @@ internal static partial class SimpleViewVerification
         Simple(fresh, true);
         fresh.ApplyCommand(new CommandEdit("Dikdörtgen çizildi.", "Dikdörtgen", document => document.Pieces.Add(Rectangle("Parça 1", 20, 20, 120, 80)), NeedsSelection: false, AddsPiece: true));
         var drawn = fresh.FirstSteps.IsDone(FirstStep.DrawPiece) && !fresh.FirstSteps.IsDone(FirstStep.ChangeSize);
+        // The executor does not select the new piece yet; the person clicks it, then edits it.
+        fresh.Select(fresh.Document.Pieces[0].Id);
+
         fresh.ApplyCommand(new CommandEdit("Genişlik değişti.", "Ölçü", document => document.Pieces[0].Points = [new(20, 20), new(115, 20), new(115, 100), new(20, 100)]));
         var sized = fresh.FirstSteps.IsDone(FirstStep.ChangeSize) && !fresh.FirstSteps.IsDone(FirstStep.MovePiece);
         fresh.ApplyCommand(new CommandEdit("Parça taşındı.", "Taşıma", document => document.Pieces[0].Points = [new(45, 20), new(140, 20), new(140, 100), new(45, 100)]));
