@@ -25,52 +25,176 @@ private struct ContentView: View {
         }
     }
 
+    /// Every alert and confirmation of the home and viewer screens goes through this one value,
+    /// so two of them can never be asked for at the same time. A follow-up (for example "Ad
+    /// değiştirilemedi" after the rename prompt) waits in `queuedAlerts` until the previous alert
+    /// has finished closing.
+    private struct HomeAlert: Identifiable {
+        enum Kind {
+            case notice(title: String, message: String)
+            case confirmDelete(CADProjectLibrary.Entry)
+            case rename(CADProjectLibrary.Entry)
+            case unreadableDraft(EditorRoute)
+        }
+
+        let id = UUID()
+        let kind: Kind
+
+        var title: String {
+            switch kind {
+            case .notice(let title, _): return title
+            case .confirmDelete(let entry): return "\(entry.name) silinsin mi?"
+            case .rename: return "Adı değiştir"
+            case .unreadableDraft: return "Önceki taslak okunamıyor"
+            }
+        }
+    }
+
+    /// What the home screen says about the autosaved drawing.
+    private struct DraftSummary {
+        let name: String
+        let pieceCount: Int
+        let modified: Date?
+    }
+
     @State private var showingImporter = false
     @State private var showingPieces = false
     @State private var editorRoute: EditorRoute?
-    @State private var blockedRoute: EditorRoute?
-    @State private var hasLocalDraft = false
+    @State private var localDraft: DraftSummary?
     @State private var recentProjects: [CADProjectLibrary.Entry] = []
     @State private var didStart = false
     @State private var recentRefresh = UUID()
     @State private var showAllRecent = false
-    @State private var pendingDelete: CADProjectLibrary.Entry?
-    @State private var renameTarget: CADProjectLibrary.Entry?
     @State private var renameText = ""
+    @State private var alert: HomeAlert?
+    @State private var queuedAlerts: [HomeAlert] = []
+    @State private var alertClosing = false
+    @State private var archiveNotice: String?
+    @State private var announceArchiveOnReturn = false
 
     private static let recentLimit = 10
+    // Long enough for the closing alert's animation to end before the next one is presented.
+    private static let alertGap: TimeInterval = 0.45
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "tr_TR")
+        formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .named
+        return formatter
+    }()
+
+    private var hasLocalDraft: Bool { localDraft != nil }
 
     private var visibleRecentProjects: [CADProjectLibrary.Entry] {
         showAllRecent ? recentProjects : Array(recentProjects.prefix(Self.recentLimit))
     }
 
-    private var deleteTitle: String {
-        pendingDelete.map { "\($0.name) silinsin mi?" } ?? "Proje silinsin mi?"
+    // MARK: Alerts
+
+    private func present(_ kind: HomeAlert.Kind) {
+        let next = HomeAlert(kind: kind)
+        if alert == nil && !alertClosing && queuedAlerts.isEmpty {
+            alert = next
+        } else {
+            queuedAlerts.append(next)
+        }
     }
 
+    private func showNotice(_ title: String, _ message: String) {
+        present(.notice(title: title, message: message))
+    }
+
+    /// SwiftUI may clear the binding before or after it runs the tapped button's action. Only the
+    /// alert that was on screen is cleared, and the next one is shown after a short gap.
+    private var alertBinding: Binding<Bool> {
+        let shownID = alert?.id
+        return Binding(
+            get: { alert != nil },
+            set: { shown in
+                guard !shown, let shownID, alert?.id == shownID else { return }
+                alert = nil
+                alertClosing = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.alertGap) { showNextAlert() }
+            })
+    }
+
+    private func showNextAlert() {
+        alertClosing = false
+        guard alert == nil, !queuedAlerts.isEmpty else { return }
+        alert = queuedAlerts.removeFirst()
+    }
+
+    @ViewBuilder
+    private func alertActions(_ shown: HomeAlert) -> some View {
+        switch shown.kind {
+        case .notice:
+            Button("Tamam", role: .cancel) { }
+        case .confirmDelete(let entry):
+            Button("Sil", role: .destructive) { deleteProject(entry) }
+            Button("Vazgeç", role: .cancel) { }
+        case .rename(let entry):
+            TextField("Yeni ad", text: $renameText)
+            Button("Kaydet") { renameProject(entry, to: renameText) }
+            Button("Vazgeç", role: .cancel) { }
+        case .unreadableDraft(let route):
+            Button("Taslağı ayır ve devam et") { setAsideUnreadableDraftAndContinue(route) }
+            Button("Vazgeç", role: .cancel) { }
+        }
+    }
+
+    private func alertMessage(_ shown: HomeAlert) -> Text {
+        switch shown.kind {
+        case .notice(_, let message):
+            return Text(message)
+        case .confirmDelete:
+            return Text("Bu işlem geri alınamaz. Bu projede kaldığın son çizim de silinir.")
+        case .rename:
+            return Text("Ad 1 ile 120 karakter arasında olmalı.")
+        case .unreadableDraft:
+            return Text("Cihazdaki otomatik taslak bozuk ya da bu sürümle uyumsuz. Dosya silinmez; ayrı bir klasöre taşınır ve yeni çalışma açılır.")
+        }
+    }
+
+    private func announce(_ text: String) {
+        #if canImport(UIKit)
+        UIAccessibility.post(notification: .announcement, argument: text)
+        #endif
+    }
+
+    // MARK: Projects and the autosaved drawing
+
     private func deleteProject(_ entry: CADProjectLibrary.Entry) {
-        pendingDelete = nil
         do {
             try CADProjectLibrary.delete(entry.id)
             recentProjects.removeAll { $0.id == entry.id }
+            announce("\(entry.name) silindi.")
         } catch {
-            self.error = "Proje silinemedi. \(error.localizedDescription)"
+            showNotice("Proje silinemedi", error.localizedDescription)
         }
         refreshProjects()
     }
 
     private func renameProject(_ entry: CADProjectLibrary.Entry, to name: String) {
-        renameTarget = nil
-        do { try CADProjectLibrary.rename(entry.id, to: name) }
-        catch { self.error = "Ad değiştirilemedi. \(error.localizedDescription)" }
+        do {
+            try CADProjectLibrary.rename(entry.id, to: name)
+            if let newName = CADProjectLibrary.validatedName(name) { announce("Yeni ad: \(newName).") }
+        } catch {
+            showNotice("Ad değiştirilemedi", error.localizedDescription)
+        }
         refreshProjects()
     }
 
     private func refreshProjects() {
-        do { hasLocalDraft = try CADLocalDraftStore.restore() != nil }
-        catch {
-            hasLocalDraft = false
-            self.error = "Taslak okunamadı. \(error.localizedDescription) Yeni bir çalışma başlatırken bu taslağı ayırabilirsiniz."
+        do {
+            localDraft = try CADLocalDraftStore.restore().map { draft in
+                DraftSummary(name: draft.name, pieceCount: draft.pieces.count,
+                             modified: CADLocalDraftStore.currentModificationDate())
+            }
+        } catch {
+            localDraft = nil
+            showNotice("Son çizim açılamadı",
+                       "Taslak okunamadı. \(error.localizedDescription) Yeni bir çalışma başlatırken bu taslağı ayırabilirsiniz.")
         }
         recentRefresh = UUID()
     }
@@ -83,7 +207,7 @@ private struct ContentView: View {
         guard !Task.isCancelled else { return }
         switch result {
         case .success(let entries): recentProjects = entries
-        case .failure(let failure): error = "Son projeler okunamadı. \(failure.localizedDescription)"
+        case .failure(let failure): showNotice("Son projeler okunamadı", failure.localizedDescription)
         }
     }
 
@@ -93,40 +217,82 @@ private struct ContentView: View {
                 throw ViewerError.message("Kaydedilmiş taslak bulunamadı.")
             }
             editorRoute = EditorRoute(document: draft)
-        } catch { self.error = error.localizedDescription }
+        } catch { showNotice("Son çizim açılamadı", error.localizedDescription) }
+    }
+
+    private func openProject(_ entry: CADProjectLibrary.Entry) {
+        do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
+        catch {
+            showNotice("Proje açılamadı", error.localizedDescription)
+            refreshProjects()
+        }
+    }
+
+    private func noteArchived(_ name: String?) {
+        archiveNotice = name.map { "Önceki çizimin «\($0)» Son projeler'e kaydedildi." }
+        announceArchiveOnReturn = archiveNotice != nil
     }
 
     private func openEditor(_ route: EditorRoute) {
         do {
-            try CADLocalDraftStore.archiveBeforeSwitch()
+            let archived = try CADLocalDraftStore.archiveBeforeSwitch()
+            noteArchived(archived)
             editorRoute = route
         } catch {
             if CADLocalDraftStore.hasUnreadableDraft() {
                 // A damaged or incompatible draft must not block every new drawing.
                 // Ask before moving it aside; nothing is deleted.
-                blockedRoute = route
+                present(.unreadableDraft(route))
             } else {
-                self.error = "Önceki taslak korunamadığı için yeni çalışma açılmadı. \(error.localizedDescription)"
+                showNotice("Yeni çalışma açılmadı",
+                           "Önceki taslak korunamadığı için yeni çalışma açılmadı. \(error.localizedDescription)")
             }
         }
     }
 
     // The route is passed in by the alert, so this does not depend on whether SwiftUI clears
-    // `blockedRoute` before or after it runs the button action.
+    // the alert before or after it runs the button action.
     private func setAsideUnreadableDraftAndContinue(_ route: EditorRoute) {
-        blockedRoute = nil
         do {
             _ = try CADLocalDraftStore.setAsideUnreadableDraft()
-            try CADLocalDraftStore.archiveBeforeSwitch()
-            hasLocalDraft = false
+            let archived = try CADLocalDraftStore.archiveBeforeSwitch()
+            noteArchived(archived)
+            localDraft = nil
             editorRoute = route
         } catch {
-            self.error = "Okunamayan taslak ayrılamadı; yeni çalışma açılmadı. \(error.localizedDescription)"
+            showNotice("Yeni çalışma açılmadı",
+                       "Okunamayan taslak ayrılamadı; yeni çalışma açılmadı. \(error.localizedDescription)")
         }
     }
 
+    private func editorClosed() {
+        refreshProjects()
+        if announceArchiveOnReturn, let archiveNotice { announce(archiveNotice) }
+        announceArchiveOnReturn = false
+    }
+
+    private func closeViewer() {
+        loadRequest = UUID()
+        isLoading = false
+        showingPieces = false
+        project = nil
+        selectedPiece = nil
+    }
+
+    /// "«Örnek kalıp» • 2 parça • 5 dakika önce değiştirildi"
+    private func draftDetail(_ draft: DraftSummary, now: Date) -> String {
+        var parts = ["«\(draft.name)»", draft.pieceCount == 0 ? "henüz parça yok" : "\(draft.pieceCount) parça"]
+        if let modified = draft.modified {
+            let moment = min(modified, now)
+            let when = now.timeIntervalSince(moment) < 60
+                ? "az önce"
+                : Self.relativeFormatter.localizedString(for: moment, relativeTo: now)
+            parts.append("\(when) değiştirildi")
+        }
+        return parts.joined(separator: " • ")
+    }
+
     @State private var project: Drawing?
-    @State private var error: String?
     @State private var selectedPiece: Int?
     @State private var drawingRevision = UUID()
     @State private var loadRequest = UUID()
@@ -134,78 +300,9 @@ private struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            if isLoading { ProgressView("Proje açılıyor…") }
+            if isLoading { ProgressView("Dosya açılıyor…") }
             if let project {
-                HStack {
-                    Button {
-                        loadRequest = UUID()
-                        isLoading = false
-                        self.project = nil
-                        selectedPiece = nil
-                    } label: {
-                        Label("Projeler", systemImage: "chevron.backward")
-                            .frame(minHeight: 44)
-                    }
-                    Spacer()
-                    Text(project.name).font(.headline).lineLimit(1)
-                }
-                if hasLocalDraft { resumeButton }
-                if let editableDraft = project.editableDraft {
-                    Button {
-                        var copy = editableDraft
-                        copy.id = UUID()
-                        openEditor(EditorRoute(document: copy))
-                    } label: {
-                        Label("Kopyasını düzenle", systemImage: "square.on.square")
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                    }
-                    .buttonStyle(.appPrimary)
-                    .accessibilityHint("Bu basit çizimin yeni düzenlenebilir bir kopyasını açar. Kaynak dosyayı değiştirmez.")
-                }
-                if let notice = project.formatNotice {
-                    Text(notice)
-                        .font(.caption)
-                        .foregroundStyle(Color(red: 0.60, green: 0.30, blue: 0.0))
-                        .accessibilityAddTraits(.isStaticText)
-                }
-                if project.pieces.contains(where: { $0.points.count > 1 }) {
-                    Button { showingPieces = true } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Gösterilen parça").font(.caption).foregroundStyle(AppTheme.muted)
-                                Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
-                                    .font(.headline).lineLimit(1)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(AppTheme.muted)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Parçaları aramak veya seçmek için açın")
-                    .sheet(isPresented: $showingPieces) {
-                        PiecePicker(pieces: project.pieces, selection: $selectedPiece)
-                    }
-                    if let selectedPiece {
-                        PieceDetails(piece: project.pieces[selectedPiece])
-                    }
-                    DrawingView(
-                        pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces,
-                        bounds: selectedPiece.flatMap { project.pieces[$0].bounds } ?? project.bounds,
-                        label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi"
-                    )
-                        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
-                        .background(Color.secondary.opacity(0.08))
-                } else {
-                    Text("Bu projede görüntülenebilir kontur yok.")
-                        .foregroundStyle(AppTheme.muted)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.secondary.opacity(0.08))
-                }
-                Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
-                    .font(.caption).foregroundStyle(AppTheme.muted)
+                viewer(project)
             } else {
                 home.disabled(isLoading)
             }
@@ -213,7 +310,7 @@ private struct ContentView: View {
         .padding()
         .frame(minWidth: 300, minHeight: 300)
         .background(AppTheme.page.ignoresSafeArea())
-        .sheet(item: $editorRoute, onDismiss: refreshProjects) { route in
+        .sheet(item: $editorRoute, onDismiss: editorClosed) { route in
             EasyCADWorkspace(example: route.example, imported: route.document)
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
@@ -236,25 +333,32 @@ private struct ContentView: View {
                             selectedPiece = nil
                             drawingRevision = UUID()
                             project = drawing
-                        case .failure(let error):
-                            self.error = error.localizedDescription
+                        case .failure(let failure):
+                            showNotice("Dosya açılamadı", failure.localizedDescription)
                         }
                     }
                 }
             } catch let failure as NSError where failure.domain == NSCocoaErrorDomain && failure.code == NSUserCancelledError {
                 // The Files picker was dismissed without selecting a project.
-            } catch { self.error = error.localizedDescription }
+            } catch { showNotice("Dosya açılamadı", error.localizedDescription) }
         }
         .onAppear {
             guard !didStart else { return }
             didStart = true
             #if DEBUG && targetEnvironment(simulator)
-            if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-draft") {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--ui-test-reset-draft") {
                 CADLocalDraftStore.discard()
                 CADProjectLibrary.resetTestLibrary()
             }
-            if ProcessInfo.processInfo.arguments.contains("--ui-test-unreadable-draft") {
+            if arguments.contains("--ui-test-unreadable-draft") {
                 CADLocalDraftStore.writeUnreadableDraftForTesting()
+            }
+            if arguments.contains("--ui-test-seed-projects") {
+                CADProjectLibrary.seedProjectsForTesting(count: 12)
+            }
+            if arguments.contains("--ui-test-unreadable-project") {
+                CADProjectLibrary.writeUnreadableProjectForTesting()
             }
             #endif
             refreshProjects()
@@ -271,53 +375,33 @@ private struct ContentView: View {
                 selectedPiece = nil
                 drawingRevision = UUID()
                 project = drawing
-            } catch { self.error = error.localizedDescription }
+            } catch { showNotice("Dosya açılamadı", error.localizedDescription) }
             #endif
         }
         .task(id: recentRefresh) {
             if didStart { await readRecentProjects() }
         }
-        .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button("Tamam", role: .cancel) { error = nil }
-        } message: { Text(error ?? "") }
-        .alert("Önceki taslak okunamıyor", isPresented: Binding(
-            get: { blockedRoute != nil }, set: { if !$0 { blockedRoute = nil } }), presenting: blockedRoute) { route in
-            Button("Taslağı ayır ve devam et") { setAsideUnreadableDraftAndContinue(route) }
-            Button("Vazgeç", role: .cancel) { blockedRoute = nil }
-        } message: { _ in
-            Text("Cihazdaki otomatik taslak bozuk ya da bu sürümle uyumsuz. Dosya silinmez; ayrı bir klasöre taşınır ve yeni çalışma açılır.")
-        }
-        .confirmationDialog(deleteTitle, isPresented: Binding(
-            get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            titleVisibility: .visible, presenting: pendingDelete) { entry in
-            Button("Sil", role: .destructive) { deleteProject(entry) }
-            Button("Vazgeç", role: .cancel) { }
-        } message: { _ in
-            Text("Bu geri alınamaz. Bu projenin otomatik kaydedilen son çizimi de silinir.")
-        }
-        .alert("Adı değiştir", isPresented: Binding(
-            get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } }),
-            presenting: renameTarget) { entry in
-            TextField("Yeni ad", text: $renameText)
-            Button("Kaydet") { renameProject(entry, to: renameText) }
-            Button("Vazgeç", role: .cancel) { }
-        } message: { _ in
-            Text("Ad 1 ile 120 karakter arasında olmalı.")
+        .alert(alert?.title ?? "", isPresented: alertBinding, presenting: alert) { shown in
+            alertActions(shown)
+        } message: { shown in
+            alertMessage(shown)
         }
     }
+
+    // MARK: Home
 
     @ViewBuilder
     private func recentActions(_ entry: CADProjectLibrary.Entry) -> some View {
         if entry.readable {
             Button {
                 renameText = entry.name
-                renameTarget = entry
+                present(.rename(entry))
             } label: {
                 Label("Adı değiştir", systemImage: "pencil")
             }
         }
         Button(role: .destructive) {
-            pendingDelete = entry
+            present(.confirmDelete(entry))
         } label: {
             Label("Sil", systemImage: "trash")
         }
@@ -325,11 +409,123 @@ private struct ContentView: View {
 
     private var resumeButton: some View {
         Button(action: resumeEditor) {
-            Label("Son çizime devam et", systemImage: "clock.arrow.circlepath")
-                .frame(maxWidth: .infinity, minHeight: 48)
+            HStack(spacing: 12) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Son çizime devam et").font(.headline)
+                    if let localDraft {
+                        TimelineView(.everyMinute) { context in
+                            Text(draftDetail(localDraft, now: context.date))
+                                .font(.subheadline)
+                                .foregroundStyle(AppTheme.muted)
+                                .lineLimit(3)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.forward").font(.caption)
+                    .foregroundStyle(AppTheme.muted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         }
         .buttonStyle(.appSecondary)
-        .accessibilityHint("Cihazda otomatik kaydedilmiş taslağı açar.")
+        // The label stays the short action name; which drawing it is goes into the value.
+        .accessibilityLabel("Son çizime devam et")
+        .accessibilityValue(localDraft.map { draftDetail($0, now: Date()) } ?? "")
+        .accessibilityHint("Cihazda otomatik kaydedilmiş çizimi açar.")
+    }
+
+    @ViewBuilder
+    private var archiveNoticeView: some View {
+        if let archiveNotice {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(AppTheme.accent)
+                    .accessibilityHidden(true)
+                Text(archiveNotice)
+                    .font(.subheadline)
+                    .foregroundStyle(AppTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("archive-notice")
+                Spacer(minLength: 0)
+                Button { self.archiveNotice = nil } label: {
+                    Image(systemName: "xmark")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AppTheme.muted)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Bildirimi kapat")
+            }
+            .padding(.leading, 12)
+            .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    @ViewBuilder
+    private func recentRow(_ entry: CADProjectLibrary.Entry) -> some View {
+        HStack(spacing: 4) {
+            if entry.readable {
+                Button { openProject(entry) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "doc.text")
+                            .foregroundStyle(AppTheme.accent)
+                            .frame(width: 36, height: 36)
+                            .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.name).foregroundStyle(AppTheme.ink)
+                            Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
+                                .font(.caption).foregroundStyle(AppTheme.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.forward").font(.caption)
+                            .foregroundStyle(AppTheme.muted)
+                    }
+                    .frame(minHeight: 48)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(entry.name)
+                .accessibilityValue(entry.modified.formatted(.dateTime.day().month().year().hour().minute()))
+                .accessibilityHint("Projeyi açar.")
+                .accessibilityIdentifier("recent-\(entry.id.uuidString)")
+            } else {
+                // A file that cannot be read is listed so it can be removed, but it never tries to open.
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(AppTheme.muted)
+                        .frame(width: 36, height: 36)
+                        .background(AppTheme.line.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.name).foregroundStyle(AppTheme.muted)
+                        Text("Okunamıyor").font(.caption).foregroundStyle(AppTheme.muted)
+                    }
+                    Spacer()
+                }
+                .frame(minHeight: 48)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Bu proje açılamaz. Silmek için işlemler düğmesini kullan.")
+                .accessibilityIdentifier("unreadable-\(entry.id.uuidString)")
+            }
+            Menu {
+                recentActions(entry)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.muted)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("\(entry.name) için işlemler")
+            .accessibilityIdentifier("project-actions-\(entry.id.uuidString)")
+        }
+        .contextMenu { recentActions(entry) }
     }
 
     private var home: some View {
@@ -380,49 +576,14 @@ private struct ContentView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Son projeler").font(.headline).foregroundStyle(AppTheme.ink)
                         .accessibilityAddTraits(.isHeader)
+                    archiveNoticeView
                     if hasLocalDraft { resumeButton }
                     if recentProjects.isEmpty && !hasLocalDraft {
                         Text("Kaydettiğin projeler burada görünür.")
                             .font(.subheadline).foregroundStyle(AppTheme.muted)
                     }
                     ForEach(visibleRecentProjects) { entry in
-                        HStack(spacing: 4) {
-                            Button {
-                                do { openEditor(EditorRoute(document: try CADProjectLibrary.open(entry.id))) }
-                                catch { self.error = "Proje açılamadı. \(error.localizedDescription)" }
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "doc.text")
-                                        .foregroundStyle(AppTheme.accent)
-                                        .frame(width: 36, height: 36)
-                                        .background(AppTheme.accentSoft, in: RoundedRectangle(cornerRadius: 10))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(entry.name).foregroundStyle(AppTheme.ink)
-                                        Text(entry.modified, format: .dateTime.day().month().year().hour().minute())
-                                            .font(.caption).foregroundStyle(AppTheme.muted)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "chevron.forward").font(.caption)
-                                        .foregroundStyle(AppTheme.muted)
-                                }
-                                .frame(minHeight: 48)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("recent-\(entry.id.uuidString)")
-                            Menu {
-                                recentActions(entry)
-                            } label: {
-                                Image(systemName: "ellipsis.circle")
-                                    .font(.title3)
-                                    .foregroundStyle(AppTheme.muted)
-                                    .frame(width: 44, height: 44)
-                                    .contentShape(Rectangle())
-                            }
-                            .accessibilityLabel("\(entry.name) için işlemler")
-                            .accessibilityIdentifier("project-actions-\(entry.id.uuidString)")
-                        }
-                        .contextMenu { recentActions(entry) }
+                        recentRow(entry)
                     }
                     if recentProjects.count > Self.recentLimit {
                         Button { showAllRecent.toggle() } label: {
@@ -442,6 +603,144 @@ private struct ContentView: View {
         }
     }
 
+    // MARK: File viewer
+
+    private func viewer(_ project: Drawing) -> some View {
+        GeometryReader { outer in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Button(action: closeViewer) {
+                        Label("Ana ekrana dön", systemImage: "chevron.backward")
+                    }
+                    .buttonStyle(.appSecondary)
+                    .accessibilityHint("Önizlemeyi kapatır ve ana ekrana döner.")
+                    .accessibilityIdentifier("viewer-back")
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Dosya önizlemesi").font(.subheadline).foregroundStyle(AppTheme.muted)
+                        Text(project.name).font(.title2.bold()).foregroundStyle(AppTheme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+
+                    archiveNoticeView
+                    if hasLocalDraft { resumeButton }
+
+                    viewerActions(project)
+
+                    if let notice = project.formatNotice {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Self.warning)
+                                .accessibilityHidden(true)
+                            Text(notice)
+                                .font(.subheadline)
+                                .foregroundStyle(Self.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isStaticText)
+                        }
+                        .appCard()
+                    }
+
+                    if project.pieces.contains(where: { $0.points.count > 1 }) {
+                        piecePickerButton(project)
+                        VStack(alignment: .leading, spacing: 10) {
+                            DrawingView(
+                                pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces,
+                                bounds: selectedPiece.flatMap { project.pieces[$0].bounds } ?? project.bounds,
+                                label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) önizlemesi" }
+                                    ?? "\(project.pieces.count) parçanın önizlemesi"
+                            )
+                            .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
+                            .frame(height: max(260, min(outer.size.height * 0.55, 560)))
+                            .background(AppTheme.page)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            if project.pieces.contains(where: { $0.grain != nil }) {
+                                Text("Oklar kumaşın yönünü gösterir. Kesikli turuncu ok, yönün kontrol edilmesi gerektiği anlamına gelir.")
+                                    .font(.caption).foregroundStyle(AppTheme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            viewerFooter(project)
+                        }
+                        .appCard()
+                        if let selectedPiece {
+                            PieceDetails(piece: project.pieces[selectedPiece])
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Bu dosyada gösterilecek parça yok.")
+                                .foregroundStyle(AppTheme.muted)
+                            viewerFooter(project)
+                        }
+                        .appCard()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private static let warning = Color(red: 0.60, green: 0.30, blue: 0.0)
+
+    private func viewerFooter(_ project: Drawing) -> some View {
+        Text("\(project.pieces.count) parça • Ekrana sığdırıldı; kesim için kullanmayın")
+            .font(.caption).foregroundStyle(AppTheme.muted)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private func viewerActions(_ project: Drawing) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let editableDraft = project.editableDraft {
+                Text("Bu dosyayı değiştirmeden bir kopyasını açıp düzenleyebilirsin.")
+                    .font(.subheadline).foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    var copy = editableDraft
+                    copy.id = UUID()
+                    openEditor(EditorRoute(document: copy))
+                } label: {
+                    Label("Kopyasını düzenle", systemImage: "square.on.square")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.appPrimary)
+                .accessibilityHint("Bu basit çizimin yeni düzenlenebilir bir kopyasını açar. Kaynak dosyayı değiştirmez.")
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "eye")
+                        .foregroundStyle(AppTheme.accent)
+                        .accessibilityHidden(true)
+                    Text("Bu dosya burada yalnızca görüntülenebilir; düzenlemek için bilgisayardaki programı kullan.")
+                        .font(.subheadline).foregroundStyle(AppTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .appCard()
+    }
+
+    private func piecePickerButton(_ project: Drawing) -> some View {
+        Button { showingPieces = true } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Gösterilen parça").font(.caption).foregroundStyle(AppTheme.muted)
+                    Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
+                        .font(.headline).foregroundStyle(AppTheme.ink).lineLimit(2)
+                }
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").foregroundStyle(AppTheme.muted)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .appCard()
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.radius))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Parçaları aramak veya tek bir parçayı seçmek için açın")
+        .sheet(isPresented: $showingPieces) {
+            PiecePicker(pieces: project.pieces, selection: $selectedPiece)
+        }
+    }
 }
 
 private enum ViewerError: LocalizedError {
@@ -649,12 +948,12 @@ private struct Drawing {
                sx.isFinite, sy.isFinite, ex.isFinite, ey.isFinite,
                [sx, sy, ex, ey].allSatisfy({ abs($0) < 1e100 }),
                (sx != ex || sy != ey), let review = jsonBoolean(grain["NeedsReview"]) {
-                grainStatus = review ? "İplik yönü: Kontrol bekliyor" : "İplik yönü: Kayıtlı"
+                grainStatus = review ? "Kumaş yönü: Kontrol edilmeli" : "Kumaş yönü: Dosyada var"
                 parsedGrain = Grain(start: Point(x: sx, y: sy), end: Point(x: ex, y: ey), needsReview: review)
             } else if raw["Grainline"] == nil || raw["Grainline"] is NSNull {
-                grainStatus = "İplik yönü: Belirtilmemiş"
+                grainStatus = "Kumaş yönü: Dosyada yok"
             } else {
-                grainStatus = "İplik yönü: Okunamadı"
+                grainStatus = "Kumaş yönü: Okunamadı"
             }
             if points.count > 1, let pieceBounds {
                 if bounds == nil { bounds = pieceBounds }
@@ -666,9 +965,9 @@ private struct Drawing {
                                 grainStatus: grainStatus, grain: parsedGrain))
         }
         let formatNotice = schemaVersion == 9
-            ? "Sürüm 9 yalnız kontur önizlemesi: Bézier/yay kontrol parametreleri iPhone'da düzenlenemez veya bağımsız doğrulanamaz. Windows CAD ile açın. Fabrika veya kesim doğrulaması değildir."
+            ? "Bu dosya bilgisayardaki programın yeni biçimiyle (sürüm 9) kaydedilmiş. Burada yalnızca parçaların çizgileri gösterilir; eğriler düzenlenemez ve denetlenemez. Kesmeden önce dosyayı bilgisayarda açıp kontrol et."
             : schemaVersion >= 6
-            ? "Sürüm \(schemaVersion) yalnız kontur önizlemesi: çentikler, döndürülmüş pastal izleri ve katman görünürlüğü uygulanmaz. Fabrika veya kesim doğrulaması değildir."
+            ? "Bu dosya bilgisayardaki programın yeni biçimiyle (sürüm \(schemaVersion)) kaydedilmiş. Burada yalnızca parçaların çizgileri gösterilir; çentikler, kesim yerleşimi ve katmanlar gösterilmez. Kesmeden önce dosyayı bilgisayarda açıp kontrol et."
             : nil
         let editableDraft = CADSketchImport.loadEditableCopy(from: data, jsonRoot: root)
         return Drawing(name: name, pieces: pieces, bounds: bounds, formatNotice: formatNotice,
@@ -698,7 +997,7 @@ private struct PiecePicker: View {
                     selectionRow(title: pieces[index].displayName(index: index), index: index)
                 }
                 if matchingIndices.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Eşleşen parça bulunamadı.")
+                    Text("Bu adla bir parça yok.")
                         .foregroundStyle(AppTheme.muted)
                 }
             }
@@ -710,6 +1009,7 @@ private struct PiecePicker: View {
                 }
             }
         }
+        .tint(AppTheme.accent)
     }
 
     private func selectionRow(title: String, index: Int?) -> some View {
@@ -718,10 +1018,10 @@ private struct PiecePicker: View {
             dismiss()
         } label: {
             HStack {
-                Text(title).foregroundStyle(.primary)
+                Text(title).foregroundStyle(AppTheme.ink)
                 Spacer()
                 if selection == index {
-                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                    Image(systemName: "checkmark").foregroundStyle(AppTheme.accent)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
@@ -736,22 +1036,22 @@ private struct PieceDetails: View {
 
     var body: some View {
         if let bounds = piece.bounds {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Kontur bilgisi").font(.subheadline.bold())
-                Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Parça bilgisi").font(.headline).foregroundStyle(AppTheme.ink)
+                Text("\(piece.points.count) nokta • \(piece.closed ? "Çevresi kapalı parça" : "Açık çizgi (uçlar birleşmiyor)")")
                 if let role = piece.role, !role.isEmpty { Text("Rol: \(role)") }
                 if let size = piece.size, !size.isEmpty { Text("Beden: \(size)") }
                 if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 Text(piece.grainStatus)
                 Text("En: \((bounds.maxX - bounds.minX).formatted(.number.precision(.fractionLength(0...2)))) • Boy: \((bounds.maxY - bounds.minY).formatted(.number.precision(.fractionLength(0...2))))")
-                Text("Boyutlar dosyadaki koordinat birimindedir.")
+                Text("En ve boy dosyadaki sayılarla gösterilir; birimi (mm, cm) dosyayı hazırlayan programa bağlıdır.")
                     .foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .font(.caption)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(8)
-            .background(Color.secondary.opacity(0.08))
+            .font(.subheadline)
+            .foregroundStyle(AppTheme.ink)
+            .appCard()
             .accessibilityElement(children: .combine)
         }
     }
@@ -790,7 +1090,7 @@ private struct DrawingView: View {
                     .offset(currentOffset)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .accessibilityLabel(label)
-                    .accessibilityHint("Yakınlaştırmak için iki parmağınızı kullanın; çizimi taşımak için sürükleyin.")
+                    .accessibilityHint("Yakınlaştırmak için iki parmağını aç; çizimi taşımak için sürükle.")
                     .accessibilityValue("Yüzde \(Int(currentZoom * 100))")
                     .accessibilityAdjustableAction { direction in
                         switch direction {
@@ -803,12 +1103,10 @@ private struct DrawingView: View {
                 VStack(alignment: .trailing, spacing: 8) {
                     Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
                     if pieces.contains(where: { $0.grain != nil }) {
-                        Button(showGrain ? "İplik yönlerini gizle" : "İplik yönlerini göster") { showGrain.toggle() }
+                        Button(showGrain ? "Kumaş yönünü gizle" : "Kumaş yönünü göster") { showGrain.toggle() }
                     }
                 }
-                .font(.caption)
-                .padding(8)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .buttonStyle(.appSecondary)
                 .padding(8)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -852,7 +1150,7 @@ private struct DrawingView: View {
                 path.move(to: position(first))
                 for point in piece.points.dropFirst() { path.addLine(to: position(point)) }
                 if piece.closed && piece.points.count > 1 { path.closeSubpath() }
-                context.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
+                context.stroke(path, with: .color(AppTheme.accent), lineWidth: 1.5)
                 if showGrain, let grain = piece.grain {
                     let start = position(grain.start), end = position(grain.end)
                     let dx = end.x - start.x, dy = end.y - start.y
@@ -865,7 +1163,7 @@ private struct DrawingView: View {
                     grainPath.move(to: CGPoint(x: end.x - ux * arrow - uy * arrow * 0.5, y: end.y - uy * arrow + ux * arrow * 0.5))
                     grainPath.addLine(to: end)
                     grainPath.addLine(to: CGPoint(x: end.x - ux * arrow + uy * arrow * 0.5, y: end.y - uy * arrow - ux * arrow * 0.5))
-                    context.stroke(grainPath, with: .color(grain.needsReview ? .orange : .primary),
+                    context.stroke(grainPath, with: .color(grain.needsReview ? .orange : AppTheme.ink),
                                    style: StrokeStyle(lineWidth: 1.5, dash: grain.needsReview ? [4, 3] : []))
                 }
             }
