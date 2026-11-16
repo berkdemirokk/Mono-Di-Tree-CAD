@@ -25,10 +25,11 @@ public partial class MainWindow
         private ICommandBarHost? commandBar;
         private Border? commandRegion;
         private SideCardView? card;
-        private Button? switchButton, openButton, saveButton, allToolsButton, openCancelProxy;
+        private Button? switchButton, themeButton, openButton, saveButton, allToolsButton, openCancelProxy;
         private TextBlock? railCaption, railHint, footerNote, scaleWarning;
         private bool switchMounted, switchPermanent, built;
         private int textScale = 100;
+        internal int TextScale => textScale;
         private readonly Dictionary<string, UIElement> toolIcons = [];
 
         internal SimpleViewController(MainWindow window) => w = window;
@@ -84,6 +85,11 @@ public partial class MainWindow
             switchButton.ToolTip = "Yoğun, ayrıntılı ekran · F9";
             DockPanel.SetDock(switchButton, Dock.Right);
             switchButton.Click += (_, _) => w.ToggleSimpleView();
+
+            // Same code path as the switch in the About window; the label names the theme a click would give.
+            themeButton = new Button { MinHeight = 32, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(8, 0, 0, 0), FontSize = 12, Cursor = Cursors.Hand };
+            DockPanel.SetDock(themeButton, Dock.Left);
+            themeButton.Click += (_, _) => w.SetStatus(InterfaceSettings.ToggleTheme());
 
             railCaption = new TextBlock { Text = "Fareyle çiz", FontSize = 12, Foreground = StudioTheme.Muted, Margin = new Thickness(4, 8, 0, 7) };
             railHint = new TextBlock { Text = "Çizerken: Enter kapatır · Esc vazgeçer", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 14, 0, 0), Focusable = true };
@@ -162,6 +168,9 @@ public partial class MainWindow
             MountSwitch(r);
             r.Set(switchButton!, DockPanel.DockProperty, Dock.Left);
             r.Set(switchButton!, FrameworkElement.MarginProperty, new Thickness(0));
+            r.Add(w.brandLinePanel, themeButton!, w.brandLinePanel.Children.IndexOf(switchButton!) + 1);
+            Action updateTheme = UpdateThemeButton;
+            r.Do(() => { StudioTheme.Changed += updateTheme; UpdateThemeButton(); }, () => StudioTheme.Changed -= updateTheme);
             r.Set(w.sourceHistoryDetails, ContentControl.ContentProperty, "Kaynak ve aktarım notları");
             if (w.modeChip.Child is TextBlock modeText)
             {
@@ -213,6 +222,14 @@ public partial class MainWindow
                 // In the interactive detailed layout the switch button stays where the tagline was.
                 if (switchPermanent) MountSwitchPermanently();
             }
+        }
+
+        private void UpdateThemeButton()
+        {
+            var name = InterfaceSettings.IsLight ? "Koyu tema" : "Açık tema";
+            themeButton!.Content = name;
+            AutomationProperties.SetName(themeButton, name + "ya geç");
+            themeButton.ToolTip = "Koyu ve açık görünüm arasında geçer; seçiminiz saklanır";
         }
 
         private static double InspectorWidth(double windowWidth) => windowWidth >= 1200 || windowWidth == 0 ? 320 : 300;

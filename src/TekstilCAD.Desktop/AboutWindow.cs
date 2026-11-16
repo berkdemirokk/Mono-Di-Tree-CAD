@@ -149,11 +149,9 @@ internal sealed class AboutWindow : Window
     /// <summary>Switches between the dark and the light palette; every open window repaints at once, and the choice is saved.</summary>
     internal void SwitchTheme()
     {
-        var next = ReferenceEquals(StudioTheme.Current, TekstilCAD.Core.Theme.ThemePalette.Light) ? TekstilCAD.Core.Theme.ThemePalette.Dark : TekstilCAD.Core.Theme.ThemePalette.Light;
-        StudioTheme.Use(next);
+        var text = InterfaceSettings.ToggleTheme();
         UpdateThemeToggle();
-        var saved = (TekstilCAD.Core.Theme.UiPreferences.Load(AppPaths.UiPreferencesPath) with { Theme = next.Name }).Save(AppPaths.UiPreferencesPath);
-        Announce((next.Name == "Light" ? "Açık görünüm kullanılıyor." : "Koyu görünüm kullanılıyor.") + (saved ? "" : " Seçim kaydedilemedi; uygulama yeniden açılınca önceki görünüm geri gelir."));
+        Announce(text);
     }
 
     private void Announce(string text)

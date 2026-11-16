@@ -5,7 +5,7 @@ namespace TekstilCAD.Core.Theme;
 /// <summary>
 /// Interface preferences stored in <c>ui.json</c>: the layout (<c>view</c>), the colour theme (<c>theme</c>), the text scale
 /// (<c>textScale</c>, percent), the recent project files (<c>recent</c>) and the completed first steps (<c>firstSteps</c>).
-/// The file is tiny and optional: a missing, oversized, corrupt or partly wrong file yields the defaults for what is wrong and
+/// The file carries a <c>schema</c> number (see <see cref="CurrentSchema"/>). The file is tiny and optional: a missing, oversized, corrupt or partly wrong file yields the defaults for what is wrong and
 /// keeps what is valid. It is read only by the interactive start path, never by a window constructor, so headless verification
 /// does not depend on it. Writing goes through a temporary file so a crash never leaves a half-written file.
 /// </summary>
@@ -17,11 +17,18 @@ public sealed record UiPreferences
     public const string DetailedView = "detailed";
     public const string SimpleView = "simple";
 
-    /// <summary>"detailed" (the original dense layout, the default) or "simple".</summary>
-    public string View { get; init; } = DetailedView;
+    /// <summary>
+    /// The schema number this build writes. A file without it (or with a smaller one) comes from a build whose defaults were
+    /// "detailed" + "Dark": that exact pair is read as "never chose" and moves to the new defaults. From schema 2 on, every value is
+    /// the user's own choice and is kept.
+    /// </summary>
+    public const int CurrentSchema = 2;
 
-    /// <summary>"Dark" (the default) or "Light"; the names of <see cref="ThemePalette"/>.</summary>
-    public string Theme { get; init; } = ThemePalette.Dark.Name;
+    /// <summary>"simple" (the default) or "detailed" (the original dense layout).</summary>
+    public string View { get; init; } = SimpleView;
+
+    /// <summary>"Light" (the default) or "Dark"; the names of <see cref="ThemePalette"/>.</summary>
+    public string Theme { get; init; } = ThemePalette.Light.Name;
 
     /// <summary>Text scale in percent: 100, 115 or 130.</summary>
     public int TextScale { get; init; } = 100;
@@ -32,7 +39,7 @@ public sealed record UiPreferences
     /// <summary>Identifiers of the first-step tips the user has finished.</summary>
     public IReadOnlyList<string> FirstSteps { get; init; } = [];
 
-    public ThemePalette Palette => ThemePalette.ByName(Theme) ?? ThemePalette.Dark;
+    public ThemePalette Palette => ThemePalette.ByName(Theme) ?? ThemePalette.Light;
 
     /// <summary>Reads preferences from JSON text; never throws. Invalid parts fall back to their defaults.</summary>
     public static UiPreferences Parse(string? json)
@@ -46,10 +53,12 @@ public sealed record UiPreferences
             var view = Text(root, "view");
             var theme = Text(root, "theme");
             var scale = root.TryGetProperty("textScale", out var scaleElement) && scaleElement.ValueKind == JsonValueKind.Number && scaleElement.TryGetInt32(out var percent) ? percent : 100;
+            var schema = root.TryGetProperty("schema", out var schemaElement) && schemaElement.ValueKind == JsonValueKind.Number && schemaElement.TryGetInt32(out var number) ? number : 1;
+            var neverChose = schema < CurrentSchema && view == DetailedView && ThemePalette.ByName(theme) == ThemePalette.Dark;
             return new UiPreferences
             {
-                View = view is DetailedView or SimpleView ? view : DetailedView,
-                Theme = ThemePalette.ByName(theme)?.Name ?? ThemePalette.Dark.Name,
+                View = !neverChose && view == DetailedView ? DetailedView : SimpleView,
+                Theme = !neverChose && ThemePalette.ByName(theme) is { } palette ? palette.Name : ThemePalette.Light.Name,
                 TextScale = scale is 100 or 115 or 130 ? scale : 100,
                 Recent = RecentProjects.Normalize(Strings(root, "recent")),
                 FirstSteps = Strings(root, "firstSteps").Where(step => step.Length is > 0 and <= 64).Distinct(StringComparer.Ordinal).Take(64).ToArray(),
@@ -61,6 +70,7 @@ public sealed record UiPreferences
     /// <summary>The JSON text of these preferences.</summary>
     public string ToJson() => JsonSerializer.Serialize(new Dictionary<string, object>
     {
+        ["schema"] = CurrentSchema,
         ["view"] = View,
         ["theme"] = Theme,
         ["textScale"] = TextScale,
