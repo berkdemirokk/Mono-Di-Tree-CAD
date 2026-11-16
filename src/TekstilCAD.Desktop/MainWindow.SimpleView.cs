@@ -4,7 +4,7 @@ using TekstilCAD.Core.Theme;
 
 namespace TekstilCAD.Desktop;
 
-/// <summary>The command box region of the simple view. The placeholder below is replaced by the real command bar view.</summary>
+/// <summary>The command box region of the simple view. Implemented by CommandBarViewHost.</summary>
 internal interface ICommandBarHost
 {
     /// <summary>Root of the region (the box and its help row); the simple view docks it under the header.</summary>
@@ -46,8 +46,8 @@ public partial class MainWindow
     private SimpleViewController? simpleView;
     private bool simpleViewSwitching;
 
-    /// <summary>Creates the command box region; the command box branch replaces this factory with its own view.</summary>
-    internal static Func<MainWindow, ICommandBarHost> CommandBarFactory { get; set; } = window => new PlaceholderCommandBar(window);
+    /// <summary>Creates the command box region; verification may replace it.</summary>
+    internal static Func<MainWindow, ICommandBarHost> CommandBarFactory { get; set; } = window => new CommandBarViewHost(window);
 
     internal bool IsSimpleView => simpleView is { IsAttached: true };
 

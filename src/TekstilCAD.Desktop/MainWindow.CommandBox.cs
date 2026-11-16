@@ -121,6 +121,8 @@ public partial class MainWindow
         if(modifiers==ModifierKeys.Control && key==Key.K)
         {
             if(windowClosed || recoveryClosing)return false;
+            // The simple view has its own box in the page: Ctrl+K goes there instead of opening a second one.
+            if(FocusSimpleCommandBar())return true;
             OpenCommandBox();return true;
         }
         if(modifiers==ModifierKeys.None && key==Key.Escape && IsCommandBoxOpen)

@@ -78,6 +78,8 @@ public partial class MainWindow
             commandRegion = new Border { Margin = new Thickness(16, 8, 16, 6), Child = row };
             AutomationProperties.SetName(commandRegion, "Komut çubuğu");
             DockPanel.SetDock(commandRegion, Dock.Top);
+            // Above the workspace, so a preview card that grows past the region is drawn and clicked over the canvas.
+            System.Windows.Controls.Panel.SetZIndex(commandRegion, 1);
 
             switchButton = new Button { Content = "Ayrıntılı görünüm", MinHeight = 32, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(10, 0, 0, 0), FontSize = 12, Cursor = Cursors.Hand };
             AutomationProperties.SetName(switchButton, "Ayrıntılı görünüme geç");
