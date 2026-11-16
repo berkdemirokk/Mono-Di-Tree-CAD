@@ -18,6 +18,14 @@ concurrency:
 
 jobs:
   build-and-test:
+    # macOS runners are scarce. Desktop branches stacked on a base that contains Apple/
+    # changes matched the paths filter and queued here too, so runs never started.
+    # Run for iPhone branches, manual runs, or a PR labelled "ios-ci".
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.head_ref, 'ios') ||
+      contains(github.head_ref, 'iphone') ||
+      contains(github.event.pull_request.labels.*.name, 'ios-ci')
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
