@@ -9,6 +9,13 @@ namespace TekstilCAD.Desktop;
 // PR 3b: planner plans applied by the executor. Expected values are written out by hand (whole-number geometry).
 internal static partial class CommandVerification
 {
+    // An open piece made of a line and a cubic curve (the shape the project validator accepts for curves).
+    private static PatternPiece CurvedFixture(string name)
+    {
+        List<CurveSegment> curves=[new CurveSegment.Line(new(0,0),new(10,0)),new CurveSegment.CubicBezier(new(10,0),new(20,0),new(30,10),new(40,10))];
+        return new PatternPiece { Name=name,Closed=false,Curves=curves,Points=ParametricContour.Sample(curves) };
+    }
+
     private static Plan PlanOf(MainWindow window,string text)
         =>window.PreviewCommand(text,true).Plan ?? throw new InvalidOperationException($"No plan for “{text}”: {window.PreviewCommand(text,true).Text}");
 
@@ -88,7 +95,7 @@ internal static partial class CommandVerification
             var bounds=Geometry.Bounds(window.Document.Pieces.Single().Points);
             Check(outcome.Result==CommandResult.Applied && bounds.MinX==10 && bounds.MinY==10 && bounds.Width==95 && bounds.Height==80 && SessionOf(window).UndoCount==1,
                 "Command executor resize keeps the top left corner and the other side",checks);
-            var curved=new PatternPiece { Name="Eğri",Points=[new(0,0),new(100,0),new(100,50),new(0,50)],Curves=[new CurveSegment.Line(new(0,0),new(100,0)),new CurveSegment.Line(new(100,0),new(100,50)),new CurveSegment.Line(new(100,50),new(0,50)),new CurveSegment.Line(new(0,50),new(0,0))] };
+            var curved=CurvedFixture("Eğri");
             window.LoadDocument(new ProjectDocument { Pieces=[curved] });window.Select(curved.Id);
             var refused=window.PreviewCommand("genişliği 95 yap",true);
             Check(refused.Kind==CommandPreviewKind.Refusal && refused.Notice!.Message.Length>0 && SessionOf(window).UndoCount==0,

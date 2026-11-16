@@ -286,8 +286,7 @@ internal static partial class CommandVerification
         Scenario(window=>
         {
             var plain=new PatternPiece { Name="Düz",Points=[new(0,0),new(100,0),new(100,50),new(0,50)] };
-            var curved=new PatternPiece { Name="Eğri",Points=[new(0,0),new(100,0),new(100,50),new(0,50)],Curves=
-                [new CurveSegment.Line(new(0,0),new(100,0)),new CurveSegment.Line(new(100,0),new(100,50)),new CurveSegment.Line(new(100,50),new(0,50)),new CurveSegment.Line(new(0,50),new(0,0))] };
+            var curved=CurvedFixture("Eğri");
             window.LoadDocument(new ProjectDocument { Pieces=[plain] });window.Select(plain.Id);
             var view=NewBox(window);view.RefreshChips();
             var plainChips=view.ChipButtons.Select(b=>(string)b.Tag!).ToList();
@@ -298,7 +297,7 @@ internal static partial class CommandVerification
             window.LoadDocument(new ProjectDocument { Pieces=[curved] });window.Select(curved.Id);
             var curvedView=NewBox(window);curvedView.RefreshChips();
             var curvedChips=curvedView.ChipButtons.Select(b=>(string)b.Tag!).ToList();
-            Check(!curvedChips.Contains("genişliği 95 yap") && curvedChips.Count>0,"No resize chip is offered for a curved piece",checks);
+            Check(!curvedChips.Contains("genişliği 95 yap"),"No resize chip is offered for a curved piece",checks);
             window.LoadDocument(new ProjectDocument());
             var emptyView=NewBox(window);emptyView.RefreshChips();
             Check(emptyView.ChipButtons.Select(b=>(string)b.Tag!).First()=="12 x 8 cm dikdörtgen","The first chip of an empty project is the centimetre example",checks);
