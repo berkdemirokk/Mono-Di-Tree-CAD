@@ -829,7 +829,7 @@ struct EasyCADWorkspace: View {
         // The drawing now sits at the top of the sheet, where dragging a piece downwards would also
         // pull the sheet. Closing goes through "Kapat", which applies pending details first.
         .interactiveDismissDisabled(true)
-        .preferredColorScheme(.light)
+        .appAppearance()
         .tint(AppTheme.accent)
         .alert("İşlem tamamlanamadı", isPresented: Binding(
             get: { problem != nil },
