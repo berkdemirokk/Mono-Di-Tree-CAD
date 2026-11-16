@@ -204,6 +204,7 @@ public partial class MainWindow
         {
             if (!IsAttached) return;
             w.CloseAllToolsSheet();
+            commandBar?.ClearPreview();
             IsAttached = false;
             try { recorder.Restore(); }
             finally

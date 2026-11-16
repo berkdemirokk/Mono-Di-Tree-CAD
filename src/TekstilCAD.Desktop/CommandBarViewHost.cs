@@ -27,6 +27,8 @@ internal sealed class CommandBarViewHost : ICommandBarHost
     public void FocusBox() => view.FocusBox();
     public void SetText(string text) { view.SetText(text); view.FocusBox(); }
 
+    public void ClearPreview() => view.ClearPreview();
+
     public void OnRefreshed()
     {
         view.OnContextChanged();
@@ -41,6 +43,7 @@ internal sealed class CommandBarViewHost : ICommandBarHost
     private sealed class OverlaySlot : Decorator
     {
         private const double IdleHeight = 96;   // 52 box + 8 gap + 36 chip row
+        private double drawnHeight;
 
         protected override Size MeasureOverride(Size available)
         {
@@ -51,8 +54,10 @@ internal sealed class CommandBarViewHost : ICommandBarHost
 
         protected override Size ArrangeOverride(Size finalSize)
         {
-            Child?.Arrange(new Rect(0, 0, finalSize.Width, Child.DesiredSize.Height));
-            InvalidateVisual();
+            if (Child is null) return finalSize;
+            Child.Arrange(new Rect(0, 0, finalSize.Width, Child.DesiredSize.Height));
+            // The card is drawn in OnRender, so it is redrawn only when the height it covers changes.
+            if (Math.Abs(Child.DesiredSize.Height - drawnHeight) > .5) { drawnHeight = Child.DesiredSize.Height; InvalidateVisual(); }
             return finalSize;
         }
 

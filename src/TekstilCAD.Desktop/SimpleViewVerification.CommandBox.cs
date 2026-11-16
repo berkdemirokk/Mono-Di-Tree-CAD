@@ -22,6 +22,7 @@ internal static partial class SimpleViewVerification
     {
         VerifyBoxIsReal(checks);
         VerifyBoxPreviewApplyUndo(reportPath, checks);
+        VerifyBoxPreviewLeavesWithView(checks);
         VerifyBoxFills(checks);
         VerifyBoxChips(checks);
     }
@@ -50,8 +51,12 @@ internal static partial class SimpleViewVerification
             "Command box, Aç, Kaydet and Tüm araçlar all fit side by side at 1024x640", checks);
 
         // Ctrl+K focuses the inline box and opens no second one.
+        // Focus is moved to the canvas first: entering the simple view already focused the box once.
+        Keyboard.Focus(F<CadCanvas>(fresh, "canvas"));
+        var movedAway = view is not null && !ReferenceEquals(FocusManager.GetFocusedElement(fresh), view.Box);
         var handled = fresh.HandleCommandBoxShortcut(ModifierKeys.Control, Key.K);
-        Check(handled && !fresh.IsCommandBoxOpen && fresh.CommandBoxView is null && view is not null && view.LastFocusRequest is not null,
+        Check(movedAway && handled && !fresh.IsCommandBoxOpen && fresh.CommandBoxView is null && view is not null
+            && (view.Box.IsKeyboardFocused || ReferenceEquals(FocusManager.GetFocusedElement(fresh), view.Box)),
             "Ctrl+K focuses the inline command box in the simple view instead of opening a popup", checks);
     });
 
@@ -99,6 +104,20 @@ internal static partial class SimpleViewVerification
             });
     }
 
+    // A preview left in the box must not outlive the simple view: the ghost goes when the detailed layout returns.
+    private static void VerifyBoxPreviewLeavesWithView(List<string> checks) => WithFresh(fresh =>
+    {
+        fresh.LoadDocument(new ProjectDocument());
+        Simple(fresh, true);
+        Render(fresh, Temp("box-detach"), 1440, 900);
+        var view = InlineBox(fresh)!; view.AutoPreview = false;
+        view.SetText(BoxCommand); view.HandleKey(Key.Enter, ModifierKeys.None);
+        var shown = F<CadCanvas>(fresh, "canvas").Ghost is not null;
+        Simple(fresh, false);
+        Check(shown && F<CadCanvas>(fresh, "canvas").Ghost is null && fresh.Document.Pieces.Count == 0,
+            "Switching to the detailed layout drops the command preview ghost", checks);
+    });
+
     private static string ReportPng(string reportPath, int width, int height)
         => Path.ChangeExtension(reportPath, $".simple-view-command-preview-{width}x{height}.png");
 
@@ -129,22 +148,24 @@ internal static partial class SimpleViewVerification
     {
         var host = fresh.CreateCommandBarHost();
         var bad = new List<string>(); var seen = 0;
-        void Scan(string state)
+        // The view only keeps chips the planner accepts, so besides parsing, each state must still offer its expected texts.
+        void Scan(string state, params string[] expected)
         {
             Invoke(fresh, "Refresh");
-            foreach (var chip in InlineBox(fresh)!.ChipButtons)
-            {
-                var text = (string)chip.Tag; seen++;
+            var texts = InlineBox(fresh)!.ChipButtons.Select(c => (string)c.Tag).ToList();
+            seen += texts.Count;
+            foreach (var text in texts)
                 if (host.Preview(text, true).Kind != CommandPreviewKind.Plan) bad.Add($"{state}: {text}");
-            }
+            foreach (var want in expected)
+                if (!texts.Contains(want)) bad.Add($"{state}: missing {want}");
         }
         fresh.LoadDocument(new ProjectDocument());
         Simple(fresh, true);
-        Scan("empty");
+        Scan("empty", "12 x 8 cm dikdörtgen", "150 çizgi");
         fresh.LoadDocument(new ProjectDocument { Pieces = [new PatternPiece { Name = "Parça 1", Points = [new(30, 40), new(150, 40), new(150, 120), new(30, 120)] }] });
-        Scan("unselected");
+        Scan("unselected", "parça 1 seç");
         fresh.Select(fresh.Document.Pieces[0].Id);
-        Scan("selected");
+        Scan("selected", "genişliği 95 yap", "25 sağa taşı", "90 sağa döndür");
         Check(seen >= 6 && bad.Count == 0, "Every example chip in the simple view command box parses to a plan"
             + (seen >= 6 && bad.Count == 0 ? "" : $" [{seen} chips; {string.Join("; ", bad)}]"), checks);
     });

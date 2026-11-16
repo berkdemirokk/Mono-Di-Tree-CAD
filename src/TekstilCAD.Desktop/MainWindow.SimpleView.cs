@@ -15,6 +15,8 @@ internal interface ICommandBarHost
     void SetText(string text);
     /// <summary>Called after every window refresh while the simple view is shown.</summary>
     void OnRefreshed();
+    /// <summary>Drops a shown preview and its canvas ghost (the box is leaving the window).</summary>
+    void ClearPreview();
 }
 
 // The simple view is a state of this same window: the constructor still builds the detailed layout and reads no
