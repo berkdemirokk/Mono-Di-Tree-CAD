@@ -45,6 +45,7 @@ internal static partial class SimpleViewVerification
             VerifyRefusals(checks);
             VerifyCommandThroughSimpleView(checks);
             VerifyRenders(reportPath, checks);
+            VerifySideCard(reportPath, checks);
             VerifyNoWindowVisible(studio, checks);
         }
         finally { StudioTheme.Use(ThemePalette.Dark); }

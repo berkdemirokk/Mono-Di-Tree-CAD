@@ -17,7 +17,9 @@ internal static class AppPaths
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TekstilCAD", DataFolderName);
     public static string RecoveryDirectory => Path.Combine(DataDirectory, "Recovery");
     public static string MachineSpoolDirectory => Path.Combine(DataDirectory, "MachineSpool");
-    public static string ProjectsDirectory => Path.Combine(DataDirectory, "Projects");
+    /// <summary>Interactive start only: the folder people find again (Documents\Kalıplarım); null keeps the data folder.</summary>
+    internal static string? InteractiveProjectsDirectory { get; set; }
+    public static string ProjectsDirectory => InteractiveProjectsDirectory ?? Path.Combine(DataDirectory, "Projects");
     public static string LogsDirectory => Path.Combine(DataDirectory, "Logs");
     /// <summary>Interface preferences (theme, view, text scale); read only by the interactive start path.</summary>
     public static string UiPreferencesPath => Path.Combine(DataDirectory, TekstilCAD.Core.Theme.UiPreferences.FileName);
