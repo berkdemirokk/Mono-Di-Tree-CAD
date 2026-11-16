@@ -1,6 +1,6 @@
 namespace TekstilCAD.Core.Guide;
 
-/// <summary>One of the four buttons under "Nereden başlayalım?".</summary>
+/// <summary>One of the four buttons under "Nereden başlamak istersiniz?".</summary>
 /// <param name="Id">Stable identifier: type-size, open-file, try-example, continue-last.</param>
 /// <param name="Title">Button title, no terminal punctuation.</param>
 /// <param name="Description">Second line of the button (for continue-last: the last file's name), no terminal punctuation.</param>
@@ -16,21 +16,21 @@ public sealed record StartTask(string Id, string Title, string Description, bool
 public static class StartTasks
 {
     /// <summary>Heading above the tasks.</summary>
-    public const string Heading = "Nereden başlayalım?";
+    public const string Heading = "Nereden başlamak istersiniz?";
 
     /// <summary>Longest file name shown in the description of "Kaldığım yerden devam et".</summary>
     public const int MaxFileNameLength = 60;
 
     internal const string TypeSizeTitle = "Ölçü yazarak başla";
     internal const string TypeSizeDescription = "Kutuya 120 x 80 dikdörtgen yazın";
-    internal const string OpenFileTitle = "Dosya aç";
-    internal const string OpenFileDescription = "Kayıtlı bir çalışmayı seçin";
-    internal const string TryExampleTitle = "Örnekle dene";
-    internal const string TryExampleDescription = "Hazır bir örnek açılır";
-    internal const string TryExampleDisabledReason = "Örnek yalnızca boş, yeni bir çalışmada açılır.";
+    internal const string OpenFileTitle = "Proje aç";
+    internal const string OpenFileDescription = "Kaydettiğiniz bir projeyi açar";
+    internal const string TryExampleTitle = "Hazır örneği aç";
+    internal const string TryExampleDescription = "Hazır örnek açılır; bir şey bozulmaz";
+    internal const string TryExampleDisabledReason = "Örnek yalnızca boş, yeni bir projede açılır.";
     internal const string ContinueTitle = "Kaldığım yerden devam et";
-    internal const string ContinueNoFileDescription = "Son çalışmanız burada görünür";
-    internal const string ContinueDisabledReason = "Henüz kayıtlı bir çalışma yok.";
+    internal const string ContinueNoFileDescription = "Kaydettiğiniz projeler burada görünür";
+    internal const string ContinueDisabledReason = "Henüz kayıtlı bir proje yok.";
 
     /// <summary>
     /// The tasks to show for the situation: four of them when the project has no pieces, otherwise none.

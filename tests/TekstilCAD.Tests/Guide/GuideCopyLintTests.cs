@@ -108,7 +108,7 @@ public sealed class GuideCopyLintTests
     [Fact]
     public void Heading_is_the_owner_s_wording()
     {
-        Assert.Equal("Nereden başlayalım?", StartTasks.Heading);
+        Assert.Equal("Nereden başlamak istersiniz?", StartTasks.Heading);
         Assert.Equal("İlk adımlar 0/6", FirstStepsTracker.Fresh.Heading);
     }
 
@@ -117,12 +117,12 @@ public sealed class GuideCopyLintTests
     {
         var sentences = GuideRules.Rules.ToDictionary(r => r.Id, r => r.Sentence);
         Assert.Equal("Yukarıdaki cümleyi okuyun. Doğruysa Enter ya da Uygula; değilse Esc.", sentences["pending-preview"]);
-        Assert.Equal("Kutuya yazın: 120 x 80 dikdörtgen. Ya da aşağıdan bir seçim yapın.", sentences["empty-first-launch"]);
+        Assert.Equal("Kutuya yazın: 120 x 80 dikdörtgen. Ya da aşağıdan birini seçin.", sentences["empty-first-launch"]);
         Assert.Equal("Ölçüyü değiştirmek için yazın: genişliği 95 yap.", sentences["selected-first-edit"]);
         Assert.Equal("Parça çizin", FirstStepsTracker.LabelOf(FirstStep.DrawPiece));
         Assert.Equal("Ölçüsünü değiştirin", FirstStepsTracker.LabelOf(FirstStep.ChangeSize));
         Assert.Equal("Parçayı taşıyın", FirstStepsTracker.LabelOf(FirstStep.MovePiece));
-        Assert.Equal("Çalışmayı kaydedin", FirstStepsTracker.LabelOf(FirstStep.Save));
+        Assert.Equal("Projeyi kaydedin", FirstStepsTracker.LabelOf(FirstStep.Save));
         Assert.Equal("Gizle", FirstStepsTracker.DismissLabel);
     }
 

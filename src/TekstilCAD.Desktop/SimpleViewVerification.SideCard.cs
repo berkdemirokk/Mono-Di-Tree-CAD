@@ -43,7 +43,7 @@ internal static partial class SimpleViewVerification
         var titles = tasks.Select(button => AutomationProperties.GetName(button)).ToList();
         var enabled = tasks.Select(button => button.IsEnabled).ToList();
         Render(fresh, Temp("start-tasks-1024x640"), 1024, 640);
-        Check(card.StartTasksVisible && titles.SequenceEqual(["Ölçü yazarak başla", "Dosya aç", "Örnekle dene", "Kaldığım yerden devam et"])
+        Check(card.StartTasksVisible && titles.SequenceEqual(["Ölçü yazarak başla", "Proje aç", "Hazır örneği aç", "Kaldığım yerden devam et"])
             && enabled.SequenceEqual([true, true, true, false]) && card.NextStepText.Length > 10
             && card.StepsHeadingText == "İlk adımlar 0/6" && card.FirstStepsVisible && !card.PieceVisible,
             "Empty project shows the four start tasks and the next step sentence", checks);
@@ -56,7 +56,7 @@ internal static partial class SimpleViewVerification
         fresh.LoadDocument(new ProjectDocument());
         Simple(fresh, true);
         Render(fresh, Temp("sample-task"), 1440, 900);
-        var example = fresh.SideCard!.TaskButtons.Single(button => AutomationProperties.GetName(button) == "Örnekle dene");
+        var example = fresh.SideCard!.TaskButtons.Single(button => AutomationProperties.GetName(button) == "Hazır örneği aç");
         Click(example);
         var loaded = fresh.Document.Pieces.Count == 2 && fresh.Document.Pieces[0].Name.Contains("örnek", StringComparison.Ordinal) && !fresh.SideCard.StartTasksVisible;
 
@@ -65,8 +65,8 @@ internal static partial class SimpleViewVerification
         typeof(MainWindow).GetField("dirty", Private)!.SetValue(fresh, true);
         Invoke(fresh, "Refresh");
         Render(fresh, Temp("sample-task-off"), 1440, 900);
-        var off = fresh.SideCard!.TaskButtons.Single(button => AutomationProperties.GetName(button) == "Örnekle dene");
-        var disabled = !off.IsEnabled && TextsOf(off).Contains("Örnek yalnızca boş, yeni bir çalışmada açılır.");
+        var off = fresh.SideCard!.TaskButtons.Single(button => AutomationProperties.GetName(button) == "Hazır örneği aç");
+        var disabled = !off.IsEnabled && TextsOf(off).Contains("Örnek yalnızca boş, yeni bir projede açılır.");
         Click(off);
         var untouched = fresh.Document.Pieces.Count == 0 && F<TextBlock>(fresh, "status").Text.Contains("Örnek yalnızca boş", StringComparison.Ordinal);
         Check(loaded && disabled && untouched, "Sample task loads the example only into a clean empty project"

@@ -43,24 +43,26 @@ public static class Refusals
     public const string RefreshFailed = "R28b";
 
     /// <summary>The first example of each refusal that offers examples.</summary>
+    private const int EchoLimit = 40;
+
     public const string RectangleExample = "120 x 80 dikdörtgen";
     public const string MoveExample = "25 sağa taşı";
     public const string RotateExample = "90 sağa döndür";
     public const string UndoExample = "geri al";
 
-    public const string TemplateNotUnderstood = "Bu yazı anlaşılmadı: “{yazı}”. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al";
+    public const string TemplateNotUnderstood = "“{yazı}” anlaşılamadı. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al";
     public const string TemplateNumberMissing = "Kaç milimetre? Örnek: {örnek}";
-    public const string TemplateNoSelection = "Önce bir parça seçin. Parçaya tıklayın ya da ön bedeni seç yazın.";
-    public const string TemplateNoPieces = "Henüz parça yok. Önce çizin. Örnek: 120 x 80 dikdörtgen";
+    public const string TemplateNoSelection = "Önce bir parça seçin. Parçaya tıklayın ya da “ön bedeni seç” yazın.";
+    public const string TemplateNoPieces = "Henüz parça yok. Önce bir parça çizin. Örnek: 120 x 80 dikdörtgen";
     public const string TemplateOutOfRange = "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen";
     public const string TemplateAmbiguousNumber = "{sayı} iki türlü okunabilir. {a} mm için {a} yazın; {b} mm için {b} yazın.";
     public const string TemplateUnitQuestion = "{yazı}: milimetre mi, santimetre mi?";
-    public const string TemplateDrawingInProgress = "Önce çizimi bitirin (Enter) ya da Esc ile vazgeçin.";
+    public const string TemplateDrawingInProgress = "Önce çizimi bitirin (Enter) ya da iptal edin (Esc).";
     public const string TemplateLockedLayer = "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın.";
     public const string TemplateBusyWithFile = "Şu anda bir dosya işlemi sürüyor. Bitince yeniden deneyin.";
-    public const string TemplateNotRectangle = "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni ölçüde dikdörtgen çizmek için yazın: 95 x 80 dikdörtgen";
-    public const string TemplateExtraData = "Bu parçada iplik yönü, köşe işareti, serileme kuralı veya eğri bilgisi var; ölçüsü yazıyla değiştirilemez. Tüm araçlar bölümünden düzenleyin.";
-    public const string TemplateCurvedPiece = "Bu parça eğri ayarlarını koruyor; taşımadan önce Tüm araçlar bölümünde “Eğriyi sabit çizgiye çevir…” yapın.";
+    public const string TemplateNotRectangle = "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni bir dikdörtgen için şunu yazın: 95 x 80 dikdörtgen";
+    public const string TemplateExtraData = "Bu parçada iplik yönü, köşe işareti, serileme kuralı ya da eğri ayarı var; ölçüsü yazıyla değiştirilemez. Parçayı silip yeni ölçüyle çizebilirsiniz.";
+    public const string TemplateCurvedPiece = "Bu parçada eğri ayarı var; taşımak için önce Tüm araçlar bölümündeki “Eğriyi sabit çizgiye çevir…” işlemini yapın. Eğri düzenleme özelliği bundan sonra kalkar; Geri al ile dönebilirsiniz.";
     public const string TemplateAngle = "Şimdilik yalnız 90, 180 ve 270 derece döndürülebilir. Örnek: 90 sağa döndür";
     public const string TemplateMultipleSelected = "Birden fazla parça seçili. Tek parça seçin ya da “Birden fazla parçayı taşı…” kullanın.";
     public const string TemplateNameNotFound = "“{ad}” adında parça bulunamadı. Örnek: {gerçek ad} seç";
@@ -68,20 +70,20 @@ public static class Refusals
     public const string TemplateTwoJobs = "Bu yazı iki ayrı iş gibi okunuyor. Tek iş yazın. Örnek: 120 x 80 dikdörtgen";
     public const string TemplateTwoMeaningsFlip = "“ters çevir” aynalamak da döndürmek de olabilir. Örnek: aynala · 90 sağa döndür";
     public const string TemplateTwoMeaningsGrow = "“büyüt” görünümü mü, parça ölçüsünü mü? Örnek: yakınlaştır · genişliği 95 yap";
-    public const string TemplateTooManyPoints = "Bu parça 4096 noktadan fazla. Bu işlem için Ayrıntılı görünümdeki düğmeyi kullanın.";
+    public const string TemplateTooManyPoints = "Bu parçada 4096'dan fazla nokta var. Bu işlemi Ayrıntılı görünümdeki ilgili düğmeyle yapın.";
     public const string TemplateNothingToUndo = "Geri alınacak işlem yok. Önce bir şey yazıp uygulayın. Örnek: 120 x 80 dikdörtgen";
     public const string TemplateNothingToRedo = "Yinelenecek işlem yok.";
-    public const string TemplateTwoMeasuresNeeded = "Dikdörtgen için iki ölçü gerekir: en ve boy. Örnek: 120 x 80 dikdörtgen";
-    public const string TemplateAreaDrafts = "Önce alan taslaklarını uygulayın ya da temizleyin. Ayrıntılı görünümde “Alan taslaklarını temizle” düğmesi var.";
-    public const string TemplateRecoveryRunning = "Kurtarma işlemi bitmeden değişiklik yapılamaz. Üstteki kurtarma uyarısındaki düğmeyi kullanın.";
+    public const string TemplateTwoMeasuresNeeded = "Dikdörtgen için iki ölçü gerekir: genişlik ve yükseklik. Örnek: 120 x 80 dikdörtgen";
+    public const string TemplateAreaDrafts = "Önce Ayrıntılı görünümdeki yarım kalmış ad ve konum kutularını uygulayın ya da temizleyin (“Alan taslaklarını temizle” düğmesi).";
+    public const string TemplateRecoveryRunning = "Kurtarma işlemi bitmeden değişiklik yapılamaz. Üstteki kurtarma uyarısının düğmesini kullanın.";
     public const string TemplatePreviewStale = "Parça değişti; önizleme yenilendi. Enter ile uygulayın.";
     public const string TemplateTooLong = "Yazı çok uzun (en fazla 200 karakter). Kısaltın. Örnek: 120 x 80 dikdörtgen";
     public const string TemplateEmptyName = "Yeni ad boş olamaz. Örnek: adı ön beden olsun";
     public const string TemplateNoChange = "Ölçü zaten {ölçü}. Değişiklik yok.";
-    public const string TemplateNegativeNumber = "Negatif ölçü yazılamaz. Yön için sağa, sola, yukarı veya aşağı yazın. Örnek: 25 sola taşı";
-    public const string TemplateNamedPieceMove = "Önce parçayı seçin: ön bedeni seç. Sonra: 25 sağa taşı";
+    public const string TemplateNegativeNumber = "Ölçü eksi (−) olamaz. Yön için sağa, sola, yukarı ya da aşağı yazın. Örnek: 25 sola taşı";
+    public const string TemplateNamedPieceMove = "Önce parçayı seçin: “ön bedeni seç”. Sonra: “25 sağa taşı”.";
     public const string TemplateExecutionFailed = "İşlem tamamlanamadı: {neden}. Hiçbir şey değişmedi.";
-    public const string TemplateRefreshFailed = "Ekran yenileniyor; işlem yapıldı. Komutu yeniden yazmayın.";
+    public const string TemplateRefreshFailed = "İşlem yapıldı ama ekran yenilenemedi. Aynı komutu yeniden yazmayın; gerekirse Geri al'ı kullanın.";
 
     /// <summary>All templates in catalogue order. <c>NeedsExample</c> is false only where the specification lists no example or button.</summary>
     public static IReadOnlyList<RefusalTemplate> Catalogue { get; } = new[]
@@ -132,13 +134,21 @@ public static class Refusals
     /// <summary>R01. The typed text is echoed unless it contains a word the product never says (then it is shown as “…”).</summary>
     public static Refusal Unrecognized(string typed, RefusalButton? didYouMean = null)
     {
-        var shown = TurkishText.ContainsForbiddenWord(typed) ? "…" : typed;
+        var shown = TurkishText.ContainsForbiddenWord(typed) ? "…" : Shorten(typed);
         var buttons = new List<RefusalButton>();
         if (didYouMean is not null) buttons.Add(didYouMean);
         buttons.Add(new RefusalButton(RectangleExample));
         buttons.Add(new RefusalButton(MoveExample));
         buttons.Add(new RefusalButton(RotateExample));
         return new Refusal(NotUnderstood, TemplateNotUnderstood.Replace("{yazı}", shown, StringComparison.Ordinal), buttons);
+    }
+
+    /// <summary>The typed text as the R01 message echoes it: at most 40 characters, then an ellipsis.</summary>
+    private static string Shorten(string typed)
+    {
+        if (typed.Length <= EchoLimit) return typed;
+        var cut = char.IsHighSurrogate(typed[EchoLimit - 1]) ? EchoLimit - 1 : EchoLimit;
+        return typed.Substring(0, cut).TrimEnd() + "…";
     }
 
     /// <summary>R02. <paramref name="example"/> is a complete working command such as "25 sağa taşı" or "150 çizgi".</summary>
@@ -229,7 +239,7 @@ public static class Refusals
 
     public static Refusal NotARectangle() => new(NotRectangle, TemplateNotRectangle, Buttons("95 x 80 dikdörtgen"));
 
-    public static Refusal HasExtraData() => new(ExtraData, TemplateExtraData, Buttons("Tüm araçlar"));
+    public static Refusal HasExtraData() => new(ExtraData, TemplateExtraData, Buttons("sil"));
 
     public static Refusal HasCurves() => new(CurvedPiece, TemplateCurvedPiece, Buttons("Tüm araçlar"));
 

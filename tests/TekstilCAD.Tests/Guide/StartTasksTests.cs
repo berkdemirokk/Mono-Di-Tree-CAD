@@ -11,8 +11,8 @@ public sealed class StartTasksTests
     {
         var tasks = StartTasks.For(Empty, null);
         Assert.Equal(["type-size", "open-file", "try-example", "continue-last"], tasks.Select(t => t.Id).ToArray());
-        Assert.Equal(["Ölçü yazarak başla", "Dosya aç", "Örnekle dene", "Kaldığım yerden devam et"], tasks.Select(t => t.Title).ToArray());
-        Assert.Equal("Nereden başlayalım?", StartTasks.Heading);
+        Assert.Equal(["Ölçü yazarak başla", "Proje aç", "Hazır örneği aç", "Kaldığım yerden devam et"], tasks.Select(t => t.Title).ToArray());
+        Assert.Equal("Nereden başlamak istersiniz?", StartTasks.Heading);
     }
 
     [Theory]

@@ -47,7 +47,7 @@ public static partial class CommandCatalogue
         public static readonly CommandCatalogueGroup GDraw = new("draw", "Çizim");
         public static readonly CommandCatalogueGroup GPiece = new("piece", "Parçayı değiştir");
         public static readonly CommandCatalogueGroup GSize = new("size", "Ölçü, beden ve pastal");
-        public static readonly CommandCatalogueGroup GExchange = new("exchange", "Başka programlarla alışveriş");
+        public static readonly CommandCatalogueGroup GExchange = new("exchange", "Dosya alma ve verme");
         public static readonly CommandCatalogueGroup GView = new("view", "Görünüm");
         public static readonly CommandCatalogueGroup GLayer = new("layer", "Katman ve liste");
         public static readonly CommandCatalogueGroup GHelp = new("help", "Yardım");

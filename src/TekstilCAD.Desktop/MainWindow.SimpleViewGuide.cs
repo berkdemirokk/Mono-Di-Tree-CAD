@@ -190,12 +190,12 @@ public partial class MainWindow
             var task = StartTasks.For(situation, RecentName).FirstOrDefault(t => t.Id == "try-example");
             if (task is not { Enabled: true })
             {
-                w.SetStatus(task?.DisabledReason ?? "Örnek yalnızca boş, yeni bir çalışmada açılır.");
+                w.SetStatus(task?.DisabledReason ?? "Örnek yalnızca boş, yeni bir projede açılır.");
                 return false;
             }
             w.LoadDocument(Sample());
             exampleEpoch = w.projectEpoch;
-            w.SetStatus("Örnek açıldı · Gerçek bir çalışma değil; istediğiniz gibi deneyin.");
+            w.SetStatus("Hazır örnek açıldı; kaydederseniz yeni bir proje olur.");
             w.Refresh();
             return true;
         }

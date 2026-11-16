@@ -82,7 +82,7 @@ public partial class MainWindow
             // Above the workspace, so a preview card that grows past the region is drawn and clicked over the canvas.
             System.Windows.Controls.Panel.SetZIndex(commandRegion, 1);
 
-            switchButton = new Button { Content = "Ayrıntılı görünüm", MinHeight = 32, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(10, 0, 0, 0), FontSize = 12, Cursor = Cursors.Hand };
+            switchButton = new Button { Content = "Ayrıntılı görünüme geç", MinHeight = 32, Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(10, 0, 0, 0), FontSize = 12, Cursor = Cursors.Hand };
             AutomationProperties.SetName(switchButton, "Ayrıntılı görünüme geç");
             switchButton.ToolTip = "Yoğun, ayrıntılı ekran · F9";
             DockPanel.SetDock(switchButton, Dock.Right);
@@ -94,7 +94,7 @@ public partial class MainWindow
             themeButton.Click += (_, _) => w.SetStatus(InterfaceSettings.ToggleTheme());
 
             railCaption = new TextBlock { Text = "Fareyle çiz", FontSize = 12, Foreground = StudioTheme.Muted, Margin = new Thickness(4, 8, 0, 7) };
-            railHint = new TextBlock { Text = "Çizerken: Enter kapatır · Esc vazgeçer", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 14, 0, 0), Focusable = true };
+            railHint = new TextBlock { Text = "Çizerken: Enter şekli kapatır · Esc çizimi iptal eder", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(7, 14, 0, 0), Focusable = true };
             AutomationProperties.SetName(railHint, "Çizerken: Enter konturu kapatır, Esc çizimden vazgeçer");
 
             footerNote = new TextBlock { Text = "Bu çizim üretim veya kesim onayı değildir", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, MaxWidth = 280, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Focusable = true };
@@ -176,7 +176,7 @@ public partial class MainWindow
             r.Set(w.sourceHistoryDetails, ContentControl.ContentProperty, "Kaynak ve aktarım notları");
             if (w.modeChip.Child is TextBlock modeText)
             {
-                r.Set(modeText, TextBlock.TextProperty, "Yerel çalışma  ·  mm");
+                r.Set(modeText, TextBlock.TextProperty, "Bu bilgisayarda  ·  mm");
                 r.Set(modeText, TextBlock.FontSizeProperty, 12d);
             }
             foreach (var button in Descendants<Button>(w.projectPanel)) r.Set(button, FrameworkElement.MinHeightProperty, 32d);
@@ -241,7 +241,7 @@ public partial class MainWindow
         {
             if (switchMounted)
             {
-                r.Set(switchButton!, ContentControl.ContentProperty, "Ayrıntılı görünüm");
+                r.Set(switchButton!, ContentControl.ContentProperty, "Ayrıntılı görünüme geç");
                 r.Set(switchButton!, AutomationProperties.NameProperty, "Ayrıntılı görünüme geç");
                 r.Set(switchButton!, FrameworkElement.ToolTipProperty, "Yoğun, ayrıntılı ekran · F9");
                 return;
@@ -258,7 +258,7 @@ public partial class MainWindow
             Build();
             switchPermanent = true;
             if (IsAttached || switchMounted) return;
-            switchButton!.Content = "Basit görünüm";
+            switchButton!.Content = "Basit görünüme geç";
             AutomationProperties.SetName(switchButton, "Basit görünüme geç");
             switchButton.ToolTip = "Sade, açık ekran · F9";
             var index = w.brandLinePanel.Children.IndexOf(w.taglineText);
@@ -437,8 +437,8 @@ public partial class MainWindow
             w.grainlineStatus.Visibility = selected?.Grainline is not null ? Visibility.Visible : Visibility.Collapsed;
 
             w.unitsText.Text = w.snap.IsChecked == true
-                ? "Ölçü birimi: milimetre (mm) · Fareyle çizerken 1 mm adımlarla"
-                : "Ölçü birimi: milimetre (mm) · Fareyle çizerken serbest";
+                ? "Ölçü birimi: milimetre (mm) · Fareyle çizerken 1 mm'lik adımlarla"
+                : "Ölçü birimi: milimetre (mm) · Fareyle çizerken adım sınırı yok";
             AutomationProperties.SetName(w.unitsText, w.unitsText.Text);
 
             var unsaved = w.HasUnsavedWork;

@@ -164,7 +164,7 @@ final class CommandFieldUITests: XCTestCase {
         openWorkshop(app)
         enter("zzz", in: app)
         prepare(in: app)
-        XCTAssertTrue(text(startingWith: "Bu yazı anlaşılmadı: “zzz”.", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(text(startingWith: "“zzz” anlaşılamadı.", in: app).waitForExistence(timeout: 5))
         XCTAssertFalse(app.alerts.firstMatch.exists, "A refusal is shown in the card, not in an alert")
         // An example fills the field and shows its preview; it is not applied.
         let example = app.buttons["120 x 80 dikdörtgen"]

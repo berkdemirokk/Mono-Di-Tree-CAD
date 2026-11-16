@@ -126,7 +126,7 @@ public partial class MainWindow
             notice.SetBinding(UIElement.VisibilityProperty, new Binding(nameof(UIElement.Visibility)) { Source = w.historyCapacityNotice, Mode = BindingMode.OneWay });
             AutomationProperties.SetName(notice, "İşlem geçmişi kapasite uyarısı");
 
-            emptyResult = new TextBlock { Text = "Bu sözle eşleşen araç bulunamadı. Başka bir söz deneyin; örneğin: kopyala, ayna, kaydet.", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 14, 0, 0), Visibility = Visibility.Collapsed, Focusable = true };
+            emptyResult = new TextBlock { Text = "Bu yazıyla eşleşen araç yok. Başka bir sözcük deneyin; örnek: dikiş payı", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 14, 0, 0), Visibility = Visibility.Collapsed, Focusable = true };
 
             foreach (var entry in CommandCatalogue.Entries) rows[entry.Id] = BuildRow(entry);
 

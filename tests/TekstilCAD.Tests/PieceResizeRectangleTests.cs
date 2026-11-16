@@ -6,8 +6,8 @@ namespace TekstilCAD.Tests;
 /// <summary>The strict resize used by the command box: rectangles only, refusals R10 and R11 of the command design.</summary>
 public sealed class PieceResizeRectangleTests
 {
-    private const string NotRectangle = "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni ölçüde dikdörtgen çizmek için yazın: 95 x 80 dikdörtgen";
-    private const string Extras = "Bu parçada iplik yönü, köşe işareti, serileme kuralı veya eğri bilgisi var; ölçüsü yazıyla değiştirilemez. Tüm araçlar bölümünden düzenleyin.";
+    private const string NotRectangle = "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni bir dikdörtgen için şunu yazın: 95 x 80 dikdörtgen";
+    private const string Extras = "Bu parçada iplik yönü, köşe işareti, serileme kuralı ya da eğri ayarı var; ölçüsü yazıyla değiştirilemez. Parçayı silip yeni ölçüyle çizebilirsiniz.";
 
     [Fact]
     public void PlainRectangleIsResizedKeepingTheTopLeft()

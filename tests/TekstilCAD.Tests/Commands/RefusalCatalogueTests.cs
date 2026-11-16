@@ -7,19 +7,19 @@ public sealed class RefusalCatalogueTests
     // Verbatim from tasarim/FINAL_COMMANDS.md section 3 (an independent copy on purpose).
     public static readonly (string Key, string Text)[] Expected =
     {
-        ("R01", "Bu yazı anlaşılmadı: “{yazı}”. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al"),
+        ("R01", "“{yazı}” anlaşılamadı. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al"),
         ("R02", "Kaç milimetre? Örnek: {örnek}"),
-        ("R03a", "Önce bir parça seçin. Parçaya tıklayın ya da ön bedeni seç yazın."),
-        ("R03b", "Henüz parça yok. Önce çizin. Örnek: 120 x 80 dikdörtgen"),
+        ("R03a", "Önce bir parça seçin. Parçaya tıklayın ya da “ön bedeni seç” yazın."),
+        ("R03b", "Henüz parça yok. Önce bir parça çizin. Örnek: 120 x 80 dikdörtgen"),
         ("R04", "Ölçü 1 ile 20000 mm arasında olmalı. Örnek: 120 x 80 dikdörtgen"),
         ("R05", "{sayı} iki türlü okunabilir. {a} mm için {a} yazın; {b} mm için {b} yazın."),
         ("R06", "{yazı}: milimetre mi, santimetre mi?"),
-        ("R07", "Önce çizimi bitirin (Enter) ya da Esc ile vazgeçin."),
+        ("R07", "Önce çizimi bitirin (Enter) ya da iptal edin (Esc)."),
         ("R08", "Parça kilitli bir katmanda. Ayrıntılı görünümde katmanın kilidini açın."),
         ("R09", "Şu anda bir dosya işlemi sürüyor. Bitince yeniden deneyin."),
-        ("R10", "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni ölçüde dikdörtgen çizmek için yazın: 95 x 80 dikdörtgen"),
-        ("R11", "Bu parçada iplik yönü, köşe işareti, serileme kuralı veya eğri bilgisi var; ölçüsü yazıyla değiştirilemez. Tüm araçlar bölümünden düzenleyin."),
-        ("R12", "Bu parça eğri ayarlarını koruyor; taşımadan önce Tüm araçlar bölümünde “Eğriyi sabit çizgiye çevir…” yapın."),
+        ("R10", "Bu parça dikdörtgen değil; ölçüsü yazıyla değiştirilemez. Yeni bir dikdörtgen için şunu yazın: 95 x 80 dikdörtgen"),
+        ("R11", "Bu parçada iplik yönü, köşe işareti, serileme kuralı ya da eğri ayarı var; ölçüsü yazıyla değiştirilemez. Parçayı silip yeni ölçüyle çizebilirsiniz."),
+        ("R12", "Bu parçada eğri ayarı var; taşımak için önce Tüm araçlar bölümündeki “Eğriyi sabit çizgiye çevir…” işlemini yapın. Eğri düzenleme özelliği bundan sonra kalkar; Geri al ile dönebilirsiniz."),
         ("R13", "Şimdilik yalnız 90, 180 ve 270 derece döndürülebilir. Örnek: 90 sağa döndür"),
         ("R14", "Birden fazla parça seçili. Tek parça seçin ya da “Birden fazla parçayı taşı…” kullanın."),
         ("R15a", "“{ad}” adında parça bulunamadı. Örnek: {gerçek ad} seç"),
@@ -27,20 +27,20 @@ public sealed class RefusalCatalogueTests
         ("R16", "Bu yazı iki ayrı iş gibi okunuyor. Tek iş yazın. Örnek: 120 x 80 dikdörtgen"),
         ("R16b-1", "“ters çevir” aynalamak da döndürmek de olabilir. Örnek: aynala · 90 sağa döndür"),
         ("R16b-2", "“büyüt” görünümü mü, parça ölçüsünü mü? Örnek: yakınlaştır · genişliği 95 yap"),
-        ("R17", "Bu parça 4096 noktadan fazla. Bu işlem için Ayrıntılı görünümdeki düğmeyi kullanın."),
+        ("R17", "Bu parçada 4096'dan fazla nokta var. Bu işlemi Ayrıntılı görünümdeki ilgili düğmeyle yapın."),
         ("R18a", "Geri alınacak işlem yok. Önce bir şey yazıp uygulayın. Örnek: 120 x 80 dikdörtgen"),
         ("R18b", "Yinelenecek işlem yok."),
-        ("R19", "Dikdörtgen için iki ölçü gerekir: en ve boy. Örnek: 120 x 80 dikdörtgen"),
-        ("R20", "Önce alan taslaklarını uygulayın ya da temizleyin. Ayrıntılı görünümde “Alan taslaklarını temizle” düğmesi var."),
-        ("R21", "Kurtarma işlemi bitmeden değişiklik yapılamaz. Üstteki kurtarma uyarısındaki düğmeyi kullanın."),
+        ("R19", "Dikdörtgen için iki ölçü gerekir: genişlik ve yükseklik. Örnek: 120 x 80 dikdörtgen"),
+        ("R20", "Önce Ayrıntılı görünümdeki yarım kalmış ad ve konum kutularını uygulayın ya da temizleyin (“Alan taslaklarını temizle” düğmesi)."),
+        ("R21", "Kurtarma işlemi bitmeden değişiklik yapılamaz. Üstteki kurtarma uyarısının düğmesini kullanın."),
         ("R22", "Parça değişti; önizleme yenilendi. Enter ile uygulayın."),
         ("R23", "Yazı çok uzun (en fazla 200 karakter). Kısaltın. Örnek: 120 x 80 dikdörtgen"),
         ("R24", "Yeni ad boş olamaz. Örnek: adı ön beden olsun"),
         ("R25", "Ölçü zaten {ölçü}. Değişiklik yok."),
-        ("R26", "Negatif ölçü yazılamaz. Yön için sağa, sola, yukarı veya aşağı yazın. Örnek: 25 sola taşı"),
-        ("R27", "Önce parçayı seçin: ön bedeni seç. Sonra: 25 sağa taşı"),
+        ("R26", "Ölçü eksi (−) olamaz. Yön için sağa, sola, yukarı ya da aşağı yazın. Örnek: 25 sola taşı"),
+        ("R27", "Önce parçayı seçin: “ön bedeni seç”. Sonra: “25 sağa taşı”."),
         ("R28a", "İşlem tamamlanamadı: {neden}. Hiçbir şey değişmedi."),
-        ("R28b", "Ekran yenileniyor; işlem yapıldı. Komutu yeniden yazmayın."),
+        ("R28b", "İşlem yapıldı ama ekran yenilenemedi. Aynı komutu yeniden yazmayın; gerekirse Geri al'ı kullanın."),
     };
 
     [Fact]
@@ -97,7 +97,7 @@ public sealed class RefusalCatalogueTests
     public void BuiltMessagesFillTheirPlaceholders()
     {
         Assert.Equal(
-            "Bu yazı anlaşılmadı: “zzz”. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al",
+            "“zzz” anlaşılamadı. Şöyle yazabilirsiniz: 120 x 80 dikdörtgen · 25 sağa taşı · 90 sağa döndür · geri al",
             Refusals.Unrecognized("zzz").Message);
         Assert.Equal("Kaç milimetre? Örnek: 150 çizgi", Refusals.NumberMissingFor("150 çizgi").Message);
         Assert.Equal("“kolu” adında parça bulunamadı. Örnek: Ön beden seç",
@@ -149,6 +149,14 @@ public sealed class RefusalCatalogueTests
         Assert.DoesNotContain("yapay", r.Message);
         Assert.Contains("“…”", r.Message);
         Assert.True(r.HasExample);
+    }
+
+    [Fact]
+    public void TheEchoOfAnUnrecognizedTextIsCappedAtFortyCharacters()
+    {
+        var long50 = new string('a', 50);
+        Assert.Contains("“" + new string('a', 40) + "…” anlaşılamadı.", Refusals.Unrecognized(long50).Message);
+        Assert.Contains("“" + new string('a', 40) + "” anlaşılamadı.", Refusals.Unrecognized(new string('a', 40)).Message);
     }
 
     [Fact]

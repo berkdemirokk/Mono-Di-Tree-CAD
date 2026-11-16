@@ -12,7 +12,7 @@ public sealed class CommandCatalogueTests
     private static readonly string[] ExpectedGroupTitles =
     [
         "Başlangıç ve dosya", "Çizim", "Parçayı değiştir", "Ölçü, beden ve pastal",
-        "Başka programlarla alışveriş", "Görünüm", "Katman ve liste", "Yardım",
+        "Dosya alma ve verme", "Görünüm", "Katman ve liste", "Yardım",
     ];
 
     /// <summary>Strings the headless verification looks up by content or automation name (map-verification-constraints 2.1-2.3).</summary>

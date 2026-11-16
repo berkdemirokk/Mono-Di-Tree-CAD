@@ -63,7 +63,7 @@ public partial class MainWindow
         if (on == IsSimpleView) return true;
         if (HasPendingCanvasOrPropertyWork || ExportRunning || DxfImportRunning || projectOpenRunning)
         {
-            refusal = "Görünüm değiştirilemedi · Önce çizimi bitirin, alan taslaklarını uygulayın veya temizleyin.";
+            refusal = "Görünüm değiştirilemedi · Önce çizimi bitirin; yarım kalmış ad ve konum kutularını uygulayın ya da temizleyin.";
             return false;
         }
         simpleView ??= new SimpleViewController(this);

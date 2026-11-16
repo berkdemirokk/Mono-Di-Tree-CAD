@@ -326,7 +326,7 @@ public partial class MainWindow
                 if(HandoffRouteFor(hand) is not { } route)break;
                 return RunHandoff("Handoff."+hand.Target,route.Run,route.Done);
         }
-        var message=$"{plan.ActionName.Trim()} bu kutudan henüz çalıştırılamıyor; ilgili düğmeyi ya da Tüm araçlar bölümünü kullanın.";
+        var message=$"{plan.ActionName.Trim()} bu kutudan şu anda yapılamıyor. "+(IsSimpleView ? "“Tüm araçlar” düğmesine basıp ilgili işlemi seçin." : "İlgili düğmeyi kullanın.");
         SetStatus(message);
         return new(CommandResult.Refused,message,CommandGuards.Unsupported);
     }

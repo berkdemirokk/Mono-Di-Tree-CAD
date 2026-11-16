@@ -613,7 +613,7 @@ enum CommandPlanner {
 extension CommandPlanner {
     /// The refusal for a drawing without any piece.
     fileprivate static func noPieces() -> CommandRefusal {
-        CommandRefusal(code: "R03", message: "Henüz parça yok. Önce çizin. Örnek: 120 x 80 dikdörtgen",
+        CommandRefusal(code: "R03", message: "Henüz parça yok. Önce bir parça çizin. Örnek: 120 x 80 dikdörtgen",
                        suggestions: ["120 x 80 dikdörtgen"])
     }
 }

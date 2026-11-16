@@ -37,8 +37,11 @@ public partial class MainWindow
     /// <summary>Runs the guarded method a button also runs (or, in verification, hands it to the seam) and reports the hand-off as done.</summary>
     private CommandOutcome RunHandoff(string key, Action run, string done)
     {
-        if (HandoffForVerification is { } seam) seam(key, run); else run();
-        return new(CommandResult.Done, done);
+        if (HandoffForVerification is { } seam) { seam(key, run); return new(CommandResult.Done, done); }
+        // The guarded method says in the status line when it refused or ended differently; never claim more than that.
+        var before = status.Text;
+        run();
+        return new(CommandResult.Done, status.Text != before ? status.Text : done);
     }
 
     private void OpenDesignRequest() => new DesignRequestWindow(this).ShowDialog();
