@@ -347,7 +347,7 @@ internal sealed partial class PlannerContext
                     break;
                 }
         }
-        var hasOutline = piece.Points is { Count: > 0 };
+        var hasOutline = SafeBounds(piece) is not null;
         var plan = new Plan(PlanKind.SelectPiece, PlanClass.NoChange, c, $"{Quote(piece.Name)} seçilecek.",
             PieceStamp.Capture(view, selection, piece.Id, c.Target is PieceTarget.Next or PieceTarget.Previous ? StampScope.Document : StampScope.Piece))
         {
@@ -384,7 +384,7 @@ internal sealed partial class PlannerContext
             if (exact.Count >= 1) found = exact;
         }
         if (found.Count == 1) { match = found[0]; return true; }
-        var names = Doc.Pieces.Take(3).Select(p => p.Name ?? "").ToList();
+        var names = Doc.Pieces.Select(p => OneLine(p.Name, 40)).Where(n => n.Length > 0).Take(3).ToList();
         if (found.Count == 0)
         {
             var typedShown = TurkishText.ContainsForbiddenWord(query) ? "…" : query;

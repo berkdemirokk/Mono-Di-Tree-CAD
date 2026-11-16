@@ -12,7 +12,7 @@ internal sealed partial class PlannerContext
         if (view.DrawingInProgress) return Refuse(Refusals.DrawingPending());
         if (view.UndoCount <= 0) return Refuse(Refusals.NothingToUndoRefusal());
         var steps = Math.Clamp(c.Steps, 1, Math.Min(10, view.UndoCount));
-        var label = string.IsNullOrWhiteSpace(view.LastUndoLabel) ? null : LowerFirst(view.LastUndoLabel!.Trim());
+        var label = OneLine(view.LastUndoLabel) is { Length: > 0 } cleaned ? LowerFirst(cleaned) : null;
         var preview = steps > 1
             ? $"Son {steps} işlem geri alınacak."
             : label is null ? "Son işlem geri alınacak." : $"Son işlem geri alınacak: {label}.";
@@ -113,13 +113,14 @@ internal sealed partial class PlannerContext
     private PlanResult PlanFile(FileCommand c)
     {
         if (view.FileOperationInProgress) return Refuse(Refusals.Busy());
-        var named = !string.IsNullOrWhiteSpace(view.FileName);
+        var fileName = OneLine(view.FileName, 120);
+        var named = fileName.Length > 0;
         var dirty = view.HasUnsavedChanges;
         switch (c.Action)
         {
             case FileAction.Save:
                 return Of(Window(PlanKind.File, PlanClass.Window, c,
-                    named ? $"Proje kaydedilecek: {view.FileName!.Trim()}" : "Proje kaydedilecek; dosya adı sorulacak.", "Kaydetme"));
+                    named ? $"Proje kaydedilecek: {fileName}" : "Proje kaydedilecek; dosya adı sorulacak.", "Kaydetme"));
             case FileAction.SaveAs:
                 return Of(Window(PlanKind.File, PlanClass.Window, c, "Proje yeni bir adla kaydedilecek; dosya adı sorulacak.", "Kaydetme"));
             case FileAction.SaveCopy:
