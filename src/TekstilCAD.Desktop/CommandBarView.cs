@@ -20,7 +20,7 @@ internal sealed record CommandBarContext(bool EmptyProject,IReadOnlyList<string>
 internal sealed record CommandBarHost(Func<string,bool,CommandPreview> Preview,Func<Plan,bool,CommandOutcome> Apply,
     Func<CommandBarContext> Context,Func<bool,string> HistoryStep,Action<GhostScene?>? ShowGhost=null);
 
-internal enum CommandBarState { Idle, Preview, DangerPreview, Question, Refusal, Result }
+internal enum CommandBarState { Idle, Preview, DangerPreview, Question, Refusal, Result, Voice }
 
 /// <summary>
 /// The single command box: a text box, one preview/result/refusal row, example chips and a short history. Enter first shows what
@@ -58,6 +58,7 @@ internal sealed class CommandBarView : Border
     private readonly Button cancel=new();
     private readonly Button danger=new();
     private readonly Button examplesToggle=new();
+    private readonly Button voice=new();
     private readonly Border examplesPanel=new();
     private readonly DispatcherTimer previewTimer=new();
     private readonly List<string> history=[];
@@ -94,6 +95,7 @@ internal sealed class CommandBarView : Border
     internal Button CancelButton=>cancel;
     internal Button DangerButton=>danger;
     internal Button ExamplesButton=>examplesToggle;
+    internal Button VoiceButton=>voice;
     internal TextBlock RowTextBlock=>rowText;
     internal TextBlock CaveatTextBlock=>caveatText;
     internal string RowText=>rowText.Text;
@@ -141,6 +143,18 @@ internal sealed class CommandBarView : Border
         placeholder.Text=Placeholder;placeholder.FontSize=18;placeholder.Foreground=StudioTheme.Muted;placeholder.IsHitTestVisible=false;
         placeholder.VerticalAlignment=VerticalAlignment.Center;placeholder.Margin=new Thickness(17,0,12,0);placeholder.TextTrimming=TextTrimming.CharacterEllipsis;
         boxGrid.Children.Add(box);boxGrid.Children.Add(placeholder);
+        // "Sesle yaz": only points to Windows voice typing (Win + H). It starts nothing and presses no keys.
+        voice.MinHeight=44;voice.MinWidth=44;voice.Margin=new Thickness(0,0,4,0);voice.Padding=new Thickness(12,4,12,4);voice.HorizontalAlignment=HorizontalAlignment.Right;voice.VerticalAlignment=VerticalAlignment.Center;
+        var voiceContent=new StackPanel { Orientation=Orientation.Horizontal };
+        voiceContent.Children.Add(new TextBlock { Text="",FontFamily=new FontFamily("Segoe MDL2 Assets"),FontSize=16,Margin=new Thickness(0,0,8,0),VerticalAlignment=VerticalAlignment.Center });
+        voiceContent.Children.Add(new TextBlock { Text="Sesle yaz",FontSize=14,VerticalAlignment=VerticalAlignment.Center });
+        voice.Content=voiceContent;
+        AutomationProperties.SetName(voice,"Sesle yaz");
+        AutomationProperties.SetHelpText(voice,"Sesle yazma için Win + H tuşlarına basın");
+        voice.Click+=(_,_)=>ShowVoiceGuidance();
+        box.Padding=new Thickness(12,4,150,4);
+        placeholder.Margin=new Thickness(17,0,150,0);
+        boxGrid.Children.Add(voice);
         root.Children.Add(boxGrid);
 
         // the one preview / result / refusal row (the only live region)
@@ -550,6 +564,24 @@ internal sealed class CommandBarView : Border
         HideRowButtons();alternatives.Children.Clear();alternatives.Visibility=Visibility.Collapsed;
         chips.Visibility=Visibility.Visible;
         RefreshChips(outcome.Changed && !outcome.RefreshFailed);
+        FocusBox();
+    }
+
+    internal const string VoiceGuidance="Konuşmak için Win + H tuşlarına basın. Söyledikleriniz bu kutuya yazılır; siz uygulamadan hiçbir şey değişmez.";
+    internal const string VoiceNote="Ses tanıma Windows'un özelliğidir; internet gerekebilir.";
+
+    /// <summary>
+    /// "Sesle yaz": puts the keyboard cursor in the box and says how to start Windows voice typing. It does not start
+    /// recognition, listens to nothing and presses no keys; typing (or dictation) replaces the message.
+    /// </summary>
+    internal void ShowVoiceGuidance()
+    {
+        previewTimer.Stop();
+        shownPlan=null;shownText=null;ClearGhost();
+        State=CommandBarState.Voice;
+        SetRow(VoiceGuidance,[VoiceNote],StudioTheme.Accent,0x1A);
+        HideRowButtons();alternatives.Children.Clear();alternatives.Visibility=Visibility.Collapsed;
+        chips.Visibility=Visibility.Collapsed;
         FocusBox();
     }
 
