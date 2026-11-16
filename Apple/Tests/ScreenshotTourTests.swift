@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Walks the main screens and saves a screenshot of each for visual review.
 ///
@@ -26,16 +29,55 @@ final class ScreenshotTourTests: XCTestCase {
         return app
     }
 
-    private func snap(_ name: String) {
+    @discardableResult
+    private func snap(_ name: String) -> XCUIScreenshot {
         let screenshot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
-        guard let directory = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"], !directory.isEmpty else { return }
+        guard let directory = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"], !directory.isEmpty else {
+            return screenshot
+        }
         let folder = URL(fileURLWithPath: directory, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try? screenshot.pngRepresentation.write(to: folder.appendingPathComponent(name + ".png"))
+        return screenshot
+    }
+
+    /// Raw values of `AppAppearance` in AppTheme.swift, stored under the `appearance` key. A UI test
+    /// cannot import the app, so they are repeated here; keep them in step.
+    private static let appearanceKey = "-appearance"
+    private static let appearanceDark = "dark"
+
+    /// Average brightness (0 black ... 1 white) of one pixel at a normalised screen position.
+    private func brightness(of screenshot: XCUIScreenshot, at point: CGPoint) -> CGFloat? {
+        #if canImport(UIKit)
+        guard let image = screenshot.image.cgImage else { return nil }
+        let x = min(image.width - 1, max(0, Int(CGFloat(image.width) * point.x)))
+        let y = min(image.height - 1, max(0, Int(CGFloat(image.height) * point.y)))
+        guard let pixel = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
+        var bytes = [UInt8](repeating: 0, count: 4)
+        let drawn: Bool = bytes.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: 1, height: 1,
+                                          bitsPerComponent: 8, bytesPerRow: 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                return false
+            }
+            context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard drawn else { return nil }
+        return (CGFloat(bytes[0]) + CGFloat(bytes[1]) + CGFloat(bytes[2])) / (3 * 255)
+        #else
+        return nil
+        #endif
+    }
+
+    /// The home screen's page colour, sampled in the left margin (the 16 pt padding) half way down.
+    private func homePageBrightness(_ screenshot: XCUIScreenshot) -> CGFloat? {
+        brightness(of: screenshot, at: CGPoint(x: 0.015, y: 0.5))
     }
 
     /// Scrolls until the control can be tapped, then taps it. Returns false when it never appears.
@@ -126,7 +168,7 @@ final class ScreenshotTourTests: XCTestCase {
 
         app.buttons["Arka Beden"].tap()
         let details = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label CONTAINS %@", "İplik yönü")).firstMatch
+            .matching(NSPredicate(format: "label CONTAINS %@", "Kumaş yönü")).firstMatch
         _ = details.waitForExistence(timeout: 10)
         snap("14-viewer-piece-selected")
 
@@ -158,14 +200,83 @@ final class ScreenshotTourTests: XCTestCase {
         snap("19-editor-large-text-scrolled")
     }
 
-    func testTour06DarkAppearance() {
+    /// Light is the default: with the phone in dark mode and no appearance chosen in the app, the
+    /// screens must stay light.
+    func testTour06SystemDarkStaysLight() {
         XCUIDevice.shared.appearance = .dark
         let app = launch(["--ui-test-reset-draft"])
         XCTAssertTrue(app.buttons["Yeni proje oluştur"].waitForExistence(timeout: 15))
-        snap("20-home-dark")
+        let home = snap("20-home-system-dark-app-light")
+        if let page = homePageBrightness(home) {
+            XCTAssertGreaterThan(page, 0.8, "With no choice made the page should stay light")
+        }
 
         XCTAssertTrue(openEditorWithRectangle(app))
         XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
-        snap("21-editor-dark")
+        snap("21-editor-system-dark-app-light")
+    }
+
+    /// The in-app "Koyu" choice turns the app dark even when the phone is light, and sheets
+    /// presented from the workshop follow it.
+    func testTour07InAppDarkChoice() {
+        XCUIDevice.shared.appearance = .light
+        let app = launch(["--ui-test-reset-draft", Self.appearanceKey, Self.appearanceDark])
+        XCTAssertTrue(app.buttons["Yeni proje oluştur"].waitForExistence(timeout: 15))
+        let home = snap("22-home-app-dark")
+        if let page = homePageBrightness(home) {
+            XCTAssertLessThan(page, 0.3, "-appearance dark should give a dark page")
+        }
+
+        XCTAssertTrue(openEditorWithRectangle(app))
+        XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
+        snap("23-editor-app-dark")
+
+        if reachAndTap(app.buttons["Parmakla şekil çiz"], in: app),
+           app.navigationBars["Parmakla çiz"].waitForExistence(timeout: 10) {
+            snap("24-finger-drawing-app-dark")
+        }
+    }
+
+    /// The "..." menu of a saved project on the home screen.
+    func testTour08ProjectActionsMenu() {
+        let app = launch(["--ui-test-reset-draft"])
+        XCTAssertTrue(reachAndTap(app.buttons["Örnekle dene"], in: app))
+        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(reachAndTap(app.buttons["Projeyi kaydet"], in: app))
+        XCTAssertTrue(reachAndTap(app.buttons["Kapat"], in: app))
+
+        let actions = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-actions-")).firstMatch
+        XCTAssertTrue(reachAndTap(actions, in: app), "The saved project should have a '...' menu")
+        XCTAssertTrue(app.buttons["Adı değiştir"].waitForExistence(timeout: 10))
+        sleep(1)
+        snap("25-home-project-actions-menu")
+    }
+
+    /// The finger drawing sheet, empty and with four corners tapped.
+    func testTour09FingerDrawingSheet() {
+        let app = launch(["--ui-test-reset-draft"])
+        XCTAssertTrue(openEditorWithRectangle(app))
+        XCTAssertTrue(reachAndTap(app.buttons["Parmakla şekil çiz"], in: app))
+        XCTAssertTrue(app.navigationBars["Parmakla çiz"].waitForExistence(timeout: 10))
+        snap("26-finger-drawing-empty")
+
+        let canvas = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Parmakla nokta ekleme tuvali")).firstMatch
+        if canvas.waitForExistence(timeout: 5), canvas.isHittable {
+            for (dx, dy) in [(0.35, 0.3), (0.65, 0.3), (0.65, 0.7), (0.35, 0.7)] {
+                canvas.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: dy)).tap()
+            }
+            snap("27-finger-drawing-four-points")
+        }
+    }
+
+    /// The corner point editor for a rectangle.
+    func testTour10CornerPointEditor() {
+        let app = launch(["--ui-test-reset-draft"])
+        XCTAssertTrue(openEditorWithRectangle(app))
+        XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
+        XCTAssertTrue(reachAndTap(app.buttons["Köşe noktalarını düzenle"], in: app))
+        XCTAssertTrue(app.navigationBars["Köşe noktaları"].waitForExistence(timeout: 10))
+        snap("28-corner-point-editor")
     }
 }

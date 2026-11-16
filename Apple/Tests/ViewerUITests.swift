@@ -168,6 +168,49 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Geri al"].isHittable)
     }
 
+    func testZoomButtonsChangeTheViewAndFitBringsItBack() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        // Nothing to zoom while the drawing is empty.
+        XCTAssertFalse(app.buttons["Yakınlaştır"].exists)
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+
+        let zoomIn = app.buttons["Yakınlaştır"]
+        XCTAssertTrue(zoomIn.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Ekrana sığdır"].exists, "Fit is only offered once zoomed")
+        zoomIn.tap()
+        zoomIn.tap()
+        XCTAssertTrue(app.buttons["Ekrana sığdır"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • 2.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+
+        app.buttons["Uzaklaştır"].tap()
+        XCTAssertTrue(app.staticTexts["1 parça • 1.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+        // A gesture-free way to bring the selected piece back to the middle.
+        XCTAssertTrue(app.buttons["Seçili parçayı göster"].exists)
+        app.buttons["Seçili parçayı göster"].tap()
+        XCTAssertTrue(app.staticTexts["1 parça • 1.6× yakınlaştırıldı"].exists)
+        app.buttons["Ekrana sığdır"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Ekrana sığdır"].exists)
+        XCTAssertFalse(app.buttons["Seçili parçayı göster"].exists)
+    }
+
+    func testWorkshopTellsABeginnerWhatToDoNext() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        let tip = app.descendants(matching: .any)["coach-tip"]
+        XCTAssertTrue(tip.waitForExistence(timeout: 5))
+        XCTAssertTrue(tip.label.contains("Başlamak için bir şekil ekle"), tip.label)
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "Ölçüleri milimetre olarak yaz"), object: tip)
+        XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed)
+    }
+
     func testResumedDraftNewerThanSavedProjectCanBeSavedAgain() {
         let app = launchClean()
         app.buttons["Örnekle dene"].tap()
@@ -203,7 +246,7 @@ final class ViewerUITests: XCTestCase {
                                 "--ui-test-reset-draft", "--ui-test-unreadable-draft"]
         app.launch()
 
-        let notice = app.alerts["Dosya açılamadı"]
+        let notice = app.alerts["Son çizim açılamadı"]
         XCTAssertTrue(notice.waitForExistence(timeout: 15), "The unreadable draft should be reported at launch")
         notice.buttons["Tamam"].tap()
         XCTAssertFalse(app.buttons["Son çizime devam et"].exists)
@@ -291,19 +334,77 @@ final class ViewerUITests: XCTestCase {
 
         let selected = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Arka Beden")).firstMatch
         XCTAssertTrue(selected.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any)["Arka Beden kontur önizlemesi"].exists)
-        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "İplik yönü: Kontrol bekliyor")).firstMatch
+        XCTAssertTrue(app.descendants(matching: .any)["Arka Beden önizlemesi"].exists)
+        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Kumaş yönü: Kontrol edilmeli")).firstMatch
         XCTAssertTrue(details.waitForExistence(timeout: 10))
         XCTAssertTrue(details.label.contains("Pamuk"))
         XCTAssertTrue(details.label.contains("Adet: 2"))
-        let hideGrain = app.buttons["İplik yönlerini gizle"]
+        let hideGrain = app.buttons["Kumaş yönünü gizle"]
         XCTAssertTrue(hideGrain.waitForExistence(timeout: 10))
         hideGrain.tap()
-        XCTAssertTrue(app.buttons["İplik yönlerini göster"].exists)
+        XCTAssertTrue(app.buttons["Kumaş yönünü göster"].exists)
         selected.tap()
         XCTAssertTrue(app.buttons["Tüm parçalar"].waitForExistence(timeout: 10))
         app.buttons["Tüm parçalar"].tap()
         XCTAssertTrue(picker.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["2 parçanın önizlemesi"].exists)
+    }
+
+    func testVerticalMoveButtonsShiftThePieceAndUndoRestoresIt() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+
+        let yField = app.textFields["Y"]
+        func expectY(_ value: String, file: StaticString = #filePath, line: UInt = #line) {
+            let expectation = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "value == %@", value), object: yField)
+            XCTAssertEqual(XCTWaiter().wait(for: [expectation], timeout: 5), .completed,
+                           "Y should read \(value)", file: file, line: line)
+        }
+        expectY("0")
+
+        // CAD Y grows upwards: the up button adds 10 mm, the down button takes it back.
+        let up = app.buttons["↑ 10 mm"]
+        let down = app.buttons["↓ 10 mm"]
+        tapBelow(up, in: app)
+        expectY("10")
+        tapBelow(down, in: app)
+        expectY("0")
+
+        let undo = app.buttons["Geri al"]
+        XCTAssertTrue(undo.isEnabled)
+        undo.tap()
+        expectY("10")
+        XCTAssertTrue(app.buttons["İleri al"].isEnabled)
+    }
+
+    func testInvalidDimensionNamesTheFieldInTheAlert() {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+
+        let width = app.textFields["En"]
+        tapBelow(width, in: app)
+        // Two separators can be typed without leaving the numbers keyboard page.
+        width.typeText(",,")
+        let done = app.keyboards.buttons["Done"]
+        if done.exists { done.tap() }
+        tapBelow(app.buttons["Ölçüleri, konumu ve adı uygula"], in: app)
+
+        let alert = app.alerts["İşlem tamamlanamadı"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        let reason = alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "birden çok")).firstMatch
+        XCTAssertTrue(reason.exists, "The alert should say which box is wrong and why")
+        alert.buttons["Tamam"].tap()
+        // The alert fades out; wait for it instead of checking at once.
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: alert)
+        XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 5), .completed)
+        // Nothing was applied: the drawing still has its one piece.
+        XCTAssertTrue(countLabel(1, in: app).exists)
     }
 }

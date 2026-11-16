@@ -23,3 +23,6 @@ targets:
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.graphics-design
         INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
         INFOPLIST_KEY_UIFileSharingEnabled: YES
+        # Export compliance: the app has no networking and no cryptography of its own.
+        # Writes ITSAppUsesNonExemptEncryption = NO so App Store Connect stops asking per build.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
