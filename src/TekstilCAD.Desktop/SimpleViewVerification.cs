@@ -20,12 +20,12 @@ internal static partial class SimpleViewVerification
     private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
 
     // Simple view canvas floors. Written from the first CI render minus 10 px; never lowered just to pass.
-    // First CI render: clean 377 px at 1024x640 and 637 px at 1440x900 (floors 367 and 627); busy 243 px at 1024x640 and 503 px at 1440x900 with a heavier busy set;
-    // the busy floors are provisional until measured with the classic busy set (CI).
+    // First CI render (clean: 377 px at 1024x640, 637 px at 1440x900; busy with the classic busy set: 279 px and 539 px):
+    // every floor is the measured value minus 10 px.
     private const double Floor1024 = 367;
     private const double Floor1440 = 627;
-    private const double BusyFloor1024 = 250;
-    private const double BusyFloor1440 = 500;
+    private const double BusyFloor1024 = 269;
+    private const double BusyFloor1440 = 529;
 
     internal static void Run(MainWindow studio, string reportPath, List<string> checks)
     {

@@ -188,7 +188,10 @@ internal static partial class SimpleViewVerification
                     var canvas = F<CadCanvas>(fresh, "canvas"); var original = canvas.ActualHeight;
                     Simple(fresh, true); Render(fresh, Temp("classic-on"), width, height);
                     Simple(fresh, false); Render(fresh, Temp("classic-after"), width, height);
-                    results.Add((busy ? "busy" : "clean", width, floor, canvas.ActualHeight));
+                    // The clean figures equal VerifyCompactWorkspace's own (421 and 681), so its floors apply as they are. The busy
+                    // state here is built from shorter notice texts than that check leaves behind and measures a little lower, so the
+                    // classic busy floors (340 and 600) stay with VerifyCompactWorkspace and this check requires no loss at all.
+                    results.Add((busy ? "busy" : "clean", width, busy ? original - .5 : floor, canvas.ActualHeight));
                     checks.Add($"[measured] classic canvas height {original:0.#} px before and {canvas.ActualHeight:0.#} px after the switch ({(busy ? "busy" : "clean")}) at {width}x{height}");
                 });
         var pass = results.All(r => r.Height >= r.Floor);
