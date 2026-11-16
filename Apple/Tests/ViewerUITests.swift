@@ -183,14 +183,14 @@ final class ViewerUITests: XCTestCase {
         zoomIn.tap()
         zoomIn.tap()
         XCTAssertTrue(app.buttons["Ekrana sığdır"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["1 parça • 2.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • 2,6× yakınlaştırıldı"].waitForExistence(timeout: 5))
 
         app.buttons["Uzaklaştır"].tap()
-        XCTAssertTrue(app.staticTexts["1 parça • 1.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • 1,6× yakınlaştırıldı"].waitForExistence(timeout: 5))
         // A gesture-free way to bring the selected piece back to the middle.
         XCTAssertTrue(app.buttons["Seçili parçayı göster"].exists)
         app.buttons["Seçili parçayı göster"].tap()
-        XCTAssertTrue(app.staticTexts["1 parça • 1.6× yakınlaştırıldı"].exists)
+        XCTAssertTrue(app.staticTexts["1 parça • 1,6× yakınlaştırıldı"].exists)
         app.buttons["Ekrana sığdır"].tap()
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Ekrana sığdır"].exists)

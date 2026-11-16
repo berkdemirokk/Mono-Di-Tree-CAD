@@ -48,7 +48,6 @@ struct EasyCADWorkspace: View {
     #endif
     // Size of the whole workshop area. Wide areas put the drawing beside the tools.
     @State private var workspaceSize = CGSize.zero
-    @State private var wideByShape = false
     @State private var shouldStoreImportedSeed = false
     // Last verified on-disk state, distinct from the next UI edit. An absent
     // draft uses nil; resumed sessions start from their verified snapshot.
@@ -503,9 +502,11 @@ struct EasyCADWorkspace: View {
     private var isWide: Bool {
         #if os(iOS)
         // Size classes do not change while the keyboard is up, so typing never switches layout.
-        if horizontalSizeClass == .regular || verticalSizeClass == .compact { return true }
+        return horizontalSizeClass == .regular || verticalSizeClass == .compact
+        #else
+        // The container (not the layout inside it) is wider than tall.
+        return workspaceSize.width > workspaceSize.height
         #endif
-        return wideByShape
     }
 
     /// The keyboard only shrinks the drawing when it sits above the tools; beside them (iPad,
@@ -514,12 +515,6 @@ struct EasyCADWorkspace: View {
 
     /// Share of the width the drawing gets beside the tools.
     private static let wideCanvasShare: CGFloat = 0.6
-
-    private func measureWorkspace(_ size: CGSize) {
-        workspaceSize = size
-        // The keyboard shortens the area; a portrait phone must not switch layout while typing.
-        if !keyboardVisible { wideByShape = size.width > size.height }
-    }
 
     private var canvasHeight: CGFloat {
         // Beside the tools the drawing uses the full height, less the two status lines under it.
@@ -551,21 +546,34 @@ struct EasyCADWorkspace: View {
         VStack(alignment: .leading, spacing: 4) {
             preview
             // This panel does not scroll, so its text is limited: it must not push the tools away.
-            if !document.pieces.isEmpty {
-                Text(viewport.isFit
-                     ? "\(document.pieces.count) parça • Tümü ekranda"
-                     : "\(document.pieces.count) parça • \(String(format: "%.1f", viewport.zoom))× yakınlaştırıldı")
-                    .font(.caption).foregroundStyle(AppTheme.muted)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
-            }
-            if let success {
-                Text(success).font(.footnote).foregroundStyle(AppTheme.muted)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
-            }
+            // At accessibility sizes these lines move to the top of the scrolling tools instead.
+            if !dynamicTypeSize.isAccessibilitySize { statusLines }
         }
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 6)
+    }
+
+    /// Piece count / zoom line and the last success message.
+    @ViewBuilder
+    private var statusLines: some View {
+        let large = dynamicTypeSize.isAccessibilitySize
+        if !document.pieces.isEmpty {
+            Text(viewport.isFit
+                 ? "\(document.pieces.count) parça • Tümü ekranda"
+                 : "\(document.pieces.count) parça • \(zoomText(viewport.zoom))× yakınlaştırıldı")
+                .font(.caption).foregroundStyle(AppTheme.muted)
+                .lineLimit(large ? nil : 2)
+        }
+        if let success {
+            Text(success).font(.footnote).foregroundStyle(AppTheme.muted)
+                .lineLimit(large ? nil : 2)
+        }
+    }
+
+    /// Zoom with a Turkish decimal comma, one fraction digit.
+    private func zoomText(_ zoom: Double) -> String {
+        zoom.formatted(.number.precision(.fractionLength(1)).locale(AppTheme.locale))
     }
 
     private func addRectangleButton(fill: Bool) -> some View {
@@ -643,8 +651,11 @@ struct EasyCADWorkspace: View {
     private func millimetreField(_ title: String, label: String, text: Binding<String>,
                                  current: String) -> some View {
         VStack(alignment: .leading) {
-            Text(label).font(.caption)
+            Text(label).font(.caption).accessibilityHidden(true)
             TextField(title, text: text)
+                .accessibilityLabel(label)
+                // Keeps lookups by the short title ("X", "En") working.
+                .accessibilityIdentifier(title)
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.done)
                 #if os(iOS)
@@ -727,7 +738,6 @@ struct EasyCADWorkspace: View {
             }
         }
         .buttonStyle(.appSecondary)
-        .font(.caption)
     }
 
     @ViewBuilder
@@ -880,6 +890,9 @@ struct EasyCADWorkspace: View {
 
     var body: some View {
         NavigationStack {
+            // The container is measured, not the layout inside it: the layout's own size depends
+            // on the previous orientation and would feed back into the decision.
+            GeometryReader { container in
             workshopLayout {
                 if showsCanvas {
                     canvasPanel
@@ -889,6 +902,7 @@ struct EasyCADWorkspace: View {
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        if dynamicTypeSize.isAccessibilitySize { statusLines }
                         coachTip.appCard()
                         addSection.appCard()
                         if !document.pieces.isEmpty { editSection.appCard() }
@@ -902,11 +916,10 @@ struct EasyCADWorkspace: View {
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("workshop-tools")
             }
-            .background(GeometryReader { proxy in
-                Color.clear
-                    .onAppear { measureWorkspace(proxy.size) }
-                    .onChange(of: proxy.size) { measureWorkspace($0) }
-            })
+            .frame(width: container.size.width, height: container.size.height, alignment: .topLeading)
+            .onAppear { workspaceSize = container.size }
+            .onChange(of: container.size) { workspaceSize = $0 }
+            }
             .background(AppTheme.page.ignoresSafeArea())
             .animation(reduceMotion ? nil : .default, value: keyboardVisible)
             // The drawing can leave the screen while the keyboard changes; a drag that was in
@@ -917,6 +930,7 @@ struct EasyCADWorkspace: View {
                 currentDrag = .zero
                 panning = false
                 pinching = false
+                pinchAnchor = nil
                 livePan = .zero
                 liveZoom = 1
                 // The drawing gets smaller with the keyboard up; a zoomed view would point at
@@ -932,11 +946,12 @@ struct EasyCADWorkspace: View {
                 livePan = .zero
                 panning = false
                 pinching = false
+                pinchAnchor = nil
             }
             .onChange(of: success) { message in announce(message) }
             .onChange(of: viewport.zoom) { zoom in
                 announce(viewport.isFit ? "Ekrana sığdırıldı"
-                                        : "Yakınlaştırma \(String(format: "%.1f", zoom)) kat")
+                                        : "Yakınlaştırma \(zoomText(zoom)) kat")
             }
             .modifier(KeyboardVisibility(visible: $keyboardVisible))
             #if os(iOS)
@@ -1338,7 +1353,7 @@ struct EasyCADWorkspace: View {
                     for p in piece.points.dropFirst() { path.addLine(to: position(p)) }
                     if piece.closed { path.closeSubpath() }
                     context.stroke(path,
-                        with: .color(piece.id == selectedID ? .accentColor : .secondary),
+                        with: .color(piece.id == selectedID ? .accentColor : AppTheme.muted),
                         lineWidth: piece.id == selectedID ? 3 : 1.8)
                 }
                 // At accessibility text sizes the tags grow until they cover the small drawing; the
@@ -1412,7 +1427,7 @@ struct EasyCADWorkspace: View {
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
         .accessibilityLabel("Dokunarak parça seçebileceğin kalıp çizimi")
-        .accessibilityHint("Bir parçaya dokunarak seç, sürükleyerek taşı. Yakınlaştırılmışken sürüklemek görünümü kaydırır; seçili parça kenar çizgisinden tutulunca taşınır. Yakınlaştırmak için yukarı, uzaklaştırmak için aşağı kaydır. Alternatif: Parça seç menüsü.")
+        .accessibilityHint("Dokunarak seç, sürükleyerek taşı, yukarı ya da aşağı kaydırarak yakınlaştır. Alternatif: Parça seç menüsü.")
         .accessibilityValue(canvasSpokenValue)
         .accessibilityAdjustableAction { direction in
             switch direction {
@@ -1437,7 +1452,8 @@ struct EasyCADWorkspace: View {
             if !document.pieces.isEmpty && !keyboardCramps { zoomControls }
         }
         .overlay(alignment: .top) {
-            if showPanHint && !viewport.isFit && !keyboardCramps { panHint }
+            if showPanHint && !viewport.isFit && !keyboardCramps
+                && !dynamicTypeSize.isAccessibilitySize { panHint }
         }
         .onChange(of: viewport.isFit) { isFit in
             if !isFit && !panHintSeen { showPanHint = true }
@@ -1502,7 +1518,7 @@ struct EasyCADWorkspace: View {
                 text += "Uzunluk \(DraftPiece.display(piece.lineLength)) milimetre. "
             }
         }
-        text += viewport.isFit ? "Ekrana sığdırılmış." : "Yakınlaştırma \(String(format: "%.1f", viewport.zoom)) kat."
+        text += viewport.isFit ? "Ekrana sığdırılmış." : "Yakınlaştırma \(zoomText(viewport.zoom)) kat."
         if !viewport.isFit && viewport.pan != .zero { text += " Görünüm kaydırılmış." }
         // The same reference the drawing shows: the grid size and where X and Y are measured from.
         if let mapper = transform(canvasSize) {
