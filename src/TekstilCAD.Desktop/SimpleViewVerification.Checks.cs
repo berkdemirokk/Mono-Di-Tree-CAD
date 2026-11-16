@@ -162,11 +162,13 @@ internal static partial class SimpleViewVerification
             var oneLine = strip.ActualHeight <= 44 && summary.ActualHeight <= 24;
             var reachable = FullyVisible(toggle, root) && toggle.Focusable && toggle.ActualHeight >= 40;
             var canvas = F<CadCanvas>(fresh, "canvas").ActualHeight >= floor;
+            var examples = Descendants<Button>(root).First(b => AutomationProperties.GetName(b) == "Örnekleri göster");
+            var clear = BoundsInRoot(examples, root).Bottom <= BoundsInRoot(strip, root).Top + .5;
             SetNotices(fresh, true, width, height);
             var complete = NoticesComplete(fresh);
             SetNotices(fresh, false, width, height);
-            if (!(oneLine && reachable && canvas && complete)) reasons.Add($"{width}x{height} strip={strip.ActualHeight:0} summary={summary.ActualHeight:0} reachable={reachable} canvas={canvas} complete={complete}");
-            ok &= oneLine && reachable && canvas && complete;
+            if (!(oneLine && reachable && canvas && complete && clear)) reasons.Add($"{width}x{height} clear={clear} strip={strip.ActualHeight:0} summary={summary.ActualHeight:0} reachable={reachable} canvas={canvas} complete={complete}");
+            ok &= oneLine && reachable && canvas && complete && clear;
         }
         });
         // One warning only: no banner, the row shows as it is.

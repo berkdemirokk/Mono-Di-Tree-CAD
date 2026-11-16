@@ -189,6 +189,18 @@ public partial class MainWindow
 
             // Header: same instances, calmer.
             r.Set(w.headerGrid, FrameworkElement.MarginProperty, new Thickness(16, 4, 16, 2));
+            // The brand name and the buttons share one line (saves a row of canvas height); the "local, mm" chip is dropped
+            // because the footer already states the unit.
+            if (w.brandLinePanel.Parent is StackPanel brandPanel)
+            {
+                r.Set(brandPanel, StackPanel.OrientationProperty, Orientation.Horizontal);
+                r.Set(brandPanel, FrameworkElement.MarginProperty, new Thickness(0, 0, 14, 0));
+                r.Set(w.brandLinePanel, FrameworkElement.MarginProperty, new Thickness(0));
+                var brandName = brandPanel.Children.OfType<TextBlock>().First();
+                r.Set(brandName, FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+                r.Set(brandName, FrameworkElement.MarginProperty, new Thickness(0, 0, 14, 0));
+            }
+            r.Set(w.modeChip, UIElement.VisibilityProperty, Visibility.Collapsed);
             r.Set(w.taglineText, UIElement.VisibilityProperty, Visibility.Collapsed);
             r.Set(w.aboutButton, FrameworkElement.MinHeightProperty, 40d);
             r.Set(w.aboutButton, Control.FontSizeProperty, 14d);

@@ -53,7 +53,7 @@ internal sealed class CommandBarView : Border
     private readonly TextBlock caveatText=new();
     private readonly WrapPanel rowButtons=new();
     private readonly WrapPanel alternatives=new();
-    private readonly WrapPanel chips=new();
+    private readonly OneLinePanel chips=new();
     private readonly Button apply=new();
     private readonly Button cancel=new();
     private readonly Button danger=new();
@@ -653,5 +653,37 @@ internal sealed class CommandBarView : Border
             shown++;
         }
         chips.Children.Add(examplesToggle);
+    }
+
+    /// <summary>
+    /// One line of chips that never wraps, so the row keeps the height the window reserves for it. Chips that do not fit are hidden
+    /// (in order, the later ones first); the last child, the examples button, always stays.
+    /// </summary>
+    private sealed class OneLinePanel : Panel
+    {
+        protected override Size MeasureOverride(Size available)
+        {
+            double width=0,height=0;
+            foreach(UIElement child in InternalChildren)
+            {
+                child.Measure(new Size(double.PositiveInfinity,available.Height));
+                width+=child.DesiredSize.Width;height=Math.Max(height,child.DesiredSize.Height);
+            }
+            return new Size(double.IsInfinity(available.Width) ? width : Math.Min(width,available.Width),height);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            var last=InternalChildren.Count-1;
+            var budget=finalSize.Width-(last>=0 ? InternalChildren[last].DesiredSize.Width : 0);
+            double x=0;var full=false;
+            for(var i=0;i<InternalChildren.Count;i++)
+            {
+                var child=InternalChildren[i];var width=child.DesiredSize.Width;
+                if(i<last && (full || x+width>budget)){ full=true;child.Visibility=Visibility.Hidden;child.Arrange(new Rect(0,0,0,0));continue; }
+                child.Visibility=Visibility.Visible;child.Arrange(new Rect(x,0,width,finalSize.Height));x+=width;
+            }
+            return finalSize;
+        }
     }
 }
