@@ -71,6 +71,9 @@ public static partial class CommandParser
         var folded = TurkishText.Fold(norm);
         if (Phrases.Keys.Any(k => k.StartsWith(folded, StringComparison.Ordinal))) return true;
 
+        // "adı olsun" already ends in its verb: the empty name is final, not unfinished typing.
+        if (result.Code == Refusals.EmptyName && RenameVerbs.Contains(folded.Substring(folded.LastIndexOf(' ') + 1))) return false;
+
         var bases = new List<string> { norm };
         var last = norm[^1];
         if (last == '\'') bases.Add(norm + "e");
