@@ -22,7 +22,9 @@ public sealed class TextileToolsWindow : Window
     private readonly ObservableCollection<GradeRow> rows = [];
     private readonly DataGrid grades = new() { AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, SelectionUnit=DataGridSelectionUnit.FullRow, SelectionMode=DataGridSelectionMode.Extended, MinHeight=80, RowHeight=34, ColumnHeaderHeight=32, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock sourceInfo = new() { TextWrapping=TextWrapping.Wrap, MaxHeight=44, TextTrimming=TextTrimming.CharacterEllipsis, VerticalAlignment=VerticalAlignment.Center };
-    private readonly TextBox sourceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=42, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(16,3,0,0) };
+    // The themed TextBox insets its text by the padding twice. With the default 7 px only 12 px of a
+    // 17 px line fit under MaxHeight; 1 px leaves room for both the name and the identity line.
+    private readonly TextBox sourceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=42, Padding=new Thickness(9,1,9,1), VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(16,3,0,0) };
     private readonly TextBlock result = new() { TextWrapping=TextWrapping.Wrap, Text="Artışları girip yeni bedeni oluşturun veya diğer araç sekmelerini kullanın." };
     private readonly List<(Button Button,Func<bool> Available)> commands = [];
     private bool refreshingSource;
@@ -564,7 +566,7 @@ public sealed class TextileToolsWindow : Window
         help.Content=new TextBlock { Text="ΔX / ΔY bir beden adımındaki mm değişimidir. Her beden aynı seçili temel parçadan hesaplanır. Artışları projeye uygulayın, ardından ana pencereden projeyi kaydedin. Uygulanmamış hücreler atölye kapanınca kaybolur. Köşe işaretleri yeni bedende aynı indeksli noktalara taşınır; görsel işaretler fiziksel çentik veya kesim komutu değildir. Her bedende konumlarını kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,6,0,6) };
         var gradeHeader=new StackPanel { Orientation=Orientation.Horizontal };gradeHeader.Children.Add(help);
         var pickGradePoint=Button(gradeHeader,"Konturdan nokta seç…",SelectGradePoint,()=>HasPiece()&&!rulesNeedReset);
-        pickGradePoint.Margin=new Thickness(0,0,0,2);pickGradePoint.Padding=new Thickness(10,3,10,3);
+        pickGradePoint.Margin=new Thickness(8,0,0,2);pickGradePoint.Padding=new Thickness(10,3,10,3);
         AutomationProperties.SetHelpText(pickGradePoint,"Kontur önizlemesinden bir nokta seçip serileme tablosundaki satırına gidin. Artışlar değiştirilmez.");
         layout.Children.Add(gradeHeader);
         foreach(var (title,property,readOnly) in new[] { ("Nokta","Index",true),("X · mm","X",true),("Y · mm","Y",true),("ΔX · mm","Dx",false),("ΔY · mm","Dy",false) })
