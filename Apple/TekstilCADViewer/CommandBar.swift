@@ -62,6 +62,7 @@ struct CommandBar: View {
                 if !visible { holdOpen = false }
             }
             .onChange(of: showsOutput) { shown in hasOutput = shown }
+    }
 
     @ViewBuilder
     private var content: some View {
