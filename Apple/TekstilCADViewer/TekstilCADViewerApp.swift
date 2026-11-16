@@ -608,7 +608,9 @@ private struct ContentView: View {
                 // Light is the default; dark and follow-the-phone are opt-in.
                 AppearancePicker()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // A readable column on iPad and wide windows; full width on a phone.
+            .frame(maxWidth: 640, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -685,7 +687,9 @@ private struct ContentView: View {
                         .appCard()
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // A readable column on iPad and wide windows; full width on a phone.
+                .frame(maxWidth: 640, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
         }
     }
