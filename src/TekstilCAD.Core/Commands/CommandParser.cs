@@ -61,7 +61,7 @@ public static partial class CommandParser
         var norm = TurkishText.Normalize(trimmed);
         if (norm.Length == 0) return ParseResult.Refused(Refusals.Unrecognized(string.Empty));
         var folded = TurkishText.Fold(norm);
-        var state = new State { Norm = norm, Folded = folded, Names = context.PieceNames ?? Array.Empty<string>() };
+        var state = new State { Norm = norm, Folded = folded, Names = (context.PieceNames ?? Array.Empty<string>()).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() };
         var lexed = Lex(norm, folded);
 
         // 1. Rename claims the whole line: "adı Ön Beden olsun".
@@ -80,7 +80,7 @@ public static partial class CommandParser
         if (named is not null) return named;
 
         // 5. Everything else is built from numbers, units, directions and keywords.
-        state.Items = BuildItems(state.Raw);
+        state.Items = BuildItems(state.Raw, norm);
         if (TryMultiPhrase(state)) return ParseResult.Refused(Refusals.TwoJobsRefusal());
         var classified = Classify(state);
         return state.UnitAssumed ? classified.WithUnitAssumed() : classified;
@@ -93,24 +93,22 @@ public static partial class CommandParser
     private static ParseResult? TryRename(State s, List<Tok> lexed)
     {
         var index = 0;
-        while (index < lexed.Count && lexed[index].Kind == TokKind.Word && FillerWords.Contains(lexed[index].Text)) index++;
+        while (index < lexed.Count && lexed[index].Kind == TokKind.Word && (FillerWords.Contains(lexed[index].Text) || lexed[index].Text is "parcanin" or "parcamin")) index++;
         if (index >= lexed.Count) return null;
         var label = lexed[index];
         if (label.Kind != TokKind.Word || !RenameLabels.Contains(label.Text)) return null;
 
+        // Every rename form ends in a verb ("olsun", "yap", ...); a line that does not is something else
+        // ("isim kartını sil" names a piece). Polite fillers after the verb ("lütfen") are ignored.
         var endIndex = lexed.Count - 1;
+        while (endIndex > index && lexed[endIndex].Kind == TokKind.Word && FillerWords.Contains(lexed[endIndex].Text)) endIndex--;
         var nameEnd = s.Norm.Length;
-        if (endIndex > index && lexed[endIndex].Kind == TokKind.Word && RenameVerbs.Contains(lexed[endIndex].Text))
-        {
+        if (endIndex == index) return ParseResult.Refused(Refusals.EmptyNameRefusal());
+        if (lexed[endIndex].Kind != TokKind.Word || !RenameVerbs.Contains(lexed[endIndex].Text)) return null;
+        nameEnd = lexed[endIndex].Start;
+        endIndex--;
+        if (endIndex > index && lexed[endIndex].Kind == TokKind.Word && lexed[endIndex].Text == "olarak")
             nameEnd = lexed[endIndex].Start;
-            endIndex--;
-            if (endIndex > index && lexed[endIndex].Kind == TokKind.Word && lexed[endIndex].Text == "olarak")
-                nameEnd = lexed[endIndex].Start;
-        }
-        else if (endIndex == index)
-        {
-            return ParseResult.Refused(Refusals.EmptyNameRefusal());
-        }
 
         var from = label.End;
         if (nameEnd < from) nameEnd = from;
@@ -168,7 +166,10 @@ public static partial class CommandParser
 
     private static ParseResult? TryNamedPiece(State s)
     {
-        var raw = s.Raw;
+        var raw = s.Raw.ToList();
+        if (raw.Count >= 3 && raw[^1].Kind == TokKind.Word && TrailingVerbs.Contains(raw[^1].Text)
+            && raw[^2].Kind == TokKind.Word && (DeleteVerbs.Contains(raw[^2].Text) || SelectVerbs.Contains(raw[^2].Text)))
+            raw.RemoveAt(raw.Count - 1); // "kolu sil yap"
         if (raw.Count < 2) return null;
         List<Tok> nameTokens;
         Tok verb;
@@ -184,6 +185,10 @@ public static partial class CommandParser
         }
         else return null;
 
+        // An ending glued to the last word ("ön beden 2'yi") is not part of the name.
+        while (nameTokens.Count > 0 && nameTokens[^1].Kind == TokKind.Joiner) nameTokens.RemoveAt(nameTokens.Count - 1);
+        if (nameTokens.Count == 0) return null;
+
         var isDelete = DeleteVerbs.Contains(verb.Text);
         if (nameTokens.All(t => t.Kind == TokKind.Word && SelectedPieceWords.Contains(t.Text)))
             return isDelete ? ParseResult.Understood(new DeleteCommand(PieceTarget.Selected)) : null;
@@ -193,28 +198,34 @@ public static partial class CommandParser
         if (resolved.Matches.Count == 0) return null;
         var verbText = isDelete ? "sil" : "seç";
         if (resolved.Matches.Count > 1) return ParseResult.Refused(Refusals.NameAmbiguousFor(resolved.Matches, verbText));
-        PieceCommandKind kind = isDelete ? PieceCommandKind.Delete : PieceCommandKind.Select;
-        return ParseResult.Understood(kind == PieceCommandKind.Delete
+        return ParseResult.Understood(isDelete
             ? new DeleteCommand(PieceTarget.Named, resolved.Query)
             : new SelectCommand(PieceTarget.Named, resolved.Query));
     }
 
-    private enum PieceCommandKind { Delete, Select }
-
     private readonly record struct NameMatch(IReadOnlyList<string> Matches, string Query);
 
     /// <summary>
-    /// Finds the pieces a typed name refers to. Matching is the search box's: lower case with Turkish rules, the typed text
-    /// appearing inside the name, plus diacritic folding. A single exactly equal name wins as typed; otherwise the typed text
-    /// is tried as written and then without its object suffix ("ön bedeni" → "ön beden").
+    /// The piece names a name query refers to, by the parser's own rule: lower case with Turkish rules, diacritic folding, the
+    /// query appearing inside the name, and a single exactly equal name winning. Use it with the <c>Name</c> of a named
+    /// <see cref="SelectCommand"/> or <see cref="DeleteCommand"/> so the planner and the parser can never disagree.
+    /// Returns every match (none, one or several); the caller asks when it is not exactly one.
+    /// </summary>
+    public static IReadOnlyList<string> FindPieces(string? query, IReadOnlyList<string>? pieceNames) =>
+        string.IsNullOrWhiteSpace(query) || pieceNames is null
+            ? Array.Empty<string>()
+            : ResolvePieceName(query, pieceNames.Where(n => !string.IsNullOrWhiteSpace(n)).ToList()).Matches;
+
+    /// <summary>
+    /// Finds the pieces a typed name refers to. A single exactly equal name wins as typed; otherwise the typed text is tried as
+    /// written and then without its ending: the accusative ("kolu" → "kol"), with the softened last letter ("eteği" → "etek",
+    /// "cebi" → "cep") and the "-yi" form ("payı" keeps its y when "pay" matches). The first form that matches decides.
     /// </summary>
     private static NameMatch ResolvePieceName(string phrase, IReadOnlyList<string> names)
     {
         var typedLower = TurkishText.ToLower(phrase).Trim();
         var typedFold = TurkishText.Fold(typedLower);
-        var strippedLower = StripObjectSuffix(typedLower, typedFold);
-        var strippedFold = TurkishText.Fold(strippedLower);
-        if (typedFold.Length == 0) return new NameMatch(Array.Empty<string>(), typedLower);
+        if (typedFold.Length < 2 || names.Count == 0) return new NameMatch(Array.Empty<string>(), typedLower);
 
         var folded = names.Select(n => TurkishText.Fold(n)).ToArray();
 
@@ -222,35 +233,41 @@ public static partial class CommandParser
         for (var i = 0; i < names.Count; i++) if (folded[i] == typedFold) exact.Add(names[i]);
         if (exact.Count == 1) return new NameMatch(exact, typedLower);
 
-        var typedHits = new List<string>();
-        for (var i = 0; i < names.Count; i++) if (folded[i].Contains(typedFold, StringComparison.Ordinal)) typedHits.Add(names[i]);
-        if (typedHits.Count > 0) return new NameMatch(typedHits, typedLower);
-
-        if (strippedFold.Length > 0 && strippedFold != typedFold)
+        foreach (var candidate in NameCandidates(typedLower, typedFold))
         {
-            var strippedHits = new List<string>();
-            for (var i = 0; i < names.Count; i++) if (folded[i].Contains(strippedFold, StringComparison.Ordinal)) strippedHits.Add(names[i]);
-            if (strippedHits.Count > 0) return new NameMatch(strippedHits, strippedLower);
+            var key = TurkishText.Fold(candidate);
+            if (key.Length < 2) continue;
+            var hits = new List<string>();
+            for (var i = 0; i < names.Count; i++) if (folded[i].Contains(key, StringComparison.Ordinal)) hits.Add(names[i]);
+            if (hits.Count > 0) return new NameMatch(hits, candidate);
         }
         return new NameMatch(Array.Empty<string>(), typedLower);
     }
 
-    /// <summary>Removes the accusative ending of the last word ("kolu" → "kol", "ön bedeni" → "ön beden").</summary>
-    private static string StripObjectSuffix(string lower, string folded)
+    /// <summary>The typed name as written, then without its Turkish ending, most likely stem first.</summary>
+    private static IEnumerable<string> NameCandidates(string lower, string folded)
     {
+        yield return lower;
         var space = folded.LastIndexOf(' ');
         var word = folded.Substring(space + 1);
-        var cut = 0;
-        if (word.Length > 3 && (word.EndsWith("yi", StringComparison.Ordinal) || word.EndsWith("yu", StringComparison.Ordinal))) cut = 2;
-        else if (word.Length > 2 && (word.EndsWith('i') || word.EndsWith('u'))) cut = 1;
-        return cut == 0 ? lower : lower.Substring(0, lower.Length - cut);
+        if (word.Length > 2 && (word.EndsWith('i') || word.EndsWith('u')))
+        {
+            var one = lower.Substring(0, lower.Length - 1);
+            yield return one;
+            var last = one[^1];
+            var softened = last switch { 'b' => 'p', 'd' => 't', 'ğ' => 'k', 'g' => 'k', _ => '\0' };
+            if (softened != '\0') yield return one.Substring(0, one.Length - 1) + softened;
+        }
+        if (word.Length > 3 && (word.EndsWith("yi", StringComparison.Ordinal) || word.EndsWith("yu", StringComparison.Ordinal)))
+            yield return lower.Substring(0, lower.Length - 2);
     }
+
 
     // ================================================================================================================
     // Items: merged words, numbers, units
     // ================================================================================================================
 
-    private static List<Tok> BuildItems(List<Tok> raw)
+    private static List<Tok> BuildItems(List<Tok> raw, string norm)
     {
         // 1. Word sequences that read as one ("yarım tur", "saat yönünde", "alt üst").
         var merged = new List<Tok>(raw.Count);
@@ -278,6 +295,9 @@ public static partial class CommandParser
         // 2. Number words ("yüz yirmi", "bir buçuk", "on iki virgül beş").
         var texts = new string[merged.Count];
         for (var i = 0; i < merged.Count; i++) texts[i] = merged[i].Kind == TokKind.Word ? merged[i].Text : string.Empty;
+        // "on" is ten, but "ön" folds to the same letters: only a word typed without the umlaut is a number.
+        for (var i = 0; i < merged.Count; i++)
+            if (texts[i] == "on" && TurkishText.ToLower(norm.Substring(merged[i].Start, merged[i].End - merged[i].Start)) != "on") texts[i] = string.Empty;
         var numbered = new List<Tok>(merged.Count);
         for (var i = 0; i < merged.Count; i++)
         {
@@ -294,6 +314,7 @@ public static partial class CommandParser
                     NumberEnd = last.End,
                     Value = match.Value,
                     FromWords = true,
+                    HasWordSuffix = match.HasSuffix,
                     Overflow = match.TooLarge,
                 });
                 if (match.HasSuffix) numbered.Add(new Tok { Kind = TokKind.Joiner, Text = "suffix", Start = last.End, End = last.End });

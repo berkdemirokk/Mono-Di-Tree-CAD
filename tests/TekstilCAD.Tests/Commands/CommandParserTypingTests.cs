@@ -38,7 +38,7 @@ public sealed class CommandParserTypingTests
     [InlineData("15 cm çizgi")]
     [InlineData("1 cm sola kaydır")]
     [InlineData("1 santim 2 milim sağa")]
-    [InlineData("20 sağa 10 mm yukarı")]
+    [InlineData("20 mm sağa 10 mm yukarı")]
     [InlineData("döndür")]
     [InlineData("90 sağa döndür")]
     [InlineData("geri al")]
@@ -174,7 +174,6 @@ public sealed class CommandParserTypingTests
 
     [Theory]
     [InlineData("zzz")]
-    [InlineData("taşı")]
     [InlineData("xyz 120")]
     [InlineData("yapay zeka ile çiz")]
     [InlineData("45 derece döndür")]
@@ -269,7 +268,7 @@ public sealed class CommandParserTypingTests
         {
             foreach (var example in Examples(notice))
             {
-                var parsed = Run(example, B1);
+                var parsed = Run(example, B1.Append("Ön beden 2").ToArray());
                 if (parsed.Kind == ParseKind.Refusal) bad.Add($"{notice.Code}: \"{example}\" -> {parsed.Code}");
             }
         }

@@ -37,7 +37,7 @@ public static partial class CommandParser
 
     private static readonly HashSet<string> IncompleteCodes = new(StringComparer.Ordinal)
     {
-        Refusals.NotUnderstood, Refusals.NumberMissing, Refusals.TwoMeasuresNeeded, Refusals.EmptyName,
+        Refusals.NotUnderstood, Refusals.NumberMissing, Refusals.TwoMeasuresNeeded, Refusals.EmptyName, Refusals.NamedPieceMove,
     };
 
     /// <summary>Endings tried after the typed text to see whether it could become a working command.</summary>
@@ -46,13 +46,16 @@ public static partial class CommandParser
         string.Empty, " 120 80", " 120 x 80", " 80", " 80 dikdörtgen", " 100 çizgi", " 100", " 10 sağa taşı", " 10 yukarı", " 5 aşağı",
         " santim yukarı", " santim sağa", " mm sağa", " milim sağa", " cm", " mm", " 50 konumuna taşı", " pastal", " payı",
         " 80 yap", " seç", " sil", " olsun", " yap", " tema", " 3 adım geri", " adım geri", " geri", " 60 yap",
-        " 2 yap", " kaydır", " aracı", " 90 derece", " döndür", " beden büyüt", " 10 çizgi",
+        " 2 yap", " kaydır", " aracı", " 90 derece", " döndür", " beden büyüt", " 10 çizgi", " x 80 dikdörtgen", " çarpı seksen dikdörtgen",
+        " dikdörtgen", " yukarı", " aşağı", " sağa", " konumuna taşı", " üst aynala", " santim aşağı", "0 yukarı", "0 konumuna taşı", "0 çizgi", "0 sağa",
     };
 
     private static readonly Lazy<string[]> PrefixVocabulary = new(() =>
     {
         var all = new SortedSet<string>(KnownWords.Value, StringComparer.Ordinal);
-        foreach (var unit in new[] { "mm", "milim", "milimetre", "cm", "santim", "santimetre", "metre" }) all.Add(unit);
+        foreach (var unit in new[] { "mm", "milim", "milimetre", "cm", "santim", "santimetre", "metre", "tur", "bucuk", "yarim", "virgul",
+            "sifir", "bir", "iki", "uc", "dort", "bes", "alti", "yedi", "sekiz", "dokuz", "on", "yirmi", "otuz", "kirk", "elli", "altmis",
+            "yetmis", "seksen", "doksan", "yuz", "bin" }) all.Add(unit);
         foreach (var d in DidYouMeanByFolded.Keys) all.Add(d);
         return all.ToArray();
     });
@@ -64,6 +67,9 @@ public static partial class CommandParser
         if (trimmed.Length == 0 || trimmed.Length > 100) return false;
         var norm = TurkishText.Normalize(trimmed);
         if (norm.Length == 0 || norm == "?") return false;
+
+        var folded = TurkishText.Fold(norm);
+        if (Phrases.Keys.Any(k => k.StartsWith(folded, StringComparison.Ordinal))) return true;
 
         var bases = new List<string> { norm };
         var last = norm[^1];

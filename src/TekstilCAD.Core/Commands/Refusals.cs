@@ -185,8 +185,9 @@ public static class Refusals
     public static Refusal NameNotFoundFor(string typedName, IReadOnlyList<string> realNames, string verb)
     {
         var first = realNames.Count > 0 ? realNames[0] : "ön beden";
+        var shown = TurkishText.ContainsForbiddenWord(typedName) ? "…" : typedName;
         var message = TemplateNameNotFound
-            .Replace("{ad}", typedName, StringComparison.Ordinal)
+            .Replace("{ad}", shown, StringComparison.Ordinal)
             .Replace("{gerçek ad}", first, StringComparison.Ordinal);
         var buttons = realNames.Take(3).Select(n => new RefusalButton(n, n + " " + verb)).ToArray();
         return new Refusal(NameNotFound, message, buttons);

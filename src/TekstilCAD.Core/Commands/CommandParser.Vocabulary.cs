@@ -65,15 +65,15 @@ public static partial class CommandParser
     private static readonly HashSet<string> DrawAllowed = Union(RectWords, SquareWords, LineWords, OrientationWords,
         WidthLabels, HeightLabels, Set("kenar", "kenari"), GlueWords);
 
-    private static readonly HashSet<string> MoveAllowed = Union(MoveVerbs, PositionMarkers, XLabels, YLabels, GlueWords,
+    private static readonly HashSet<string> MoveAllowed = Union(MoveVerbs, PositionMarkers, XLabels, YLabels, GlueWords, SelectedPieceWords,
         Set("al", "git", "saga", "sag", "sola", "sol", "yukari", "yukariya", "asagi", "asagiya"));
 
-    private static readonly HashSet<string> RotateAllowed = Union(RotateWords, GlueWords,
+    private static readonly HashSet<string> RotateAllowed = Union(RotateWords, GlueWords, SelectedPieceWords,
         Set("cevir", "saga", "sola", "tersyone"));
 
-    private static readonly HashSet<string> MirrorAllowed = Union(MirrorWords, MirrorModifiers, GlueWords);
+    private static readonly HashSet<string> MirrorAllowed = Union(MirrorWords, MirrorModifiers, GlueWords, SelectedPieceWords);
 
-    private static readonly HashSet<string> ResizeAllowed = Union(WidthLabels, HeightLabels, BothLabels, GlueWords);
+    private static readonly HashSet<string> ResizeAllowed = Union(WidthLabels, HeightLabels, BothLabels, GlueWords, SelectedPieceWords);
 
     private static readonly HashSet<string> UndoAllowed = Union(UndoWords, Set("al", "ve"));
 
