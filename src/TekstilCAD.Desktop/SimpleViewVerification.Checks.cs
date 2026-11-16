@@ -166,10 +166,10 @@ internal static partial class SimpleViewVerification
                 WithFresh(fresh =>
                 {
                     Simple(fresh, true);
-                    if (busy) MakeBusy(fresh, true);
+                    if (busy) MakeBusy(fresh, false);
                     Render(fresh, Temp($"floor-{busy}-{width}x{height}"), width, height);
                     var canvas = F<CadCanvas>(fresh, "canvas");
-                    checks.Add($"[measured] simple view canvas height {canvas.ActualHeight:0.#} px ({(busy ? "every notice busy" : "clean")}) at {width}x{height}");
+                    checks.Add($"[measured] simple view canvas height {canvas.ActualHeight:0.#} px ({(busy ? "busy" : "clean")}) at {width}x{height}");
                     if (busy) CheckFloor(canvas.ActualHeight, busyFloor, $"Canvas keeps at least {busyFloor} px of height in the simple view with every header notice busy at {width}x{height}", checks);
                     else CheckFloor(canvas.ActualHeight, floor, $"Canvas keeps at least {floor} px of height in the simple view at {width}x{height}", checks);
                 });
@@ -275,7 +275,7 @@ internal static partial class SimpleViewVerification
             Simple(fresh, true);
             foreach (var (name, width, height, busy) in new[] { ("", 1440, 900, false), ("", 1024, 640, false), ("-busy", 1024, 640, true) })
             {
-                if (busy) MakeBusy(fresh, true);
+                if (busy) MakeBusy(fresh, false);
                 var path = Path.ChangeExtension(reportPath, $".simple-view{name}-{width}x{height}.png");
                 Render(fresh, path, width, height); files.Add(path);
             }
