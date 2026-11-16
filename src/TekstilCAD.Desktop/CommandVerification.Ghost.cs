@@ -62,13 +62,15 @@ internal static partial class CommandVerification
             var b=new PatternPiece { Name="B",Points=[new(200,20),new(300,20),new(300,100),new(200,100)] };
             window.LoadDocument(new ProjectDocument { Pieces=[a,b] });window.Select(a.Id);
             Render(window,RenderPath(".command-box-ghost-selection.png"),1440,900);
-            var canvas=Field<CadCanvas>(window,"canvas");var session=SessionOf(window);var view=NewBox(window);
+            var canvas=Field<CadCanvas>(window,"canvas");var session=SessionOf(window);
+            // The window tells its own box (the one Ctrl+K opens) about selection changes.
+            var host=new RecordingHost();window.CommandBoxHostForVerification=()=>host;
+            window.OpenCommandBox();var view=window.CommandBoxView!;view.AutoPreview=false;
             Type(view,"25 sağa taşı");Enter(view);var shown=canvas.Ghost is not null;
             window.Select(b.Id);
             Check(shown && canvas.Ghost is null && view.State==CommandBarState.Idle && session.UndoCount==0,
                 "Ghost preview is cleared after a selection change",checks);
-            var host=new RecordingHost();window.CommandBoxHostForVerification=()=>host;
-            window.OpenCommandBox();var real=window.CommandBoxView!;real.AutoPreview=false;
+            var real=view;real.Reset();
             real.SetText("sil");real.HandleKey(Key.Enter,ModifierKeys.None);
             var danger=canvas.Ghost is { Style:GhostStyle.Danger };
             window.CloseCommandBox();
