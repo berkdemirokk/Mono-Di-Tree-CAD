@@ -44,6 +44,7 @@ internal static partial class SimpleViewVerification
             VerifyControls(checks);
             VerifyRefusals(checks);
             VerifyCommandThroughSimpleView(checks);
+            VerifyCommandBox(reportPath, checks);
             VerifyAllTools(reportPath, checks);
             VerifyRenders(reportPath, checks);
             VerifySideCard(reportPath, checks);
