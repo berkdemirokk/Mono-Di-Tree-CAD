@@ -316,7 +316,7 @@ internal static partial class CommandVerification
             var caveat=view.CaveatText;
             var parts=new[] { view.State==CommandBarState.Result,caveat.Contains("plik yönü"),view.CaveatTextBlock.Visibility==Visibility.Visible,view.CaveatTextBlock.TextWrapping==TextWrapping.Wrap,
                 view.CaveatTextBlock.TextTrimming==TextTrimming.None,double.IsInfinity(view.CaveatTextBlock.MaxHeight),
-                view.CaveatTextBlock.ActualHeight>=view.CaveatTextBlock.DesiredSize.Height-.5,
+                view.CaveatTextBlock.ActualHeight+view.CaveatTextBlock.Margin.Top+view.CaveatTextBlock.Margin.Bottom>=view.CaveatTextBlock.DesiredSize.Height-.5,
                 caveat.Length>0 && System.Windows.Automation.AutomationProperties.GetName(view.RowTextBlock).Contains(caveat.Split(Environment.NewLine)[0]) };
             Check(parts.All(p=>p),"Result row keeps the caveat of the applied command, whole, until the next typing ("+string.Join("",parts.Select(p=>p ? "1" : "0"))+", state "+view.State+", caveat \""+caveat+"\", row \""+view.RowText+"\")",checks);
             Type(view,"a");
