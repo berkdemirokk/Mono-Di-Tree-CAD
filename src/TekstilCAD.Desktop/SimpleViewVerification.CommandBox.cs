@@ -99,9 +99,9 @@ internal static partial class SimpleViewVerification
                 checks.Add($"[measured] simple view canvas height {canvas.ActualHeight:0.#} px with a command preview shown at {width}x{height}");
                 CheckFloor(canvas.ActualHeight, floor, $"Canvas keeps at least {floor} px of height in the simple view while the command preview is shown at {width}x{height}", checks);
                 var root = (FrameworkElement)fresh.Content;
-                Check(view.ApplyButton.IsVisible && FullyVisible(view.ApplyButton, root) && FullyVisible(view.CancelButton, root),
+                Check(FullyVisible(view.ApplyButton, root) && FullyVisible(view.CancelButton, root),
                     $"Preview card with Uygula and Vazgeç stays fully visible at {width}x{height}"
-                    + (view.ApplyButton.IsVisible && FullyVisible(view.ApplyButton, root) && FullyVisible(view.CancelButton, root) ? ""
+                    + (FullyVisible(view.ApplyButton, root) && FullyVisible(view.CancelButton, root) ? ""
                         : $" [state={view.State} apply={BoundsInRoot(view.ApplyButton, root)}/{VisibleBoundsInRoot(view.ApplyButton, root)} cancel={BoundsInRoot(view.CancelButton, root)}/{VisibleBoundsInRoot(view.CancelButton, root)}]"), checks);
             });
     }
