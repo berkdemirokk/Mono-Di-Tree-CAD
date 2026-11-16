@@ -835,6 +835,7 @@ public partial class MainWindow : Window
         selection.Clear();selection.AddRange(ids);
         if(primary is { } value && !selection.Contains(value))selection.Add(value);
         SelectedId=primary;
+        commandBox?.OnContextChanged();
     }
     private void ApplyListSelection(IReadOnlyList<Guid> ids)
     {
@@ -4365,6 +4366,8 @@ public partial class MainWindow : Window
         var editing = Keyboard.FocusedElement is TextBoxBase or PasswordBox or ComboBox;
         try
         {
+            if (HandleCommandBoxShortcut(Keyboard.Modifiers, e.Key))
+            { e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F1)
             { OpenAbout(); e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.F9 && simpleViewSwitching)

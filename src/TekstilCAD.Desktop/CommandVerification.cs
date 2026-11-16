@@ -16,11 +16,11 @@ namespace TekstilCAD.Desktop;
 /// computed with the code under test, so they describe the behaviour the buttons and the draft path had before
 /// the shared operation table and TranslatePiece existed.
 /// </summary>
-internal static class CommandVerification
+internal static partial class CommandVerification
 {
     private const BindingFlags Private=BindingFlags.NonPublic|BindingFlags.Instance;
 
-    internal static void Run(MainWindow studio,List<string> checks)
+    internal static void Run(MainWindow studio,List<string> checks,string? reportPath=null)
     {
         // The table first: a regression there fails a check before any button is clicked (AddButton turns an
         // exception in a click into a message box, which would hang a headless run instead of failing it).
@@ -28,6 +28,10 @@ internal static class CommandVerification
         VerifyOrthogonalButtonsKeepTheirDocuments(checks);
         VerifyPositionDraftsKeepTheirDocuments(checks);
         VerifyExecutor(checks);
+        VerifyPlanExecution(checks);
+        VerifyCommandBox(checks,reportPath);
+        VerifyGhost(checks,reportPath);
+        VerifyVoiceButton(checks,reportPath);
         VerifyOpenTextileToolsAt(checks);
     }
 
@@ -421,9 +425,9 @@ internal static class CommandVerification
             Check(failed is { Result:CommandResult.Refused,Guard:CommandGuards.Commit } && failed.Message.Contains("deneme hatası")
                 && session.UndoCount==0 && DocumentSession.ContentEquals(before,window.Document),
                 "Command executor rolls back an edit that throws and reports why",checks);
-            Check(window.PreviewCommand("120 x 80 dikdörtgen") is { Result:CommandResult.Refused,Guard:CommandGuards.Planner }
-                && window.PreviewCommand("  ").Message=="Bir komut yazın." && DocumentSession.ContentEquals(before,window.Document) && session.UndoCount==0,
-                "Command preview without a planner refuses and changes nothing",checks);
+            Check(window.PreviewCommand("120 x 80 dikdörtgen") is { Kind:CommandPreviewKind.Plan,Plan: not null }
+                && window.PreviewCommand("  ").Kind==CommandPreviewKind.Empty && DocumentSession.ContentEquals(before,window.Document) && session.UndoCount==0,
+                "Command preview plans the typed text and changes nothing",checks);
         });
         // 15: the project changed but the refresh failed afterwards.
         Scenario(window=>
