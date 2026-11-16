@@ -49,6 +49,8 @@ internal sealed class CommandBarViewHost : ICommandBarHost
         {
             if (Child is null) return default;
             Child.Measure(new Size(available.Width, double.PositiveInfinity));
+            // The slot's own size can stay 96 while the card grows, so the child must be arranged again at its full height.
+            InvalidateArrange();
             return new Size(Child.DesiredSize.Width, Math.Min(IdleHeight, Child.DesiredSize.Height));
         }
 
