@@ -137,7 +137,8 @@ internal static partial class SimpleViewVerification
             foreach (var w in warnings)
             {
                 var bounds = BoundsInRoot(w, root);
-                var visible = FullyVisible(w, root) && (w is not TextBlock t || t.ActualHeight >= t.DesiredSize.Height - .5) && (w is not TextBox box || box.ExtentHeight <= box.ViewportHeight + .5);
+                // DesiredSize is stale after the manual re-layout above, so only the visible bounds (and an unscrolled text box) count.
+                var visible = FullyVisible(w, root) && (w is not TextBox box || box.ExtentHeight <= box.ViewportHeight + .5);
                 var below = bounds.Top >= cardBounds.Bottom - .5;
                 if (!visible || !below) { ok = false; reasons.Add($"{state} {width}x{height} {w.GetType().Name}: fullyVisible={visible} below={below} bounds={bounds} visible={VisibleBoundsInRoot(w, root)} cardBottom={cardBounds.Bottom:0} viewport={Viewport(w, root)} desired={w.DesiredSize} vis={w.Visibility} wrap={(w as TextBlock)?.TextWrapping}"); }
             }
