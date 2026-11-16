@@ -164,7 +164,7 @@ public partial class MainWindow
             tile.Content = new StackPanel { Children =
             {
                 new TextBlock { Text = label, FontSize = 12, Foreground = StudioTheme.Muted },
-                new TextBlock { Text = value, FontSize = 16, FontWeight = FontWeights.SemiBold },
+                new TextBlock { Text = value, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap },
             } };
             AutomationProperties.SetName(tile, label + " " + value + "; komut kutusuna yazılır: " + typed);
             tile.ToolTip = "Komut kutusuna şunu yazar: " + typed;
@@ -227,6 +227,11 @@ public partial class MainWindow
             r.Set(w.workspaceGrid.ColumnDefinitions[2], ColumnDefinition.WidthProperty, new GridLength(InspectorWidth(w.rootPanel.ActualWidth)));
             SizeChangedEventHandler resized = (_, e) => w.workspaceGrid.ColumnDefinitions[2].Width = new GridLength(InspectorWidth(e.NewSize.Width));
             r.Do(() => w.rootPanel.SizeChanged += resized, () => w.rootPanel.SizeChanged -= resized);
+
+            // Tab order: header, command bar, workspace; the footer stops come last.
+            r.Set(w.headerGrid, KeyboardNavigation.TabIndexProperty, 0);
+            r.Set(commandRegion!, KeyboardNavigation.TabIndexProperty, 1);
+            r.Set(w.workspaceGrid, KeyboardNavigation.TabIndexProperty, 2);
 
             AttachRail(r);
             AttachCanvasHeader(r);
@@ -319,22 +324,23 @@ public partial class MainWindow
                     r.Set(text, TextBlock.TextProperty, label);
                     r.Set(text, TextBlock.FontSizeProperty, 13d);
                     r.Set(key, TextBlock.FontSizeProperty, 12d);
-                    r.Set(key, UIElement.OpacityProperty, 0.8);
-                    r.Add(item, DrawnIcon(tool, button));
+                    r.Set(key, UIElement.OpacityProperty, 1.0);
+                    r.Add(item, DrawnIcon(tool, item));
                 }
                 var hint = button.ToolTip as string ?? tool;
                 r.Set(button, FrameworkElement.ToolTipProperty, hint + "\nYazarak: " + typed);
             }
         }
 
-        private static UIElement DrawnIcon(string tool, Button button)
+        private static UIElement DrawnIcon(string tool, Grid item)
         {
             var path = new Path
             {
                 Data = System.Windows.Media.Geometry.Parse(IconPaths[tool]), StrokeThickness = 1.8, StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
                 Width = 20, Height = 20, Stretch = Stretch.None, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false,
             };
-            path.SetBinding(Shape.StrokeProperty, new Binding(nameof(Control.Foreground)) { Source = button });
+            // The label's colour (set by the button template for hover and press as well), so icon and text always agree.
+            path.SetBinding(Shape.StrokeProperty, new Binding { Path = new PropertyPath("(TextElement.Foreground)"), Source = item });
             return path;
         }
 
@@ -421,6 +427,8 @@ public partial class MainWindow
         // ---------------------------------------------------------------- state
 
         internal string ToolHeading(string tool) => "Kalıp alanı · " + (ToolTexts.FirstOrDefault(t => t.Tool == tool).Label ?? tool);
+
+        internal void FocusSwitch() => switchButton?.Focus();
 
         internal bool FocusCommandBar()
         {

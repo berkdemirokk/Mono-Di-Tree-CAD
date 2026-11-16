@@ -93,6 +93,9 @@ public partial class MainWindow
             SetStatus("Görünüm değiştirilemedi · " + ex.Message);
             return;
         }
+        // Keep keyboard focus on something that still exists, and say what happened (the status line is silent in the simple view).
+        if (IsSimpleView) FocusSimpleCommandBar(); else simpleView?.FocusSwitch();
+        SetStatus(IsSimpleView ? "Basit görünüm açık · F9 ile Ayrıntılı görünüme dönebilirsiniz." : "Ayrıntılı görünüm açık · F9 ile Basit görünüme dönebilirsiniz.");
         if (!simpleViewSwitching) return;
         var preferences = UiPreferences.Load(AppPaths.UiPreferencesPath);
         if (!(preferences with { View = target ? UiPreferences.SimpleView : UiPreferences.DetailedView }).Save(AppPaths.UiPreferencesPath))
