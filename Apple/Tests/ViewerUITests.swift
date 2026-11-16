@@ -237,7 +237,7 @@ final class ViewerUITests: XCTestCase {
         tapBelow(app.buttons["Projeyi kaydet"], in: app)
         XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 3),
                        "Saving a resumed draft over its own saved project must not report a conflict")
-        XCTAssertTrue(app.staticTexts["Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."].exists)
+        XCTAssertTrue(app.staticTexts["Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsin."].exists)
     }
 
     func testUnreadableDraftCanBeSetAsideInsteadOfBlockingNewWork() {
