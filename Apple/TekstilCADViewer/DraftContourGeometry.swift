@@ -15,9 +15,9 @@ enum DraftContourGeometry {
 
     static func validationError(points: [DraftPoint], closed: Bool) -> String? {
         guard points.count >= (closed ? 3 : 2) else {
-            return closed ? "Kapalı bir kalıp için en az 3 nokta gerekli." : "Açık çizgi için en az 2 nokta gerekli."
+            return closed ? "Kapalı bir parça için en az 3 nokta gerekli." : "Açık çizgi için en az 2 nokta gerekli."
         }
-        guard points.count <= pointLimit else { return "Bu araç en fazla 250 noktalı konturları düzenler." }
+        guard points.count <= pointLimit else { return "Bu araç en fazla 250 noktalı parçaları düzenler." }
         guard points.allSatisfy({ abs($0.x) <= coordinateLimit && abs($0.y) <= coordinateLimit }) else {
             return "Nokta çalışma alanı sınırını aşıyor."
         }
@@ -35,7 +35,7 @@ enum DraftContourGeometry {
                 } else if closed && i == 0 && j == edgeCount - 1 {
                     if overlapsAtVertex(b, a, c) { return "Komşu kenarlar üst üste biniyor." }
                 } else if intersects(a, b, c, d) {
-                    return "Kontur çizgileri birbirini kesiyor. Noktaları gözden geçirin."
+                    return "Parçanın çizgileri birbirini kesiyor. Noktaları gözden geçirin."
                 }
             }
         }
@@ -46,7 +46,7 @@ enum DraftContourGeometry {
             for i in 1..<(points.count - 1) {
                 twiceArea += cross(origin, points[i], points[i + 1])
             }
-            if abs(twiceArea) <= 1e-6 { return "Kalıp kapalı bir alan oluşturmuyor." }
+            if abs(twiceArea) <= 1e-6 { return "Parça kapalı bir alan oluşturmuyor." }
         }
         return nil
     }
@@ -111,6 +111,26 @@ struct DraftViewport: Equatable {
                              pan: CGSize(width: Double(pan.width) * ratio, height: Double(pan.height) * ratio))
     }
 
+    /// Multiplies the zoom by `factor` like `zoomed(by:)`, but keeps the drawing under `anchor` (a
+    /// point in the drawing area, for example where a pinch started) in place instead of the
+    /// centre. The same clamps apply: zoom stays within 1–24, the pan within the bounds of
+    /// `panned(by:in:content:)`, and returning to fit clears the pan. When a bound is hit the
+    /// anchor may drift by the clamped amount.
+    func zoomed(by factor: Double, keeping anchor: CGPoint, in size: CGSize, content: CGSize) -> DraftViewport {
+        guard factor.isFinite, factor > 0, anchor.x.isFinite, anchor.y.isFinite,
+              size.width.isFinite, size.height.isFinite else { return self }
+        let next = min(Self.maxZoom, max(Self.minZoom, zoom * factor))
+        if next <= Self.minZoom + 1e-9 { return DraftViewport() }
+        let ratio = next / zoom
+        // Screen = centre + (fit - centre) * zoom + pan. Holding the screen point d (relative to
+        // the centre) fixed while the zoom changes gives pan' = d - (d - pan) * ratio.
+        let dx = Double(anchor.x) - Double(size.width) / 2
+        let dy = Double(anchor.y) - Double(size.height) / 2
+        let target = CGSize(width: dx - (dx - Double(pan.width)) * ratio,
+                            height: dy - (dy - Double(pan.height)) * ratio)
+        return DraftViewport(zoom: next).panned(by: target, in: size, content: content)
+    }
+
     /// Adds `delta` to the pan. `content` is the size of the drawing at fit (zoom 1). The drawing
     /// can be moved until only `keepVisible` points of it are left in view, never further.
     func panned(by delta: CGSize, in size: CGSize, content: CGSize) -> DraftViewport {
@@ -120,6 +140,36 @@ struct DraftViewport: Equatable {
         return DraftViewport(zoom: zoom, pan: CGSize(
             width: min(limitX, max(-limitX, Double(pan.width + delta.width))),
             height: min(limitY, max(-limitY, Double(pan.height + delta.height)))))
+    }
+}
+
+/// Spacing of the faint millimetre grid behind the drawing. The step follows the zoom through
+/// 1, 5, 10, 50, 100, 500 … mm: the smallest one whose squares are at least `minimumSpacing`
+/// points wide. Every `majorEvery`-th line is drawn a little stronger; it marks the step the grid
+/// would switch to when zoomed out further.
+struct DraftGrid: Equatable {
+    static let minimumSpacing = 12.0
+
+    let step: Double
+    let majorEvery: Int
+
+    init?(pointsPerMillimetre: Double, minimumSpacing: Double = DraftGrid.minimumSpacing) {
+        guard pointsPerMillimetre.isFinite, pointsPerMillimetre > 0,
+              minimumSpacing.isFinite, minimumSpacing > 0 else { return nil }
+        var step = 1.0
+        var nextIsFive = true
+        while step * pointsPerMillimetre < minimumSpacing {
+            guard step < 1e9 else { return nil }
+            step *= nextIsFive ? 5 : 2
+            nextIsFive.toggle()
+        }
+        self.step = step
+        majorEvery = nextIsFive ? 5 : 2
+    }
+
+    /// Whether the line at `index × step` millimetres is a major line.
+    func isMajor(_ index: Double) -> Bool {
+        index.truncatingRemainder(dividingBy: Double(majorEvery)) == 0
     }
 }
 
@@ -168,16 +218,63 @@ struct DraftCanvasMap {
     }
 
     init?(size: CGSize, minX: Double, maxX: Double, minY: Double, maxY: Double, inset: Double) {
+        self.init(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY,
+                  insetLeft: inset, insetRight: inset, insetTop: inset, insetBottom: inset)
+    }
+
+    /// Fits like `init(size:minX:maxX:minY:maxY:inset:)`, but keeps a bottom-right `corner` free
+    /// for controls drawn over the drawing. When the plain fit already misses the corner it is
+    /// used unchanged; otherwise either a strip on the right or one at the bottom is kept free,
+    /// whichever leaves the drawing larger.
+    init?(size: CGSize, minX: Double, maxX: Double, minY: Double, maxY: Double, inset: Double,
+          keepingClear corner: CGSize) {
+        guard let plain = DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY,
+                                         inset: inset) else { return nil }
+        let cornerWidth = Double(corner.width), cornerHeight = Double(corner.height)
+        guard cornerWidth.isFinite, cornerHeight.isFinite, cornerWidth > 0, cornerHeight > 0,
+              plain.overlapsCorner(width: cornerWidth, height: cornerHeight, in: size) else {
+            self = plain
+            return
+        }
+        let right = DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY,
+                                   insetLeft: inset, insetRight: max(inset, cornerWidth),
+                                   insetTop: inset, insetBottom: inset)
+        let below = DraftCanvasMap(size: size, minX: minX, maxX: maxX, minY: minY, maxY: maxY,
+                                   insetLeft: inset, insetRight: inset,
+                                   insetTop: inset, insetBottom: max(inset, cornerHeight))
+        switch (right, below) {
+        case let (r?, b?): self = r.scale >= b.scale ? r : b
+        case let (r?, nil): self = r
+        case let (nil, b?): self = b
+        // Too small to keep the corner free: drawing under the controls beats drawing nothing.
+        case (nil, nil): self = plain
+        }
+    }
+
+    private init?(size: CGSize, minX: Double, maxX: Double, minY: Double, maxY: Double,
+                  insetLeft: Double, insetRight: Double, insetTop: Double, insetBottom: Double) {
         let width = Double(size.width), height = Double(size.height)
-        guard width > 2 * inset, height > 2 * inset, maxX >= minX, maxY >= minY else { return nil }
+        let areaWidth = width - insetLeft - insetRight, areaHeight = height - insetTop - insetBottom
+        guard areaWidth > 0, areaHeight > 0, maxX >= minX, maxY >= minY else { return nil }
         let spanX = maxX - minX, spanY = maxY - minY
-        scale = min((width - 2 * inset) / max(spanX, 1), (height - 2 * inset) / max(spanY, 1))
-        left = (width - spanX * scale) / 2
-        bottom = (height + spanY * scale) / 2
+        scale = min(areaWidth / max(spanX, 1), areaHeight / max(spanY, 1))
+        left = insetLeft + (areaWidth - spanX * scale) / 2
+        bottom = insetTop + (areaHeight + spanY * scale) / 2
         self.minX = minX
         self.minY = minY
         contentWidth = spanX * scale
         contentHeight = spanY * scale
+    }
+
+    /// Screen points per millimetre, including any zoom.
+    var pointsPerMillimetre: Double { scale }
+
+    /// Whether the drawing's bounding box reaches into the bottom-right corner of `size`. Meant for
+    /// a fit map; a zoomed one keeps the fit-size box.
+    func overlapsCorner(width cornerWidth: Double, height cornerHeight: Double, in size: CGSize) -> Bool {
+        // A drawing that only touches the corner's edge (to round-off) does not count.
+        left + contentWidth > Double(size.width) - cornerWidth + 1e-6 &&
+            bottom > Double(size.height) - cornerHeight + 1e-6
     }
 
     func screen(_ p: DraftPoint) -> CGPoint {
