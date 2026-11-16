@@ -28,10 +28,15 @@ public partial class App : Application
         StudioTheme.Use(preferences.Palette);
         CrashReporter.Attach();
         CrashReporter.ShowPendingNotice();
+        // New projects are saved where people find them again: Documents\Kalıplarım (created on the first save).
+        AppPaths.InteractiveProjectsDirectory = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Kalıplarım");
+        var firstLaunch = !System.IO.File.Exists(AppPaths.UiPreferencesPath);
+        if (firstLaunch) preferences.Save(AppPaths.UiPreferencesPath);
         var window = new MainWindow();
         // The window constructor always builds the detailed layout; the saved view is applied here, after construction, interactive start only.
         window.EnableViewSwitching();
         window.ApplySimpleTextScale(preferences.TextScale);
+        window.LoadSimpleViewState(preferences, firstLaunch);
         if (preferences.View == TekstilCAD.Core.Theme.UiPreferences.SimpleView)
         {
             window.LoadDocument(new TekstilCAD.Core.ProjectDocument());

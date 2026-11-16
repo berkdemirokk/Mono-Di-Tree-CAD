@@ -2108,6 +2108,8 @@ public partial class MainWindow : Window
         if(BlockForDxfImport())return;
         if(projectOpenRunning) { SetStatus("Proje açma işlemi sürüyor.");return; }
         var dlg = new OpenFileDialog { Filter = "Mono Di Tree CAD proje (*.tcad)|*.tcad|JSON (*.json)|*.json" };
+        // Starts where the save dialog puts new projects, when that folder exists already.
+        if (AppPaths.InteractiveProjectsDirectory is { } projects && Directory.Exists(projects)) dlg.InitialDirectory = projects;
         if (dlg.ShowDialog(this) != true) return;
         _ = OpenProjectFileAsync(dlg.FileName);
     }

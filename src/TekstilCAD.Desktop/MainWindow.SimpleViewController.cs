@@ -18,16 +18,15 @@ public partial class MainWindow
     /// only in the simple view (command bar region, side card, rail captions, footer note) are created on the first attach
     /// and are children of the window only while the simple view is on.
     /// </summary>
-    private sealed class SimpleViewController
+    private sealed partial class SimpleViewController
     {
         private readonly MainWindow w;
         private readonly ViewRecorder recorder = new();
         private ICommandBarHost? commandBar;
-        private Border? commandRegion, sideCard;
+        private Border? commandRegion;
+        private SideCardView? card;
         private Button? switchButton, openButton, saveButton, allToolsButton, openCancelProxy;
-        private TextBlock? railCaption, railHint, footerNote, scaleWarning, nextStep, cardName, cardEmpty;
-        private StackPanel? cardPiece;
-        private Button? widthTile, heightTile, positionTile;
+        private TextBlock? railCaption, railHint, footerNote, scaleWarning;
         private bool switchMounted, switchPermanent, built;
         private int textScale = 100;
         private readonly Dictionary<string, UIElement> toolIcons = [];
@@ -97,7 +96,7 @@ public partial class MainWindow
             AutomationProperties.SetName(scaleWarning, "Yazı büyüdükçe çalışma alanı küçülür.");
             DockPanel.SetDock(scaleWarning, Dock.Right);
 
-            BuildSideCard();
+            card = BuildCard();
             built = true;
         }
 
@@ -127,55 +126,9 @@ public partial class MainWindow
             return null;
         }
 
-        private void BuildSideCard()
-        {
-            var stack = new StackPanel();
-            nextStep = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Foreground = StudioTheme.Text, Margin = new Thickness(0, 4, 0, 0), Focusable = true };
-            var stepBox = new Border { Background = StudioTheme.AccentSoft, CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 10, 12, 10), Child = new StackPanel { Children = { new TextBlock { Text = "Sıradaki adım", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = StudioTheme.Accent }, nextStep } } };
-            stack.Children.Add(stepBox);
-            cardEmpty = new TextBlock { FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 14, 0, 0) };
-            stack.Children.Add(cardEmpty);
-            cardPiece = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
-            cardName = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = StudioTheme.Text, TextTrimming = TextTrimming.CharacterEllipsis, Focusable = true };
-            cardPiece.Children.Add(cardName);
-            widthTile = Tile(); heightTile = Tile(); positionTile = Tile();
-            var tiles = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-            tiles.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-            tiles.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-            tiles.RowDefinitions.Add(new()); tiles.RowDefinitions.Add(new());
-            Grid.SetColumn(heightTile, 1); Grid.SetRow(positionTile, 1); Grid.SetColumnSpan(positionTile, 2);
-            widthTile.Margin = new Thickness(0, 0, 4, 8); heightTile.Margin = new Thickness(4, 0, 0, 8); positionTile.Margin = new Thickness(0);
-            tiles.Children.Add(widthTile); tiles.Children.Add(heightTile); tiles.Children.Add(positionTile);
-            cardPiece.Children.Add(tiles);
-            cardPiece.Children.Add(new TextBlock { Text = "Bir kutucuğa tıklayın; komut kutusuna yazılır, siz onaylayana kadar hiçbir şey değişmez.", FontSize = 12, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 6, 0, 0) });
-            stack.Children.Add(cardPiece);
-            sideCard = new Border { Margin = new Thickness(0, 0, 0, 12), Child = stack };
-            AutomationProperties.SetName(sideCard, "Sıradaki adım ve seçili parça");
-        }
 
-        private Button Tile()
-        {
-            var button = new Button { MinHeight = 48, Padding = new Thickness(12, 6, 12, 6), HorizontalContentAlignment = HorizontalAlignment.Left, HorizontalAlignment = HorizontalAlignment.Stretch, Cursor = Cursors.Hand };
-            return button;
-        }
 
-        private void SetTile(Button tile, string label, string value, string typed)
-        {
-            tile.Content = new StackPanel { Children =
-            {
-                new TextBlock { Text = label, FontSize = 12, Foreground = StudioTheme.Muted },
-                new TextBlock { Text = value, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap },
-            } };
-            AutomationProperties.SetName(tile, label + " " + value + "; komut kutusuna yazılır: " + typed);
-            tile.ToolTip = "Komut kutusuna şunu yazar: " + typed;
-            tile.Tag = typed;
-            tile.Click -= TileClicked; tile.Click += TileClicked;
-        }
 
-        private void TileClicked(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button { Tag: string typed }) commandBar!.SetText(typed);
-        }
 
         // ---------------------------------------------------------------- attach / detach
 
@@ -366,7 +319,8 @@ public partial class MainWindow
                 if (keep.Contains(child)) continue;
                 r.Set(child, UIElement.VisibilityProperty, Visibility.Collapsed);
             }
-            r.Add(w.inspectorPanel, sideCard!, 0);
+            r.Add(w.inspectorPanel, card!, 0);
+            r.Add(w.inspectorPanel, card!.FirstStepsPanel);
             foreach (var warning in new TextBlock[] { w.gradingGeometryNotice, w.pieceLimits, w.grainlineStatus })
                 r.Set(warning, TextBlock.FontSizeProperty, 12d);
             r.Set(w.propertyDraftConflict, Control.FontSizeProperty, 12d);
@@ -439,6 +393,7 @@ public partial class MainWindow
 
         internal void OnRefreshed()
         {
+            Observe();
             if (!IsAttached) return;
             var selected = w.Selected is { Points.Count: > 0 } piece ? piece : null;
             var pieceCount = w.Document.Pieces.Count;
@@ -471,24 +426,5 @@ public partial class MainWindow
             commandBar!.OnRefreshed();
         }
 
-        private void UpdateCard(PatternPiece? selected, int pieceCount, bool unsaved)
-        {
-            if (w.canvas.HasPendingDrawing) nextStep!.Text = "Çizimi kapatmak için Enter, vazgeçmek için Esc tuşuna basın.";
-            else if (selected is null && pieceCount == 0) nextStep!.Text = "Kutuya yazın: 120 x 80 dikdörtgen. Ya da soldan bir çizim aracı seçip çizin.";
-            else if (selected is null) nextStep!.Text = "Bir parçaya tıklayarak seçin ya da çizim aracı seçip yeni parça çizin.";
-            else if (unsaved) nextStep!.Text = "Çalışmanızı korumak için Kaydet düğmesine basın.";
-            else nextStep!.Text = "Ölçüyü değiştirmek için yazın: genişliği 95 yap.";
-            cardEmpty!.Text = pieceCount == 0 ? "Henüz parça yok." : $"Projede {pieceCount} parça var. Seçili parça yok.";
-            cardEmpty.Visibility = selected is null ? Visibility.Visible : Visibility.Collapsed;
-            cardPiece!.Visibility = selected is null ? Visibility.Collapsed : Visibility.Visible;
-            if (selected is null) return;
-            var bounds = TekstilCAD.Core.Geometry.Bounds(selected.Points);
-            var width = MeasurementInput.Format(bounds.MaxX - bounds.MinX); var height = MeasurementInput.Format(bounds.MaxY - bounds.MinY);
-            cardName!.Text = SafePieceName(selected.Name);
-            cardName.ToolTip = cardName.Text;
-            SetTile(widthTile!, "Genişlik", width + " mm", "genişliği " + width + " yap");
-            SetTile(heightTile!, "Yükseklik", height + " mm", "boyu " + height + " yap");
-            SetTile(positionTile!, "Konum", "soldan " + MeasurementInput.Format(bounds.MinX) + " mm, yukarıdan " + MeasurementInput.Format(bounds.MinY) + " mm", "25 sağa taşı");
-        }
     }
 }
