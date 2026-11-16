@@ -258,6 +258,7 @@ struct ContourPointEditor: View {
             var updated = working
             updated.points = edit.points
             if let reason = onSave(updated) {
+                // The typed value was already saved above; say so, or the refusal reads as if nothing happened.
                 refuse(applied + "Nokta eklenmedi. " + reason)
                 return
             }
@@ -350,7 +351,7 @@ struct ContourPointEditor: View {
                         let marker = CGRect(x: position.x - radius, y: position.y - radius,
                                             width: 2 * radius, height: 2 * radius)
                         context.fill(Path(ellipseIn: marker),
-                                     with: .color(index == selected ? Color.accentColor : AppTheme.muted))
+                                     with: .color(index == selected ? AppTheme.accent : AppTheme.muted))
                     }
                 }
                 .contentShape(Rectangle())
@@ -361,7 +362,8 @@ struct ContourPointEditor: View {
             }
         }
         .frame(height: 190)
-        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
     }
 
     private func coordinateField(_ axis: String, text: Binding<String>) -> some View {
@@ -502,6 +504,7 @@ struct ContourPointEditor: View {
                 .padding()
             }
             .accessibilityIdentifier("point-editor")
+            .background(AppTheme.page.ignoresSafeArea())
             .navigationTitle("Köşe noktaları")
             .toolbar {
                 // Changes are already saved, so there is nothing left to cancel.
