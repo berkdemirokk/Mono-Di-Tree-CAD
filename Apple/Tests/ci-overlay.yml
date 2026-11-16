@@ -21,12 +21,12 @@
       - path: Tests/ViewerUITests.swift
       - path: Tests/FixtureLoadingTests.swift
       - path: Tests/ScreenshotTourTests.swift
+      - path: Tests/CommandFieldUITests.swift
       - path: Tests/PointEditorUITests.swift
       - path: Tests/ComposerUITests.swift
       - path: Tests/ProjectLibraryUITests.swift
       - path: Tests/WorkshopPanelUITests.swift
       - path: Tests/CanvasUITests.swift
-      - path: Tests/CommandFieldUITests.swift
       - path: Tests/Fixtures
         buildPhase: resources
     dependencies:

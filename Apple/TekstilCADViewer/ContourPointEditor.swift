@@ -29,12 +29,12 @@ enum PointEditing {
 
     static func minimumReason(closed: Bool) -> String {
         closed
-            ? "Kapalı bir parçada en az 3 nokta kalmalı. Bu noktayı silmek için önce yeni bir nokta ekleyin."
-            : "Açık bir çizgide en az 2 nokta kalmalı. Bu noktayı silmek için önce yeni bir nokta ekleyin."
+            ? "Kapalı bir parçada en az 3 nokta kalmalı. Bu noktayı silmek için önce yeni bir nokta ekle."
+            : "Açık bir çizgide en az 2 nokta kalmalı. Bu noktayı silmek için önce yeni bir nokta ekle."
     }
 
     static var limitReason: String {
-        "Bir parçada en fazla \(DraftContourGeometry.pointLimit) nokta olabilir. Yeni nokta eklemek için önce bir nokta silin."
+        "Bir parçada en fazla \(DraftContourGeometry.pointLimit) nokta olabilir. Yeni nokta eklemek için önce bir nokta sil."
     }
 
     /// True when a new point after `index` extends an open line instead of splitting an edge.
@@ -59,7 +59,7 @@ enum PointEditing {
 
     /// Inserts a point right after `index`; the new point is selected.
     static func inserting(after index: Int, in points: [DraftPoint], closed: Bool) -> Outcome {
-        guard points.indices.contains(index) else { return .refused("Önce bir nokta seçin.") }
+        guard points.indices.contains(index) else { return .refused("Önce bir nokta seç.") }
         guard canInsert(count: points.count) else { return .refused(limitReason) }
         guard let point = newPoint(after: index, in: points, closed: closed) else {
             return .refused("Yeni noktanın yeri bulunamadı.")
@@ -75,7 +75,7 @@ enum PointEditing {
     /// Removes the point at `index`. Afterwards the point that took its place is selected; on a
     /// closed piece that wraps to the first point, on an open line it stops at the new last point.
     static func deleting(at index: Int, in points: [DraftPoint], closed: Bool) -> Outcome {
-        guard points.indices.contains(index) else { return .refused("Önce bir nokta seçin.") }
+        guard points.indices.contains(index) else { return .refused("Önce bir nokta seç.") }
         guard canDelete(count: points.count, closed: closed) else {
             return .refused(minimumReason(closed: closed))
         }
@@ -110,7 +110,7 @@ struct ContourPointEditor: View {
     @State private var problem: String?
     @State private var status: String?
 
-    private static let fixHint = "Değeri düzeltin ya da “Yazdığımı geri al” düğmesine basın."
+    private static let fixHint = "Değeri düzelt ya da “Yazdığımı geri al” düğmesine bas."
 
     init(piece: DraftPiece, onSave: @escaping (DraftPiece) -> String?) {
         self.onSave = onSave
@@ -191,7 +191,7 @@ struct ContourPointEditor: View {
         let suffix = context.isEmpty ? "" : " " + context
         guard let newX = resolved(x, original: current.x),
               let newY = resolved(y, original: current.y) else {
-            refuse("Nokta \(number) için yazdığınız X veya Y değeri kullanılamıyor. Milimetre olarak bir sayı yazın, örneğin 12,5." + suffix)
+            refuse("Nokta \(number) için yazdığın X veya Y değeri kullanılamıyor. Milimetre olarak bir sayı yaz, örneğin 12,5." + suffix)
             return .refused
         }
         let moved = DraftPoint(x: newX, y: newY)
@@ -239,7 +239,7 @@ struct ContourPointEditor: View {
             return
         case .applied:
             select(index)
-            report("Nokta \(number) için yazdığınız değer uygulandı. Şimdi Nokta \(index + 1) seçili.")
+            report("Nokta \(number) için yazdığın değer uygulandı. Şimdi Nokta \(index + 1) seçili.")
         case .unchanged:
             select(index)
             status = "Nokta \(index + 1) seçili."
@@ -250,7 +250,7 @@ struct ContourPointEditor: View {
         let number = selected + 1
         let pending = takePending(context: "Nokta eklenmedi. " + Self.fixHint)
         guard pending != .refused else { return }
-        let applied = pending == .applied ? "Nokta \(number) için yazdığınız değer uygulandı. " : ""
+        let applied = pending == .applied ? "Nokta \(number) için yazdığın değer uygulandı. " : ""
         switch PointEditing.inserting(after: selected, in: working.points, closed: working.closed) {
         case .refused(let reason):
             refuse(applied + reason)
@@ -286,7 +286,7 @@ struct ContourPointEditor: View {
             working = updated
             select(edit.selected)
             var message = "Nokta \(number) silindi. Parçada artık \(edit.points.count) nokta var. Şimdi Nokta \(edit.selected + 1) seçili."
-            if hadPending { message += " Bu nokta için yazdığınız ama uygulamadığınız değer de silindi." }
+            if hadPending { message += " Bu nokta için yazdığın ama uygulamadığın değer de silindi." }
             report(message)
         }
     }
@@ -294,7 +294,7 @@ struct ContourPointEditor: View {
     private func revertTyped() {
         let number = selected + 1
         select(selected)
-        report("Yazdığınız değer geri alındı. Nokta \(number) eski konumunda.")
+        report("Yazdığın değer geri alındı. Nokta \(number) eski konumunda.")
     }
 
     // "Bitti" also takes what was typed but not yet applied; if that is invalid the sheet stays open.
@@ -304,7 +304,7 @@ struct ContourPointEditor: View {
         case .refused:
             return
         case .applied:
-            announce("Nokta \(number) için yazdığınız değer uygulandı.")
+            announce("Nokta \(number) için yazdığın değer uygulandı.")
         case .unchanged:
             break
         }
@@ -326,7 +326,7 @@ struct ContourPointEditor: View {
 
     private var deleteExplanation: String {
         PointEditing.canDelete(count: working.points.count, closed: working.closed)
-            ? "Silinen noktayı, Bitti'ye bastıktan sonra çizimdeki Geri al ile geri getirebilirsiniz."
+            ? "Silinen noktayı, Bitti'ye bastıktan sonra çizimdeki Geri al ile geri getirebilirsin."
             : PointEditing.minimumReason(closed: working.closed)
     }
 
@@ -422,7 +422,7 @@ struct ContourPointEditor: View {
     private var pendingNotice: some View {
         if isDirty {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Yazdığınız değer henüz uygulanmadı. Başka bir noktaya geçtiğinizde, nokta eklediğinizde ya da Bitti'ye bastığınızda otomatik uygulanır.",
+                Label("Yazdığın değer henüz uygulanmadı. Başka bir noktaya geçince, nokta ekleyince ya da Bitti'ye basınca kendiliğinden uygulanır.",
                       systemImage: "pencil.circle")
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.ink)
@@ -440,7 +440,7 @@ struct ContourPointEditor: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(working.name).font(.headline)
-                    Text("Bir köşeye dokunun veya listeden nokta seçin. Yeni konumu milimetre olarak yazın. Yazdığınız değer; Uygula'ya, başka bir noktaya ya da Bitti'ye bastığınızda kaydedilir.")
+                    Text("Bir köşeye dokun ya da listeden nokta seç, yeni konumu milimetre olarak yaz. Uygula'ya, başka bir noktaya ya da Bitti'ye basınca kaydedilir.")
                         .font(.subheadline)
                         .foregroundStyle(AppTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)

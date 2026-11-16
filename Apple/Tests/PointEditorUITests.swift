@@ -54,7 +54,7 @@ final class PointEditorUITests: XCTestCase {
         let demo = app.buttons["Örnekle dene"]
         XCTAssertTrue(demo.waitForExistence(timeout: 15))
         demo.tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         let open = app.buttons["Köşe noktalarını düzenle"]
         let tools = app.scrollViews["workshop-tools"]
         reach(open, in: tools, app: app)

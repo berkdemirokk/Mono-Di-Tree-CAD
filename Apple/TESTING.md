@@ -186,14 +186,14 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 ## Son projeler için eşzamanlı kayıt güvenliği
 
 - **Projeyi kaydet**, açıldığı anda doğrulanmış kütüphane sürümüyle karşılaştırarak kaydeder. Arada başka bir oturum tarafından değiştirilmiş veya silinmiş dosya sessizce ezilmez.
-- Çakışma uyarısı görülürse **Farklı kopya kaydet** yeni proje UUID'siyle ikinci bir bağımsız kayıt üretir. Mevcut kütüphane dosyası korunur; çalışma alanı da kapanmaz.
-- **Farklı kopya kaydet** mevcut taslak veya başka bir proje üzerine yazmaz. Bir kopyanın oluştuğunu ana ekrandaki **Son projeler** listesinde doğrulayın.
+- Çakışma uyarısı görülürse **Kopyasını kaydet** yeni proje UUID'siyle ikinci bir bağımsız kayıt üretir. Mevcut kütüphane dosyası korunur; çalışma alanı da kapanmaz.
+- **Kopyasını kaydet** mevcut taslak veya başka bir proje üzerine yazmaz. Bir kopyanın oluştuğunu ana ekrandaki **Son projeler** listesinde doğrulayın.
 - `CADStorageTests`, aynı UUID'ye sahip eski kayıt sürümü, yanlış UUID ve idempotent yeniden kaydetme senaryolarını çalıştırır.
 - Taslak ve kütüphane kayıtlarında, uygulamanın kendi yazıcıları arasında `.json.lock` yan dosyasıyla işlem/kontrol/kayıt bir dosya kilidi altında tutulur; mevcut taslağın arşivlenmesi ve silinmesi de aynı kilitle yapılır. Yan kilit dosyaları başka açık süreçlerin kilidini geçersiz kılmamak için silinmez. Eşzamanlı eski-sürüm yazımlarını reddeden bir regresyon testi bulunur. Kilidi kullanmayan harici yazıcılar, farklı dosya alias'ları ve fiziksel cihaz testi bu garantinin dışındadır.
 
 ## Devam edilen taslağı projeye kaydetme
 
-- **Son çizime devam et** ile açılan taslak, aynı proje kimliğiyle daha önce kaydedilmiş sürümden yeniyse **Projeyi kaydet** artık o kayıtlı sürümün yerine yazar. Önceden bu durumda kayıt her zaman "başka bir çalışma tarafından değiştirildi" hatasıyla reddediliyordu ve yalnız **Farklı kopya kaydet** çalışıyordu.
+- **Son çizime devam et** ile açılan taslak, aynı proje kimliğiyle daha önce kaydedilmiş sürümden yeniyse **Projeyi kaydet** artık o kayıtlı sürümün yerine yazar. Önceden bu durumda kayıt her zaman "başka bir çalışma tarafından değiştirildi" hatasıyla reddediliyordu ve yalnız **Kopyasını kaydet** çalışıyordu.
 - Gerekçe: başka bir projeye geçilirken geçerli taslak önce arşivlendiği için, geçerli taslak ile aynı kimlikli kayıtlı proje her zaman aynı çalışmanın devamıdır. Atölye açıldıktan sonra kayıtlı sürüm değişirse kayıt yine reddedilir.
 - Son projelerden ya da dosyadan açılan belgelerde kural değişmedi: kayıtlı sürüm yalnız açılan belgeyle birebir aynıysa yerine yazılabilir.
 - Kayıtlı sürüm taslaktan yeni de olabilir: **Projeyi kaydet**, **Geri al**, **Kapat**, **Son çizime devam et**, **Projeyi kaydet** sırasında kayıtlı sürümün yerine geri alınmış hâl yazılır. Aynı oturumda geri alıp kaydetmekle aynı sonuçtur; yineleme geçmişi atölye kapanınca zaten silinir.
@@ -265,3 +265,15 @@ Simülatör testleri 1., 3., 5. ve 6. adımı kapsar (`ViewerUITests`, `ProjectL
 8. **Görünüm:** telefon koyu moddayken uygulama açık kalmalı. Ana ekrandaki **Görünüm** menüsünden Koyu seçince ana ekran, atölye ve Parmakla çiz sayfası koyu olmalı; Telefona uy seçilince telefonun ayarına hemen uymalı. Kontrastı Artır açıkken kart kenarları ve çerçeveli düğmeler belirgin olmalı (görüntüyle doğrulanmadı).
 
 Bu adımların çoğu yeni arayüz testleriyle simülatörde sınanır (yukarıdaki tablo); iki parmakla yakınlaştırma, VoiceOver, Kontrastı Artır ve gerçek cihaz sınanmadı.
+
+## Ekran incelemesi düzeltmeleri (16 Kasım 2026)
+
+CI ekran görüntüleri tasarım incelemesinden geçirildi; bulunan sorunlar düzeltildi:
+
+1. **Yatay ekran:** Atölyede araç sütunu kaydırılınca Geri al / İleri al düğmeleri artık kutuların üstüne binmemeli; üst çubuğun kendi zemini var.
+2. **Tam genişlik düğmeler:** "Ölçüleri, konumu ve adı uygula" ve "Köşe noktalarını düzenle" kartın tüm genişliğini kaplamalı, dar bir hap gibi kırılmamalı.
+3. **Durum satırı:** Ekrana sığdırılmışken "N parça • Tümü ekranda" yazmalı (eskiden "Önizleme ölçüye göre ekrana sığdırılır").
+4. **Türkçe biçim:** Telefonun bölgesi İngilizce olsa da son projeler listesindeki tarih Türkçe yazmalı; parmakla çiz alanı "1000 mm" göstermeli ("1,000 mm" değil) ve "300 mm" seçiliyken tek satıra sığmalı.
+5. **Dil:** Nokta düzenleyici ve hata iletileri de uygulamanın geri kalanı gibi "sen" diliyle yazar. "Farklı kopya kaydet" düğmesinin adı **Kopyasını kaydet** oldu; dışa aktarma notundaki teknik sözcükler sadeleşti.
+
+Bu düzeltmeler simülatör görüntülerinden çıkarıldı; düzeltilmiş hâlin görüntüsü bir sonraki CI çalışmasında üretilir.

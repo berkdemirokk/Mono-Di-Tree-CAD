@@ -166,7 +166,7 @@ struct EasyCADWorkspace: View {
         }
         var updated = document
         updated.pieces.append(piece)
-        guard commit(updated, notice: "Parmakla çizdiğiniz \(piece.points.count) noktalı şekil eklendi.") else { return }
+        guard commit(updated, notice: "Parmakla çizdiğin \(piece.points.count) noktalı şekil eklendi.") else { return }
         select(piece)
     }
 
@@ -258,7 +258,7 @@ struct EasyCADWorkspace: View {
         do {
             try CADProjectLibrary.save(document, replacing: savedLibrarySnapshot)
             savedLibrarySnapshot = document
-            success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."
+            success = "Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsin."
             return true
         } catch {
             problem = error.localizedDescription
@@ -274,7 +274,7 @@ struct EasyCADWorkspace: View {
         copy.name = String(document.name.prefix(120)) + " (kopya)"
         do {
             try CADProjectLibrary.save(copy)
-            success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsiniz."
+            success = "Bağımsız kopya kaydedildi. Son projeler bölümünden açabilirsin."
             return true
         } catch {
             problem = "Kopya kaydedilemedi. " + error.localizedDescription
@@ -352,16 +352,16 @@ struct EasyCADWorkspace: View {
                               mustBePositive: Bool) -> String? {
         if text == DraftPiece.display(original) { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return "\(title): boş bırakılamaz. Milimetre cinsinden bir sayı yazın." }
+        if trimmed.isEmpty { return "\(title): boş bırakılamaz. Milimetre cinsinden bir sayı yaz." }
         guard let value = DraftContourGeometry.coordinate(text) else {
             let separators = trimmed.filter { $0 == "," || $0 == "." }.count
             if separators > 1 {
-                return "\(title): birden çok virgül ya da nokta var. Ondalık için tek virgül kullanın."
+                return "\(title): birden çok virgül ya da nokta var. Ondalık için tek virgül kullan."
             }
             if let number = Double(trimmed.replacingOccurrences(of: ",", with: ".")), number.isFinite {
                 return "\(title): değer çalışma alanı sınırını aşıyor (en çok 100 000 000 mm)."
             }
-            return "\(title): sayı değil. Yalnız rakam, eksi işareti ve ondalık için virgül yazın; birim yazmayın."
+            return "\(title): sayı değil. Yalnız rakam, eksi işareti ve ondalık için virgül yaz; birim yazma."
         }
         if mustBePositive && value <= 0 {
             return "\(title): 0'dan büyük olmalı (sıfır ve eksi değer olmaz)."
@@ -430,7 +430,7 @@ struct EasyCADWorkspace: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let separators = trimmed.filter { $0 == "," || $0 == "." }.count
         if separators > 1 {
-            return "Birden çok nokta veya virgül var. Ondalık için tek virgül kullanın."
+            return "Birden çok nokta ya da virgül var. Ondalık için tek virgül kullan."
         }
         guard separators == 1,
               let separator = trimmed.firstIndex(where: { $0 == "," || $0 == "." }) else { return nil }
@@ -491,7 +491,7 @@ struct EasyCADWorkspace: View {
         guard let index = selectedIndex else { return }
         var updated = document
         updated.pieces.remove(at: index)
-        guard commit(updated, notice: "Parça silindi. Geri Al ile geri getirebilirsiniz.") else { return }
+        guard commit(updated, notice: "Parça silindi. Geri al ile geri getirebilirsin.") else { return }
         select(updated.pieces.first)
     }
 
@@ -519,7 +519,7 @@ struct EasyCADWorkspace: View {
 
     /// Writes the drawing as a .tcad file in a fresh temporary folder, or says why it cannot.
     private func writeExportFile() -> URL? {
-        guard !document.pieces.isEmpty else { problem = "Önce en az bir parça ekleyin."; return nil }
+        guard !document.pieces.isEmpty else { problem = "Önce en az bir parça ekle."; return nil }
         do {
             let bytes = try CADSketchImport.encode(document)
             // Named after the project, so the file is recognisable in Files and Mail.
@@ -585,7 +585,7 @@ struct EasyCADWorkspace: View {
                      text: "Çizimdeki bir parçaya dokun ya da aşağıdaki Parça seç menüsünü kullan.")
         } else {
             CoachTip(systemImage: "ruler", title: "Ölçüleri milimetre olarak yaz",
-                     text: "Kutulara yaz ve uygula ya da parçayı parmağınla sürükle (yakınlaştırılmışken kenar çizgisinden tut). Bitince Projeyi kaydet'e dokun.")
+                     text: "Kutulara yaz ve uygula ya da parçayı parmağınla sürükle. Bitince Projeyi kaydet'e dokun.")
         }
     }
 
@@ -652,7 +652,7 @@ struct EasyCADWorkspace: View {
             // This panel does not scroll, so its text is limited: it must not push the tools away.
             if !document.pieces.isEmpty {
                 Text(viewport.isFit
-                     ? "\(document.pieces.count) parça • Önizleme ölçüye göre ekrana sığdırılır"
+                     ? "\(document.pieces.count) parça • Tümü ekranda"
                      : "\(document.pieces.count) parça • \(String(format: "%.1f", viewport.zoom))× yakınlaştırıldı")
                     .font(.caption).foregroundStyle(AppTheme.muted)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? 1 : 2)
@@ -811,11 +811,18 @@ struct EasyCADWorkspace: View {
             millimetreField("Uzunluk", label: "Toplam çizgi uzunluğu (mm)", text: $pieceWidth,
                             current: DraftPiece.display(document.pieces[index].lineLength))
         }
-        Button("Ölçüleri, konumu ve adı uygula") { _ = saveDetails() }
-            .buttonStyle(.appPrimary)
+        Button { _ = saveDetails() } label: {
+            Text("Ölçüleri, konumu ve adı uygula")
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.appPrimary)
         if document.pieces[index].points.count <= DraftContourGeometry.pointLimit {
-            Button("Köşe noktalarını düzenle") {
+            Button {
                 if !hasPendingDetails || saveDetails() { editingPoints = document.pieces[index] }
+            } label: {
+                Label("Köşe noktalarını düzenle", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.appSecondary)
         } else {
@@ -886,7 +893,7 @@ struct EasyCADWorkspace: View {
                 .accessibilityAddTraits(.isHeader)
             TextField("Proje adı", text: $projectName)
                 .textFieldStyle(.roundedBorder)
-            Text("Çizimin cihazda otomatik saklanır. Listede kalıcı görünmesi için Projeyi kaydet'e bas.")
+            Text("Çizimin bu cihazda kendiliğinden saklanır. Ana ekrandaki listeye eklemek için Projeyi kaydet'e bas.")
                 .font(.caption).foregroundStyle(AppTheme.muted)
             Button {
                 saveProjectToLibrary()
@@ -905,7 +912,7 @@ struct EasyCADWorkspace: View {
             Button {
                 saveSeparateCopy()
             } label: {
-                Label("Farklı kopya kaydet", systemImage: "doc.on.doc")
+                Label("Kopyasını kaydet", systemImage: "doc.on.doc")
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.appSecondary)
@@ -941,7 +948,7 @@ struct EasyCADWorkspace: View {
                     .font(.caption).foregroundStyle(AppTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Yalnız yeni çizim parçaları dışa aktarılır. Bu araç, içe alınmış fabrika dosyalarını değiştirmez.")
+            Text("Paylaşılan dosyada yalnız bu çizim olur. Açtığın başka dosyalar değişmez.")
                 .font(.caption).foregroundStyle(AppTheme.muted)
         }
     }
@@ -955,26 +962,30 @@ struct EasyCADWorkspace: View {
                                ? workspaceSize.width * Self.wideCanvasShare : nil)
                     Divider()
                 }
-                CommandBar(context: commandContext(), keyboardVisible: keyboardVisible,
-                           hasOutput: $commandHasOutput,
-                           apply: { applyCommand($0) }, undoLast: { undo() })
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        coachTip.appCard()
-                        addSection.appCard()
-                        if !document.pieces.isEmpty { editSection.appCard() }
-                        saveSection.appCard()
-                        Text("Ölçüler milimetredir. Çizimler cihazda otomatik saklanır • Üretim/kesim onayı değildir.")
-                            .font(.caption).foregroundStyle(AppTheme.muted)
+                // The command bar and the tools form one column: under the drawing on a phone,
+                // beside it on a wide area.
+                VStack(spacing: 0) {
+                    CommandBar(context: commandContext(), keyboardVisible: keyboardVisible,
+                               hasOutput: $commandHasOutput,
+                               apply: { applyCommand($0) }, undoLast: { undo() })
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            coachTip.appCard()
+                            addSection.appCard()
+                            if !document.pieces.isEmpty { editSection.appCard() }
+                            saveSection.appCard()
+                            Text("Ölçüler milimetredir. Bu çizim üretim ya da kesim onayı değildir.")
+                                .font(.caption).foregroundStyle(AppTheme.muted)
+                        }
+                        .padding()
+                        .controlSize(.large)
                     }
-                    .padding()
-                    .controlSize(.large)
+                    .scrollDismissesKeyboard(.interactively)
+                    .accessibilityIdentifier("workshop-tools")
+                    // At very large text a command card gets the whole room below the bar.
+                    .frame(maxHeight: dynamicTypeSize.isAccessibilitySize && commandHasOutput ? 0 : .infinity)
+                    .accessibilityHidden(dynamicTypeSize.isAccessibilitySize && commandHasOutput)
                 }
-                .scrollDismissesKeyboard(.interactively)
-                .accessibilityIdentifier("workshop-tools")
-                // At very large text a command card gets the whole room below the bar.
-                .frame(maxHeight: dynamicTypeSize.isAccessibilitySize && commandHasOutput ? 0 : .infinity)
-                .accessibilityHidden(dynamicTypeSize.isAccessibilitySize && commandHasOutput)
             }
             .background(GeometryReader { proxy in
                 Color.clear
@@ -1017,6 +1028,10 @@ struct EasyCADWorkspace: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .navigationTitle("Kalıp atölyesi")
+            #if os(iOS)
+            .toolbarBackground(AppTheme.page, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            #endif
             .onAppear {
                 if shouldStoreImportedSeed {
                     shouldStoreImportedSeed = false
@@ -1481,8 +1496,8 @@ struct EasyCADWorkspace: View {
         .frame(maxWidth: .infinity)
         .background(AppTheme.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.line, lineWidth: 1))
-        .accessibilityLabel("Dokunarak parça seçebileceğiniz kalıp önizlemesi")
-        .accessibilityHint("Bir parçaya dokunarak seçin ve sürükleyerek taşıyın. Yakınlaştırılmışken sürüklemek görünümü kaydırır; seçili parça kenar çizgisinden tutulunca taşınır. Yakınlaştırmak için yukarı, uzaklaştırmak için aşağı kaydırın. Alternatif: Parça seç menüsü.")
+        .accessibilityLabel("Dokunarak parça seçebileceğin kalıp çizimi")
+        .accessibilityHint("Bir parçaya dokunarak seç, sürükleyerek taşı. Yakınlaştırılmışken sürüklemek görünümü kaydırır; seçili parça kenar çizgisinden tutulunca taşınır. Yakınlaştırmak için yukarı, uzaklaştırmak için aşağı kaydır. Alternatif: Parça seç menüsü.")
         .accessibilityValue(canvasSpokenValue)
         .accessibilityAdjustableAction { direction in
             switch direction {

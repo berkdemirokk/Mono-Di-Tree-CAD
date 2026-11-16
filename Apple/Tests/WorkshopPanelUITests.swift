@@ -23,7 +23,7 @@ final class WorkshopPanelUITests: XCTestCase {
     }
 
     private func countLabel(_ count: Int, in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts["\(count) parça • Önizleme ölçüye göre ekrana sığdırılır"]
+        app.staticTexts["\(count) parça • Tümü ekranda"]
     }
 
     /// A slow drag over half the tools area; a flick would carry momentum and skip a control.
@@ -158,7 +158,7 @@ final class WorkshopPanelUITests: XCTestCase {
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
 
         XCUIDevice.shared.orientation = .landscapeLeft
-        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğiniz kalıp önizlemesi"]
+        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğin kalıp çizimi"]
         let tools = app.scrollViews["workshop-tools"]
         XCTAssertTrue(drawing.waitForExistence(timeout: 5))
         XCTAssertTrue(tools.waitForExistence(timeout: 5))

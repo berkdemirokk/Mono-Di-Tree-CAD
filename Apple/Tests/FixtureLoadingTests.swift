@@ -116,15 +116,15 @@ final class FixtureLoadingTests: XCTestCase {
         let edit = app.buttons["Kopyasını düzenle"]
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
         edit.tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"]
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"]
             .waitForExistence(timeout: 15))
         app.buttons["Dikdörtgen ekle"].tap()
-        XCTAssertTrue(app.staticTexts["3 parça • Önizleme ölçüye göre ekrana sığdırılır"].exists)
+        XCTAssertTrue(app.staticTexts["3 parça • Tümü ekranda"].exists)
         app.buttons["Kapat"].tap()
         let resume = app.buttons["Son çizime devam et"]
         XCTAssertTrue(resume.waitForExistence(timeout: 10))
         resume.tap()
-        XCTAssertTrue(app.staticTexts["3 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["3 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         app.buttons["Kapat"].tap()
         XCTAssertTrue(app.staticTexts["2 parça • Ekrana sığdırıldı; kesim için kullanmayın"].exists)
     }

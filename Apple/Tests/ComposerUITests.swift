@@ -165,7 +165,7 @@ final class ComposerUITests: XCTestCase {
         reveal(add, in: app)
         XCTAssertTrue(add.isEnabled)
         add.tap()
-        XCTAssertTrue(app.staticTexts["1 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10),
+        XCTAssertTrue(app.staticTexts["1 parça • Tümü ekranda"].waitForExistence(timeout: 10),
                       "The new piece should appear in the workshop")
     }
 }
