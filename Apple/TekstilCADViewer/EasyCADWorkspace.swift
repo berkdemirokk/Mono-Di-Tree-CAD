@@ -41,6 +41,8 @@ struct EasyCADWorkspace: View {
     @State private var savedLibrarySnapshot: DraftProject?
     // The pinned drawing gives way to the keyboard so the focused field stays reachable.
     @State private var keyboardVisible = false
+    // A command card or result is showing under the drawing (see CommandBar).
+    @State private var commandHasOutput = false
     // The zoom buttons grow with the text size and never drop below the 44 pt touch target.
     @ScaledMetric(relativeTo: .body) private var zoomButtonBase: CGFloat = 44
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -521,6 +523,8 @@ struct EasyCADWorkspace: View {
         #if os(iOS)
         if keyboardVisible && verticalSizeClass == .compact { return false }
         #endif
+        // With very large text a command card needs the whole room above the tools.
+        if dynamicTypeSize.isAccessibilitySize && commandHasOutput { return false }
         return true
     }
 
@@ -785,6 +789,7 @@ struct EasyCADWorkspace: View {
                     Divider()
                 }
                 CommandBar(context: commandContext(), keyboardVisible: keyboardVisible,
+                           hasOutput: $commandHasOutput,
                            apply: { applyCommand($0) }, undoLast: { undo() })
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {

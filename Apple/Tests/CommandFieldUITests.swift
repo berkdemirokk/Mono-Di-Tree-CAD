@@ -207,7 +207,7 @@ final class CommandFieldUITests: XCTestCase {
         done.tap()
 
         enter("25 saga tasi", in: app, submit: true)
-        XCTAssertTrue(text(containing: "milimetre ölçülerini kontrol edin", in: app).waitForExistence(timeout: 5),
+        XCTAssertTrue(text(containing: "Komut, alanlardaki değerlere dayanır", in: app).waitForExistence(timeout: 5),
                       "The command names the field problem instead of silently depending on it")
         XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].exists)
         XCTAssertFalse(app.buttons["command-apply"].exists)

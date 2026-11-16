@@ -14,6 +14,9 @@ struct CommandBar: View {
     /// The drawing as the commands see it. Recomputed by the workshop on every change.
     let context: CommandContext
     let keyboardVisible: Bool
+    /// True while a card or a result line is showing; the workshop gives the room to it at very
+    /// large text sizes by hiding the drawing.
+    @Binding var hasOutput: Bool
     /// Applies a confirmed plan. Returns the result line, or nil when nothing was applied.
     let apply: (CommandPlan) -> String?
     /// Undoes the last applied command.
@@ -51,12 +54,14 @@ struct CommandBar: View {
     /// While another field has the keyboard, the whole bar steps aside so that field keeps its room.
     private var isShown: Bool { !keyboardVisible || focused || holdOpen }
 
+    private var showsOutput: Bool { card != nil || result != nil }
+
     var body: some View {
         content
             .onChange(of: keyboardVisible) { visible in
                 if !visible { holdOpen = false }
             }
-    }
+            .onChange(of: showsOutput) { shown in hasOutput = shown }
 
     @ViewBuilder
     private var content: some View {
@@ -99,8 +104,12 @@ struct CommandBar: View {
 
     private var field: some View {
         TextField("Ne yapmak istiyorsunuz? Örnek: 120 x 80 dikdörtgen", text: $text)
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.plain)
             .font(.callout)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 44)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.5), lineWidth: 1))
             .focused($focused)
             .submitLabel(.go)
             #if os(iOS)
@@ -109,7 +118,6 @@ struct CommandBar: View {
             #endif
             // Return only prepares the preview; it never applies anything.
             .onSubmit { prepare() }
-            .frame(minHeight: 44)
             .accessibilityLabel("Komut kutusu")
             .accessibilityHint("Yapmak istediğinizi yazın ya da klavyedeki mikrofonla söyleyin. Önce ne olacağı gösterilir; Uygula'ya dokunmadan hiçbir şey değişmez.")
             .accessibilityIdentifier("command-field")
@@ -118,7 +126,7 @@ struct CommandBar: View {
     private var prepareButton: some View {
         Button("Hazırla") { prepare() }
             .buttonStyle(.borderedProminent)
-            .frame(minHeight: 44)
+            .controlSize(.large)
             .accessibilityIdentifier("command-prepare")
     }
 
@@ -185,17 +193,17 @@ struct CommandBar: View {
             Button("Evet, parçayı sil", role: .destructive) { confirm(command: command, plan: plan, state: state) }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
-                .frame(minHeight: 44)
+                .controlSize(.large)
                 .accessibilityIdentifier("command-apply")
         } else {
             Button("Uygula") { confirm(command: command, plan: plan, state: state) }
                 .buttonStyle(.borderedProminent)
-                .frame(minHeight: 44)
+                .controlSize(.large)
                 .accessibilityIdentifier("command-apply")
         }
         Button("Vazgeç") { card = nil }
             .buttonStyle(.bordered)
-            .frame(minHeight: 44)
+            .controlSize(.large)
             .accessibilityIdentifier("command-cancel")
     }
 
@@ -208,7 +216,7 @@ struct CommandBar: View {
             Text("Anlaşılmayan yazı hiçbir şeyi değiştirmez.").font(.caption).foregroundStyle(.secondary)
             Button("Anladım") { card = nil }
                 .buttonStyle(.bordered)
-                .frame(minHeight: 44)
+                .controlSize(.large)
                 .accessibilityIdentifier("command-cancel")
         }
         .padding(10)
@@ -228,18 +236,18 @@ struct CommandBar: View {
                 ForEach(Array(refusal.buttons.prefix(3).enumerated()), id: \.offset) { _, button in
                     Button(button.label) { chooseExactPiece(named: button.label, source: source) }
                         .buttonStyle(.bordered)
-                        .frame(minHeight: 44)
+                        .controlSize(.large)
                 }
             } else {
                 ForEach(Array(refusal.buttons.prefix(3).enumerated()), id: \.offset) { _, button in
                     Button(button.label) { fillAndPrepare(button.fillText) }
                         .buttonStyle(.bordered)
-                        .frame(minHeight: 44)
+                        .controlSize(.large)
                 }
             }
             Button("Vazgeç") { card = nil }
                 .buttonStyle(.borderless)
-                .frame(minHeight: 44)
+                .controlSize(.large)
                 .accessibilityIdentifier("command-cancel")
         }
         .padding(10)
@@ -262,7 +270,7 @@ struct CommandBar: View {
                     result = ResultState(text: "İşlem geri alındı.", undoable: false)
                 }
                 .buttonStyle(.bordered)
-                .frame(minHeight: 44)
+                .controlSize(.large)
                 .accessibilityIdentifier("command-undo")
             }
         }
