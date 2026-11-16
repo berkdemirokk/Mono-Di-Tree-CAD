@@ -176,7 +176,7 @@ internal sealed class ProductionNestingWindow : Window
         choiceBorder.SetValue(Border.BorderBrushProperty,Brushes.Transparent);choiceBorder.SetValue(Border.BorderThicknessProperty,new Thickness(2));choiceBorder.SetValue(Border.CornerRadiusProperty,new CornerRadius(4));choiceBorder.AppendChild(itemPanel);
         var choiceTemplate=new DataTemplate { VisualTree=choiceBorder };
         var navigatedTrigger=new DataTrigger { Binding=new Binding(nameof(ChoiceItem.IsNavigationTarget)),Value=true };
-        navigatedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty,StudioTheme.Accent,"ErrorNavigationBorder"));choiceTemplate.Triggers.Add(navigatedTrigger);
+        navigatedTrigger.Setters.Add(new Setter { Property=Border.BorderBrushProperty,Value=new DynamicResourceExtension("Studio.Accent"),TargetName="ErrorNavigationBorder" });choiceTemplate.Triggers.Add(navigatedTrigger);
         choices.ItemTemplate=choiceTemplate;
         choices.ItemsSource=choiceItems;
         var choicePanel=new DockPanel();panel.Children.Add(choicePanel);
@@ -280,10 +280,10 @@ internal sealed class ProductionNestingWindow : Window
         chrome.AppendChild(presenter);
         var itemTemplate=new ControlTemplate(typeof(ListBoxItem)) { VisualTree=chrome };
         var focused=new Trigger { Property=UIElement.IsKeyboardFocusedProperty,Value=true };
-        focused.Setters.Add(new Setter(Border.BorderBrushProperty,StudioTheme.Accent,"Chrome"));
+        focused.Setters.Add(new Setter { Property=Border.BorderBrushProperty,Value=new DynamicResourceExtension("Studio.Accent"),TargetName="Chrome" });
         itemTemplate.Triggers.Add(focused);
         var hover=new Trigger { Property=UIElement.IsMouseOverProperty,Value=true };
-        hover.Setters.Add(new Setter(Border.BackgroundProperty,StudioTheme.Raised,"Chrome"));
+        hover.Setters.Add(new Setter { Property=Border.BackgroundProperty,Value=new DynamicResourceExtension("Studio.Raised"),TargetName="Chrome" });
         itemTemplate.Triggers.Add(hover);
         var baseStyle=TryFindResource(typeof(ListBoxItem)) as Style;
         var itemStyle=new Style(typeof(ListBoxItem),baseStyle);
