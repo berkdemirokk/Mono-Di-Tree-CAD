@@ -41,13 +41,23 @@ final class ScreenshotTourTests: XCTestCase {
     /// Scrolls until the control can be tapped, then taps it. Returns false when it never appears.
     private func reachAndTap(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         guard element.waitForExistence(timeout: 10) else { return false }
-        for _ in 0..<8 {
+        for _ in 0..<14 {
             if element.isHittable { break }
-            app.scrollViews.firstMatch.swipeUp()
+            dragTools(in: app)
         }
         guard element.isHittable else { return false }
         element.tap()
         return true
+    }
+
+    /// Scrolls the workshop's tools (or the first scroll view elsewhere) by half a viewport, slowly,
+    /// so that nothing is skipped by momentum.
+    private func dragTools(in app: XCUIApplication) {
+        let tools = app.scrollViews["workshop-tools"]
+        let scroll = tools.exists ? tools : app.scrollViews.firstMatch
+        let from = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+        let to = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
+        from.press(forDuration: 0.05, thenDragTo: to)
     }
 
     private func openEditorWithRectangle(_ app: XCUIApplication) -> Bool {
@@ -67,9 +77,19 @@ final class ScreenshotTourTests: XCTestCase {
         XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
         snap("03-editor-one-piece")
 
-        for step in 1...4 {
-            app.scrollViews.firstMatch.swipeUp()
-            snap("0\(3 + step)-editor-scrolled-\(step)")
+        // The drawing should stay on screen while a dimension is being typed.
+        if reachAndTap(app.textFields["En"], in: app) {
+            // Wait for the keyboard and the shrinking drawing to settle: one second caught the
+            // layout half way through its animation on the CI simulator.
+            sleep(4)
+            snap("03b-editor-typing-dimension")
+            let done = app.keyboards.buttons["Done"]
+            if done.exists { done.tap() }
+        }
+
+        for step in 1...6 {
+            dragTools(in: app)
+            snap("04-editor-scrolled-\(step)")
         }
 
         XCUIDevice.shared.orientation = .landscapeLeft
@@ -134,7 +154,7 @@ final class ScreenshotTourTests: XCTestCase {
         XCTAssertTrue(openEditorWithRectangle(app))
         XCTAssertTrue(reachAndTap(app.buttons["Dikdörtgen ekle"], in: app))
         snap("18-editor-large-text")
-        app.scrollViews.firstMatch.swipeUp()
+        dragTools(in: app)
         snap("19-editor-large-text-scrolled")
     }
 
