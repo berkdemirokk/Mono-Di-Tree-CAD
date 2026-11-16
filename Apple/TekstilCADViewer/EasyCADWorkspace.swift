@@ -34,6 +34,15 @@ struct EasyCADWorkspace: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var editingPoints: DraftPiece?
     @State private var showingTouchComposer = false
+    // Set while "Kapat" waits for a choice about a box whose value cannot be applied.
+    @State private var discardReason: String?
+    #if os(iOS)
+    // The file handed to the system share sheet; set only after it was written successfully.
+    @State private var shareFile: ShareFile?
+    #endif
+    // Size of the whole workshop area. Wide areas put the drawing beside the tools.
+    @State private var workspaceSize = CGSize.zero
+    @State private var wideByShape = false
     @State private var shouldStoreImportedSeed = false
     // Last verified on-disk state, distinct from the next UI edit. An absent
     // draft uses nil; resumed sessions start from their verified snapshot.
@@ -46,6 +55,7 @@ struct EasyCADWorkspace: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @FocusState private var pieceNameFocused: Bool
 
@@ -149,6 +159,35 @@ struct EasyCADWorkspace: View {
         var updated = document
         updated.pieces.append(piece)
         guard commit(updated, notice: "Parmakla çizdiğiniz \(piece.points.count) noktalı şekil eklendi.") else { return }
+        select(piece)
+    }
+
+    private func addCircle() {
+        guard !hasPendingDetails || saveDetails() else { return }
+        let start = Double(document.pieces.count) * 20
+        appendShape(DraftPiece(name: "Daire \(document.pieces.count + 1)", closed: true,
+                               points: DraftShapes.circle(left: start, bottom: start, diameter: 100)),
+                    notice: "Çapı 100 mm olan bir daire eklendi. En ve Boy kutularıyla büyüklüğünü değiştirebilirsin.")
+    }
+
+    private func addTriangle() {
+        guard !hasPendingDetails || saveDetails() else { return }
+        let start = Double(document.pieces.count) * 20
+        appendShape(DraftPiece(name: "Üçgen \(document.pieces.count + 1)", closed: true,
+                               points: DraftShapes.triangle(left: start, bottom: start, width: 100, height: 100)),
+                    notice: "Eni ve boyu 100 mm olan bir üçgen eklendi. Ölçüleri milimetre cinsindendir.")
+    }
+
+    /// Adds a ready-made shape within the drawing's piece and point limits and selects it.
+    private func appendShape(_ piece: DraftPiece, notice: String) {
+        guard document.pieces.count < 250 else { problem = "Parça sınırına ulaşıldı."; return }
+        guard document.pieces.reduce(0, { $0 + $1.points.count }) + piece.points.count <= 20_000 else {
+            problem = "Çizim sınırı doldu. Yeni şekil eklenemedi."
+            return
+        }
+        var updated = document
+        updated.pieces.append(piece)
+        guard commit(updated, notice: notice) else { return }
         select(piece)
     }
 
@@ -377,8 +416,9 @@ struct EasyCADWorkspace: View {
         success = "İşlem yeniden uygulandı."
     }
 
-    private func prepareExport() {
-        guard !document.pieces.isEmpty else { problem = "Önce en az bir parça ekleyin."; return }
+    /// Writes the drawing as a .tcad file in a fresh temporary folder, or says why it cannot.
+    private func writeExportFile() -> URL? {
+        guard !document.pieces.isEmpty else { problem = "Önce en az bir parça ekleyin."; return nil }
         do {
             let bytes = try CADSketchImport.encode(document)
             // Named after the project, so the file is recognisable in Files and Mail.
@@ -387,11 +427,49 @@ struct EasyCADWorkspace: View {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let url = folder.appendingPathComponent(CADSketchImport.exportFileName(forProjectNamed: document.name))
             try bytes.write(to: url, options: .atomic)
-            exportURL = url
-            success = "Dosya hazır. Aşağıdaki «Paylaş veya Dosyalara kaydet» düğmesine dokun."
+            return url
         } catch {
             problem = "Dosya hazırlanamadı: \(error.localizedDescription)"
+            return nil
         }
+    }
+
+    /// One step on iOS: typed values are applied (or the wrong box is named), the file is written
+    /// from the current drawing and the system share sheet opens. Nothing is prepared in advance,
+    /// so an edit can never leave an outdated file or a vanished button behind.
+    private func shareDrawing() {
+        guard saveDetails() else { return }
+        guard let url = writeExportFile() else { return }
+        #if os(iOS)
+        shareFile = ShareFile(url: url)
+        #else
+        exportURL = url
+        success = "Dosya hazır. Aşağıdaki «Paylaş veya Dosyalara kaydet» düğmesine dokun."
+        #endif
+    }
+
+    /// Why sharing cannot start yet, or what will happen first. Shown under the share button.
+    private var shareNote: String? {
+        if document.pieces.isEmpty { return "Paylaşmak için önce en az bir parça ekle." }
+        if hasPendingDetails { return "Kutulara yazdığın değerler paylaşmadan önce uygulanır." }
+        return nil
+    }
+
+    // MARK: Closing
+
+    /// Applies typed values and closes. A value that cannot be applied no longer traps the
+    /// person here: they choose between fixing it and leaving without it.
+    private func requestClose() {
+        if saveDetails() { dismiss(); return }
+        // The reason goes into the choice itself instead of an alert that only says "OK".
+        discardReason = problem ?? "Yazılan bir değer uygulanamıyor."
+        problem = nil
+    }
+
+    /// Drops only the text typed into the boxes; the drawing and its saved copies stay as they are.
+    private func discardPendingDetails() {
+        projectName = document.name
+        select(document.pieces.first(where: { $0.id == selectedID }))
     }
 
     // MARK: Guidance
@@ -400,7 +478,7 @@ struct EasyCADWorkspace: View {
     private var coachTip: some View {
         if document.pieces.isEmpty {
             CoachTip(systemImage: "1.circle.fill", title: "Başlamak için bir şekil ekle",
-                     text: "Aşağıdan Dikdörtgen ya da Çizgi seç. Ölçüleri sonra kendin yazarsın.")
+                     text: "Aşağıdan Dikdörtgen, Çizgi, Daire ya da Üçgen seç. Ölçüleri sonra kendin yazarsın.")
         } else if selectedIndex == nil {
             CoachTip(systemImage: "hand.tap.fill", title: "Düzenlemek için parçaya dokun",
                      text: "Çizimdeki bir parçaya dokun ya da aşağıdaki Parça seç menüsünü kullan.")
@@ -414,7 +492,28 @@ struct EasyCADWorkspace: View {
     // The drawing stays on screen while the tools below it scroll, so a dimension can be
     // typed while looking at the piece it changes.
 
+    /// iPad, landscape and other wide areas: the drawing on the left, the tools on the right.
+    /// A portrait iPhone keeps the drawing above the tools.
+    private var isWide: Bool {
+        #if os(iOS)
+        // Size classes do not change while the keyboard is up, so typing never switches layout.
+        if horizontalSizeClass == .regular || verticalSizeClass == .compact { return true }
+        #endif
+        return wideByShape
+    }
+
+    /// Share of the width the drawing gets beside the tools.
+    private static let wideCanvasShare: CGFloat = 0.6
+
+    private func measureWorkspace(_ size: CGSize) {
+        workspaceSize = size
+        // The keyboard shortens the area; a portrait phone must not switch layout while typing.
+        if !keyboardVisible { wideByShape = size.width > size.height }
+    }
+
     private var canvasHeight: CGFloat {
+        // Beside the tools the drawing uses the full height, less the two status lines under it.
+        if isWide { return max(160, workspaceSize.height - 110) }
         if keyboardVisible { return 110 }
         #if os(iOS)
         if verticalSizeClass == .compact { return 130 }
@@ -429,6 +528,13 @@ struct EasyCADWorkspace: View {
         if keyboardVisible && verticalSizeClass == .compact { return false }
         #endif
         return true
+    }
+
+    /// Drawing above the tools, or beside them on a wide area. AnyLayout keeps the drawing's and
+    /// the tools' state when the device turns.
+    private var workshopLayout: AnyLayout {
+        isWide ? AnyLayout(HStackLayout(alignment: .top, spacing: 0))
+               : AnyLayout(VStackLayout(spacing: 0))
     }
 
     private var canvasPanel: some View {
@@ -468,6 +574,24 @@ struct EasyCADWorkspace: View {
         .buttonStyle(.appSecondary)
     }
 
+    private func addCircleButton(fill: Bool) -> some View {
+        Button { addCircle() } label: {
+            Label("Daire ekle", systemImage: "circle")
+                .frame(maxWidth: fill ? .infinity : nil, minHeight: 48)
+        }
+        .buttonStyle(.appSecondary)
+        .accessibilityHint("Çapı 100 milimetre olan yuvarlak bir parça ekler")
+    }
+
+    private func addTriangleButton(fill: Bool) -> some View {
+        Button { addTriangle() } label: {
+            Label("Üçgen ekle", systemImage: "triangle")
+                .frame(maxWidth: fill ? .infinity : nil, minHeight: 48)
+        }
+        .buttonStyle(.appSecondary)
+        .accessibilityHint("Eni ve boyu 100 milimetre olan üçgen bir parça ekler")
+    }
+
     private var addSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("1 · Parça ekle", systemImage: "plus.square.on.square").font(.headline)
@@ -483,6 +607,17 @@ struct EasyCADWorkspace: View {
                 VStack(spacing: 10) {
                     addRectangleButton(fill: true)
                     addLineButton(fill: true)
+                }
+            }
+            // The round and pointed shapes share a second row on the same terms.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    addCircleButton(fill: false).fixedSize(horizontal: true, vertical: false)
+                    addTriangleButton(fill: false).fixedSize(horizontal: true, vertical: false)
+                }
+                VStack(spacing: 10) {
+                    addCircleButton(fill: true)
+                    addTriangleButton(fill: true)
                 }
             }
             Button {
@@ -677,19 +812,37 @@ struct EasyCADWorkspace: View {
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.appSecondary)
-            // One prominent action per section: saving the project. Preparing a file is secondary
-            // until it is ready to share.
-            Button { if saveDetails() { prepareExport() } } label: {
+            // One prominent action per section: saving the project. Sharing is secondary.
+            #if os(iOS)
+            // One tap: the file is written from the current drawing and the share sheet opens.
+            // The button never disappears; when sharing cannot start, the note below says why.
+            Button { shareDrawing() } label: {
+                Label("Paylaş veya Dosyalara kaydet", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.appSecondary)
+            .disabled(document.pieces.isEmpty)
+            .accessibilityHint("Çizimi .tcad dosyası olarak hazırlar ve paylaşma seçeneklerini açar")
+            .accessibilityIdentifier("share-drawing")
+            #else
+            Button { shareDrawing() } label: {
                 Label("Dosyayı hazırla (.tcad)", systemImage: "doc.badge.plus")
                     .frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.appSecondary)
+            .disabled(document.pieces.isEmpty)
             if let exportURL, !hasPendingDetails {
                 ShareLink(item: exportURL, preview: SharePreview("Mono Di Tree CAD çizimi")) {
                     Label("Paylaş veya Dosyalara kaydet", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.appPrimary)
+            }
+            #endif
+            if let shareNote {
+                Text(shareNote)
+                    .font(.caption).foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Text("Yalnız yeni çizim parçaları dışa aktarılır. Bu araç, içe alınmış fabrika dosyalarını değiştirmez.")
                 .font(.caption).foregroundStyle(AppTheme.muted)
@@ -698,9 +851,11 @@ struct EasyCADWorkspace: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            workshopLayout {
                 if showsCanvas {
                     canvasPanel
+                        .frame(width: isWide && workspaceSize.width > 0
+                               ? workspaceSize.width * Self.wideCanvasShare : nil)
                     Divider()
                 }
                 ScrollView {
@@ -718,6 +873,11 @@ struct EasyCADWorkspace: View {
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("workshop-tools")
             }
+            .background(GeometryReader { proxy in
+                Color.clear
+                    .onAppear { measureWorkspace(proxy.size) }
+                    .onChange(of: proxy.size) { measureWorkspace($0) }
+            })
             .background(AppTheme.page.ignoresSafeArea())
             .animation(reduceMotion ? nil : .default, value: keyboardVisible)
             // The drawing can leave the screen while the keyboard changes; a drag that was in
@@ -809,9 +969,33 @@ struct EasyCADWorkspace: View {
                     addTouchContour(newPiece)
                 }
             }
+            #if os(iOS)
+            .sheet(item: $shareFile) { file in
+                ActivityShareSheet(url: file.url) { completed in
+                    shareFile = nil
+                    if completed { success = "Dosya paylaşıldı." }
+                }
+                .presentationDetents([.medium, .large])
+                .ignoresSafeArea()
+            }
+            #endif
+            .confirmationDialog("Yazdığın değer uygulanamıyor", isPresented: Binding(
+                get: { discardReason != nil },
+                set: { if !$0 { discardReason = nil } }
+            ), titleVisibility: .visible) {
+                Button("Değişikliği at ve kapat", role: .destructive) {
+                    discardPendingDetails()
+                    discardReason = nil
+                    dismiss()
+                }
+                Button("Düzeltmeye dön", role: .cancel) { discardReason = nil }
+            } message: {
+                Text((discardReason ?? "") +
+                     " Atarsan yalnız kutulara yazdığın değerler silinir; çizimin ve kaydettiğin proje değişmez.")
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Kapat") { if saveDetails() { dismiss() } }
+                    Button("Kapat") { requestClose() }
                 }
                 // Always in reach, wherever the tools below are scrolled to.
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -1128,6 +1312,29 @@ struct EasyCADWorkspace: View {
         .accessibilityIdentifier(id)
     }
 }
+
+#if os(iOS)
+/// A written .tcad file waiting for the share sheet.
+private struct ShareFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// The system share sheet ("Paylaş", "Dosyalara Kaydet", Mail, AirDrop) for one file. SwiftUI's
+/// ShareLink needs its file before the tap; this one is handed a file written at the tap.
+private struct ActivityShareSheet: UIViewControllerRepresentable {
+    let url: URL
+    let finished: (Bool) -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, completed, _, _ in finished(completed) }
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+#endif
 
 /// Reports whether the software keyboard is showing. It does nothing on macOS.
 private struct KeyboardVisibility: ViewModifier {
