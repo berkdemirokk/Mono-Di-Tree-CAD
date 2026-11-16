@@ -284,7 +284,7 @@ public partial class MainWindow : Window
 
         var commandArea = new WrapPanel { Margin = new Thickness(12, 0, 12, 6) };
         var start = CommandGroup(commandArea, "BAŞLANGIÇ");
-        var design = AddButton(start, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "İstek hazırlar; kalıp oluşturmaz.");
+        var design = AddButton(start, "Kalıp isteği hazırla…", OpenDesignRequest, "İstek hazırlar; kalıp oluşturmaz.");
         design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.OnAccent;
         var files = CommandGroup(commandArea, "PROJE");
         AddButton(files, "Yeni", NewDocument, "Yeni proje · Ctrl+N");
@@ -294,7 +294,7 @@ public partial class MainWindow : Window
         var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.OnAccent;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
         CompactLabel(AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true), "Güvenli kopya…");
-        recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
+        recoveryRescan = AddButton(files, "Kurtarma tara", RescanRecovery, "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
         // Slightly narrower buttons keep both groups and the two collapsed groups on one row at the minimum window width.
         foreach (var command in start.Children.OfType<Button>().Concat(files.Children.OfType<Button>())) command.Padding = new Thickness(8);

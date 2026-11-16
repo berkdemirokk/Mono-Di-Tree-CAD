@@ -37,11 +37,9 @@ public partial class App : Application
         window.EnableViewSwitching();
         window.ApplySimpleTextScale(preferences.TextScale);
         window.LoadSimpleViewState(preferences, firstLaunch);
-        if (preferences.View == TekstilCAD.Core.Theme.UiPreferences.SimpleView)
-        {
-            window.LoadDocument(new TekstilCAD.Core.ProjectDocument());
-            window.TrySetSimpleView(true, out _);
-        }
+        // An interactive start always begins with an empty project (the start tasks show); the constructor's document is for verification only.
+        window.LoadDocument(new TekstilCAD.Core.ProjectDocument());
+        if (preferences.View == TekstilCAD.Core.Theme.UiPreferences.SimpleView) window.TrySetSimpleView(true, out _);
         window.Show();
     }
 }

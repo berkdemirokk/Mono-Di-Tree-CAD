@@ -33,6 +33,8 @@ internal static partial class CommandVerification
         VerifyGhost(checks,reportPath);
         VerifyVoiceButton(checks,reportPath);
         VerifyOpenTextileToolsAt(checks);
+        VerifyCommandCoverage(checks);
+        VerifyThemeButton(checks);
     }
 
     // ---- fixtures ---------------------------------------------------------------------------------------------

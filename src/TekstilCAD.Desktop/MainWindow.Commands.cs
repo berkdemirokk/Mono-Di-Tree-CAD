@@ -54,7 +54,8 @@ internal enum CommandResult
 /// <param name="Guard">Name of the guard that refused (see <see cref="CommandGuards"/>), or null.</param>
 /// <param name="RefreshFailed">True when the project changed but refreshing the screen failed afterwards.</param>
 /// <param name="Caveats">Short permanent notes the result row keeps whole (they come from the plan).</param>
-internal sealed record CommandOutcome(CommandResult Result,string Message,string? Guard=null,bool RefreshFailed=false,IReadOnlyList<string>? Caveats=null)
+/// <param name="OpensExamples">True for "yardım": the box opens its example list.</param>
+internal sealed record CommandOutcome(CommandResult Result,string Message,string? Guard=null,bool RefreshFailed=false,IReadOnlyList<string>? Caveats=null,bool OpensExamples=false)
 {
     internal bool Changed=>Result==CommandResult.Applied;
 }

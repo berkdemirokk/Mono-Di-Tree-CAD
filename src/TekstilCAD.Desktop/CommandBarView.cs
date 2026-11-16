@@ -564,6 +564,7 @@ internal sealed class CommandBarView : Border
         HideRowButtons();alternatives.Children.Clear();alternatives.Visibility=Visibility.Collapsed;
         chips.Visibility=Visibility.Visible;
         RefreshChips(outcome.Changed && !outcome.RefreshFailed);
+        if(outcome.OpensExamples)ShowExamples(true);
         FocusBox();
     }
 

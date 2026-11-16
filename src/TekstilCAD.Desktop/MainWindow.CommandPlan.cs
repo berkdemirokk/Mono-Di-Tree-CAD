@@ -181,6 +181,15 @@ public partial class MainWindow
 
     // ---- plans that do not edit the project ----------------------------------------------------------------------------
 
+    /// <summary>Plans whose buttons are not gated by an unfinished recovery restore: they never edit or select pieces.</summary>
+    private static bool DoesNotTouchProject(Plan plan) => plan.Command switch
+    {
+        HandoffCommand h => h.Target is HandoffTarget.RecoveryScan or HandoffTarget.About,
+        ViewCommand v => v.Action is ViewAction.ThemeDark or ViewAction.ThemeLight or ViewAction.TextLarger or ViewAction.TextSmaller
+            or ViewAction.AllTools or ViewAction.DetailedView,
+        _ => false,
+    };
+
     private CommandOutcome ApplyOtherPlan(Plan plan)
     {
         CommandOutcome Refuse(string guard)=>new(CommandResult.Refused,status.Text,guard);
@@ -189,8 +198,9 @@ public partial class MainWindow
         try { if(!EnsureMainMutationReady())return Refuse(CommandGuards.MutationReview); }
         catch(InvalidOperationException ex)
         { SetStatus(ex.Message);return new(CommandResult.Refused,ex.Message,CommandGuards.MutationReview); }
-        if(plan.Kind is PlanKind.CancelPreview or PlanKind.Help)return new(CommandResult.Done,plan.ResultText);
-        if(BlockForIncompleteRecovery())return Refuse(CommandGuards.Recovery);
+        if(plan.Kind==PlanKind.CancelPreview)return new(CommandResult.Done,"Önizleme kapatıldı. Hiçbir şey değişmedi.");
+        if(plan.Kind==PlanKind.Help)return new(CommandResult.Done,"Örnek listesi açıldı; birine tıklayınca kutuya yazılır, siz Enter'a basmadan uygulanmaz.",OpensExamples:true);
+        if(!DoesNotTouchProject(plan) && BlockForIncompleteRecovery())return Refuse(CommandGuards.Recovery);
         if(plan.Stamp.Check(CommandView(),CommandSelection())!=StampState.Current)
         {
             SetStatus($"{plan.ActionName} yapılmadı · {Refusals.TemplatePreviewStale}");
@@ -236,6 +246,12 @@ public partial class MainWindow
                     case ViewAction.PanRight:canvas.PanView(-120,0);return Done("Görünüm sağa kaydırıldı.");
                     case ViewAction.PanUp:canvas.PanView(0,120);return Done("Görünüm yukarı kaydırıldı.");
                     case ViewAction.PanDown:canvas.PanView(0,-120);return Done("Görünüm aşağı kaydırıldı.");
+                    case ViewAction.DetailedView:return ApplyDetailedView("Ayrıntılı görünüme geçildi.");
+                    case ViewAction.AllTools:return ApplyAllTools();
+                    case ViewAction.TextLarger:return ApplyTextScale(true);
+                    case ViewAction.TextSmaller:return ApplyTextScale(false);
+                    case ViewAction.ThemeDark:return Done(InterfaceSettings.UseTheme(TekstilCAD.Core.Theme.ThemePalette.Dark));
+                    case ViewAction.ThemeLight:return Done(InterfaceSettings.UseTheme(TekstilCAD.Core.Theme.ThemePalette.Light));
                 }
                 break;
             case PlanKind.Tool:
@@ -282,29 +298,33 @@ public partial class MainWindow
                     {
                     switch(file.Action)
                     {
-                        case FileAction.Save:Save();return Done("Kaydetme isteği işlendi.");
-                        case FileAction.SaveAs:SaveAs();return Done("Kaydetme isteği işlendi.");
-                        case FileAction.Open:Open();return Done("Açma isteği işlendi.");
-                        case FileAction.New:NewDocument();return Done("Yeni proje isteği işlendi.");
+                        case FileAction.Save:return RunHandoff("File.Save",Save,"Kaydetme isteği işlendi.");
+                        case FileAction.SaveAs:return RunHandoff("File.SaveAs",SaveAs,"Kaydetme isteği işlendi.");
+                        case FileAction.SaveCopy:return RunHandoff("File.SaveCopy",SaveNewCopy,"Güvenli kopya isteği işlendi.");
+                        case FileAction.Open:return RunHandoff("File.Open",Open,"Açma isteği işlendi.");
+                        case FileAction.New:return RunHandoff("File.New",NewDocument,"Yeni proje isteği işlendi.");
                     }
                     }
                     catch(ProjectConflictException) { ShowProjectSaveConflict(this);return Done("Kaydetme çakışması: açılan pencerede bir seçenek seçin."); }
                 }
                 break;
             case PlanKind.Window:
-                if(plan.Command is HandoffCommand hand)
+                if(plan.Command is not HandoffCommand hand)break;
+                if(hand.Target==HandoffTarget.Layers)
                 {
-                    switch(hand.Target)
-                    {
-                        case HandoffTarget.About:OpenAbout();return Done("Hakkında penceresi kapandı.");
-                        case HandoffTarget.TextileTools:
-                            OpenTextileToolsAt(hand.Tab is { } tab ? Math.Clamp(tab-1,0,2) : 0,
-                                hand.Value is { } value && hand.Tab is >=2 ? value.ToString("0.###",CultureInfo.InvariantCulture) : null);
-                            return Done("Tekstil araçları penceresi kapandı.");
-                        case HandoffTarget.MachineCenter:OpenMachineCenter();return Done("Makine dosyası penceresi kapandı.");
-                    }
+                    var shown=ApplyDetailedView("Katmanlar Ayrıntılı görünümde yönetilir; katman seçimi bölümü açıldı.");
+                    if(shown.Result==CommandResult.Done)layerList.Focus();
+                    return shown;
                 }
-                break;
+                if(hand.Target==HandoffTarget.RecoveryScan && recoveryRescan is not { IsEnabled:true })
+                {
+                    // The button is disabled while a scan runs or when there is no recovery store: the box must not claim a scan started.
+                    const string busy="Kurtarma taraması şu an başlatılamıyor; çalışıyor ya da kurtarma deposu yok.";
+                    SetStatus(busy);
+                    return new(CommandResult.Refused,busy,CommandGuards.PendingWork);
+                }
+                if(HandoffRouteFor(hand) is not { } route)break;
+                return RunHandoff("Handoff."+hand.Target,route.Run,route.Done);
         }
         var message=$"{plan.ActionName.Trim()} bu kutudan henüz çalıştırılamıyor; ilgili düğmeyi ya da Tüm araçlar bölümünü kullanın.";
         SetStatus(message);

@@ -12,15 +12,15 @@ public class UiPreferencesTests
     }
 
     [Fact]
-    public void DefaultsAreTheDarkDetailedView()
+    public void DefaultsAreTheLightSimpleView()
     {
         var defaults = new UiPreferences();
-        Assert.Equal("detailed", defaults.View);
-        Assert.Equal("Dark", defaults.Theme);
+        Assert.Equal("simple", defaults.View);
+        Assert.Equal("Light", defaults.Theme);
         Assert.Equal(100, defaults.TextScale);
         Assert.Empty(defaults.Recent);
         Assert.Empty(defaults.FirstSteps);
-        Assert.Same(ThemePalette.Dark, defaults.Palette);
+        Assert.Same(ThemePalette.Light, defaults.Palette);
     }
 
     [Fact]
@@ -48,8 +48,8 @@ public class UiPreferencesTests
     public void UnusableTextGivesTheDefaults(string? json)
     {
         var read = UiPreferences.Parse(json);
-        Assert.Equal("Dark", read.Theme);
-        Assert.Equal("detailed", read.View);
+        Assert.Equal("Light", read.Theme);
+        Assert.Equal("simple", read.View);
         Assert.Equal(100, read.TextScale);
         Assert.Empty(read.Recent);
     }
@@ -60,7 +60,7 @@ public class UiPreferencesTests
         var read = UiPreferences.Parse("{\"theme\":\"Light\",\"textScale\":\"huge\",\"view\":\"nope\",\"recent\":[\"C:\\\\x.tcad\",5,null]}");
         Assert.Equal("Light", read.Theme);
         Assert.Equal(100, read.TextScale);
-        Assert.Equal("detailed", read.View);
+        Assert.Equal("simple", read.View);
         Assert.Equal(["C:\\x.tcad"], read.Recent);
     }
 
@@ -68,7 +68,7 @@ public class UiPreferencesTests
     public void OversizedTextIsIgnored()
     {
         var padding = new string(' ', UiPreferences.MaximumBytes);
-        Assert.Equal("Dark", UiPreferences.Parse("{\"theme\":\"Light\"}" + padding).Theme);
+        Assert.Equal("Light", UiPreferences.Parse("{\"schema\":2,\"theme\":\"Dark\"}" + padding).Theme);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class UiPreferencesTests
         try
         {
             var path = Path.Combine(folder, "nested", UiPreferences.FileName);
-            Assert.Equal("Dark", UiPreferences.Load(path).Theme);
+            Assert.Equal("Light", UiPreferences.Load(path).Theme);
             Assert.True(new UiPreferences { Theme = "Light" }.Save(path));
             Assert.Equal("Light", UiPreferences.Load(path).Theme);
             Assert.True(new UiPreferences { Theme = "Dark", TextScale = 115 }.Save(path));
@@ -98,9 +98,58 @@ public class UiPreferencesTests
         {
             var path = Path.Combine(folder, UiPreferences.FileName);
             File.WriteAllText(path, "\0\0 broken");
-            Assert.Equal("Dark", UiPreferences.Load(path).Theme);
-            Assert.True(new UiPreferences { Theme = "Light" }.Save(path));
             Assert.Equal("Light", UiPreferences.Load(path).Theme);
+            Assert.True(new UiPreferences { Theme = "Dark" }.Save(path));
+            Assert.Equal("Dark", UiPreferences.Load(path).Theme);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void AnEarlierBuildsDefaultPairIsReadAsNeverChosen()
+    {
+        var read = UiPreferences.Parse("{\"view\":\"detailed\",\"theme\":\"Dark\",\"textScale\":115,\"recent\":[\"C:\\\\a.tcad\"],\"firstSteps\":[\"draw\"]}");
+        Assert.Equal("simple", read.View);
+        Assert.Equal("Light", read.Theme);
+        Assert.Equal(115, read.TextScale);
+        Assert.Equal(["C:\\a.tcad"], read.Recent);
+        Assert.Equal(["draw"], read.FirstSteps);
+    }
+
+    [Theory]
+    [InlineData("{\"view\":\"detailed\",\"theme\":\"Light\"}", "detailed", "Light")]
+    [InlineData("{\"view\":\"simple\",\"theme\":\"Dark\"}", "simple", "Dark")]
+    [InlineData("{\"schema\":1,\"view\":\"simple\",\"theme\":\"Light\"}", "simple", "Light")]
+    public void AnEarlierFileThatIsNotTheDefaultPairKeepsItsValues(string json, string view, string theme)
+    {
+        var read = UiPreferences.Parse(json);
+        Assert.Equal(view, read.View);
+        Assert.Equal(theme, read.Theme);
+    }
+
+    [Fact]
+    public void ADetailedDarkChoiceMadeNowIsKept()
+    {
+        var json = new UiPreferences { View = "detailed", Theme = "Dark" }.ToJson();
+        Assert.Contains("\"schema\": 2", json);
+        var read = UiPreferences.Parse(json);
+        Assert.Equal("detailed", read.View);
+        Assert.Equal("Dark", read.Theme);
+    }
+
+    [Fact]
+    public void AMigratedFileKeepsTheUsersLaterChoiceThroughSaveAndLoad()
+    {
+        var folder = TemporaryFolder();
+        try
+        {
+            var path = Path.Combine(folder, UiPreferences.FileName);
+            File.WriteAllText(path, "{\"view\":\"detailed\",\"theme\":\"Dark\"}");
+            Assert.Equal("simple", UiPreferences.Load(path).View);
+            Assert.True((UiPreferences.Load(path) with { View = "detailed", Theme = "Dark" }).Save(path));
+            var read = UiPreferences.Load(path);
+            Assert.Equal("detailed", read.View);
+            Assert.Equal("Dark", read.Theme);
         }
         finally { Directory.Delete(folder, true); }
     }
