@@ -23,13 +23,13 @@ Yerelde paket: `.\scripts\Package.ps1` (çıktı `work\packages`). Windows Power
 | Paket içeriği | `scripts/VerifyArchive.ps1` (Package.ps1 çağırır) |
 | Paketten çalıştırma | ZIP'i ayrı klasöre açıp `--verify` ve elle açılış |
 
-Masaüstü doğrulaması CI'da çalışmaz; yayın öncesi elle çalıştırılmalıdır. Depo yolu uzunsa (yaklaşık 190 karakterden fazla) sabit bağlantı (hard link) kontrolü Windows yol sınırı yüzünden başarısız olur; kısa bir yolda çalıştırın.
+Penceresiz masaüstü doğrulaması CI'da da çalışır: `windows-ci.yml` her `main` hedefli PR'da ve `main`'e her gönderimde, `windows-release.yml` ise paketlemeden önce çalıştırır; `PASS` değilse iş başarısız olur ve rapor ile ekran görüntüleri `desktop-verification` çıktısı olarak yüklenir. Yayın öncesi yine de etiketli commit için bu çıktının yeşil olduğuna bakın. Depo yolu uzunsa (yaklaşık 190 karakterden fazla) sabit bağlantı (hard link) kontrolü Windows yol sınırı yüzünden başarısız olur; kısa bir yolda çalıştırın.
 
-## 15 Kasım 2026 durumu (`f440bd8` üzerine)
+## Durum notları
 
-- Derleme: 0 hata, 36 uyarı. Birim testleri: 3.016 başarılı, 0 başarısız, 1 atlanan.
-- Masaüstü doğrulaması `main` üzerinde **FAIL**: yay aracının üç kontrolü (`Arc preserves the chosen start coordinate exactly`, `Arc preserves an exactly equal-radius end coordinate`, `Arc start remains attached through undo and redo`). Yay aracı parametrik eğriye geçtikten sonra başlangıç noktası tıklanan koordinatla bit düzeyinde aynı kalmıyor ve nokta sayısı toleransa göre değişiyor. Doğrulama ilk hatada durur: bu daldaki normal derleme yay kontrolüne kadar 623 kontrolü geçti. Kalan kontroller, yalnız tanılama amacıyla hatada durmayan geçici bir derlemeyle çalıştırıldı: `main` üzerinde 2.468 kontrolden, bu dalın bir önceki düzeninde (Hakkında düğmesi başlığın sağındayken) 2.484 kontrolden bu üçü dışında hepsi geçti. Düğme marka altına taşındıktan sonraki tanılama derlemesini bu bilgisayardaki Akıllı Uygulama Denetimi engelledi (`0x800711C7`); son düzen için tam çalıştırma kanıtı yoktur. Geçici derleme depoya girmedi.
-- Bu kapı kapanmadan önizleme yayımlanmamalıdır: ya yay aracı kesin başlangıç/bitiş noktasını yeniden korumalı ya da beklenti bilinçli bir kararla güncellenmelidir.
+- 15 Kasım 2026, `f440bd8` üzerinde yapılan elle ölçüm (tarihsel, bugünün durumu değildir): derleme 0 hata, 36 uyarı; birim testleri 3.016 başarılı, 0 başarısız, 1 atlanan. O gün masaüstü doğrulaması yay aracının üç kontrolünde (`Arc preserves the chosen start coordinate exactly`, `Arc preserves an exactly equal-radius end coordinate`, `Arc start remains attached through undo and redo`) başarısız görünüyordu. Yay aracının beklentileri taslak PR #23'te güncelleniyor (#47'ye dahil); `main`'e birleşmedi.
+- 16 Kasım 2026: `integration/rc-trial` (#47) üzerindeki `Windows build and test` çalışmaları, masaüstü doğrulama adımı dahil, başarılı bitti (örn. çalışma 43908897841, 16:34 UTC). Bu, `main` için bir kanıt değildir: `main` üzerindeki en son çalışma 15 Kasım 2026 tarihli ve o sırada iş akışında masaüstü doğrulama adımı yoktu; birleşmeden sonra `main` üzerindeki doğrulama sonucu doğrulanmadı.
+- Yay aracı kontrollerinin `main` üzerinde geçtiği doğrulanmadı; yayından önce `main` üzerindeki CI sonucuna bakılmalıdır. Yayın kapısı kapanmadan önizleme yayımlanmamalıdır.
 
 ## Önizleme için açık kararlar
 
