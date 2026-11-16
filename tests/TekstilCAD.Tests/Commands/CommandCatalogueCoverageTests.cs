@@ -49,11 +49,19 @@ public class CommandCatalogueCoverageTests
         return File.ReadAllText(path, Encoding.UTF8);
     }
 
+    // The five orthogonal transform buttons are built from the OrthogonalOps table (AddOrthogonalButton), so the scanner reads their labels there.
+    private static string LoadCommandsSource()
+    {
+        var path = Path.Combine(FindRepoRoot(), "src", "TekstilCAD.Desktop", "MainWindow.Commands.cs");
+        Assert.True(File.Exists(path), "MainWindow.Commands.cs not found at " + path);
+        return File.ReadAllText(path, Encoding.UTF8);
+    }
+
     /// <summary>Scans the real window source and fails with every extraction problem listed, so a refactor cannot hide buttons.</summary>
     private static ClassicButtonScanner.Extraction ScanWindow(out string text)
     {
         text = LoadMainWindowSource();
-        var extraction = ClassicButtonScanner.Scan(text);
+        var extraction = ClassicButtonScanner.Scan(text, LoadCommandsSource());
         Assert.True(extraction.Problems.Count == 0,
             "The button extractor could not read MainWindow.cs cleanly (a refactor may have hidden buttons from the catalogue check; "
             + "fix the window code or extend ClassicButtonScanner):\n" + string.Join("\n", extraction.Problems));
@@ -129,6 +137,22 @@ public class CommandCatalogueCoverageTests
                 offenders.Add($"glyph button \"{glyph}\": window name \"{name}\", catalogue ClassicAccessibleName \"{entry.ClassicAccessibleName}\" (entry {entry.Id})");
         }
         Assert.True(offenders.Count == 0, "Glyph button names differ between window and catalogue:\n" + string.Join("\n", offenders));
+    }
+
+    [Fact]
+    public void OrthogonalButtons_KeepTheirAccessibleNamesInTheCatalogue()
+    {
+        var commands = LoadCommandsSource();
+        var offenders = new List<string>();
+        foreach (Match m in Regex.Matches(commands, @"OrthogonalOp\s+\w+\s*=\s*new\(\s*""[^""]*""\s*,\s*""([^""]*)""\s*,\s*""[^""]*""\s*,\s*(null|""([^""]*)"")"))
+        {
+            var label = m.Groups[1].Value; var name = m.Groups[3].Success ? m.Groups[3].Value : null;
+            var entry = CommandCatalogue.FindByClassicLabel(label);
+            if (entry is null) offenders.Add($"\"{label}\" has no entry");
+            else if (entry.ClassicAccessibleName != name) offenders.Add($"\"{label}\": window name \"{name}\", catalogue \"{entry.ClassicAccessibleName}\"");
+        }
+        Assert.Empty(offenders);
+        Assert.Equal(5, Regex.Matches(commands, @"OrthogonalOp\s+\w+\s*=\s*new\(").Count);
     }
 
     [Fact]
@@ -228,6 +252,8 @@ public class CommandCatalogueCoverageTests
     /// (2) <c>AddButton(panel, "literal", ...)</c>, (3) <c>new Button { Content="literal" ... }</c>, (4) the tuple array of the
     /// <c>foreach (var (tool, glyph, shortcut) in new[] {...})</c> tool loop, (5) <c>ViewButton("glyph", "accessible name", ...)</c>,
     /// plus <c>CompactLabel(AddButton(panel, "full", ...), "short")</c> pairs.
+    /// (6) <c>AddOrthogonalButton(panel, OrthogonalOps.Member)</c>, whose label is read from the OrthogonalOps table in MainWindow.Commands.cs;
+    /// any other <c>Add...Button(</c> helper is reported as a problem.
     /// LIMITS: it is a lexer-assisted text scan, not a C# parser. Comments, strings, verbatim strings and char literals are
     /// skipped when matching braces and parentheses, but interpolated strings are treated as plain strings (a nested quote inside
     /// <c>{...}</c> would confuse it), raw string literals (<c>"""</c>) and constants or concatenations as labels are not understood
@@ -260,7 +286,17 @@ public class CommandCatalogueCoverageTests
         private static readonly Regex SetNameCall = new(@"AutomationProperties\.SetName\(\s*[^,\r\n]+,\s*");
         private static readonly HashSet<string> AllowedVariables = ["tool", "glyph"];
 
-        public static Extraction Scan(string text)
+        private static readonly Regex OrthogonalCall = new(@"AddOrthogonalButton\(\s*\w+\s*,\s*OrthogonalOps\.(\w+)\s*\)");
+        private static readonly Regex OtherHelper = new(@"(?!AddButton|AddOrthogonalButton)(Add\w*Button)\(");
+
+        /// <summary>The label of table entry <paramref name="member"/> in the OrthogonalOps declaration text, or null.</summary>
+        private static string? OrthogonalLabel(string commandsText, string member)
+        {
+            var m = Regex.Match(commandsText, @"OrthogonalOp\s+" + Regex.Escape(member) + @"\s*=\s*new\(\s*""[^""]*""\s*,\s*""([^""]*)""");
+            return m.Success ? m.Groups[1].Value : null;
+        }
+
+        public static Extraction Scan(string text, string? commandsText = null)
         {
             var buttons = new List<Found>();
             var problems = new List<string>();
@@ -294,6 +330,15 @@ public class CommandCatalogueCoverageTests
                 if (variable.Success && AllowedVariables.Contains(variable.Groups[1].Value)) continue;
                 P(m.Index, "AddButton whose label is not a plain string literal (the button would be invisible to the catalogue check)");
             }
+
+            foreach (Match m in OrthogonalCall.Matches(body))
+            {
+                var label = commandsText is null ? null : OrthogonalLabel(commandsText, m.Groups[1].Value);
+                if (label is null) P(m.Index, "AddOrthogonalButton for an OrthogonalOps member whose label could not be read from MainWindow.Commands.cs");
+                else buttons.Add(new(label, "AddOrthogonalButton", Line(m.Index)));
+            }
+            foreach (Match m in OtherHelper.Matches(body))
+                P(m.Index, $"{m.Groups[1].Value}(...) is a button helper the scanner does not know");
 
             foreach (Match m in NewButton.Matches(body))
             {

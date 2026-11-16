@@ -44,6 +44,7 @@ internal static partial class SimpleViewVerification
             VerifyControls(checks);
             VerifyRefusals(checks);
             VerifyCommandThroughSimpleView(checks);
+            VerifyAllTools(reportPath, checks);
             VerifyRenders(reportPath, checks);
             VerifyNoWindowVisible(studio, checks);
         }
