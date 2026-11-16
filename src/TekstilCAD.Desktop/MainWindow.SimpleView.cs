@@ -16,6 +16,8 @@ internal interface ICommandBarHost
     void SetText(string text);
     /// <summary>Shows or hides the "Deneyin" suggestion chips (the side card's start tasks offer the same actions).</summary>
     void ShowSuggestions(bool show);
+    /// <summary>True while the box's own live row shows a preview, result or refusal (it announces itself).</summary>
+    bool ShowsMessage { get; }
     /// <summary>Called after every window refresh while the simple view is shown.</summary>
     void OnRefreshed();
     /// <summary>Drops a shown preview and its canvas ghost (the box is leaving the window).</summary>

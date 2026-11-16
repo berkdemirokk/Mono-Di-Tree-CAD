@@ -708,7 +708,7 @@ public sealed class CadCanvas : FrameworkElement
             UpdateDragPreview(pos);
             previewChanged=previousPreview is null ? dragPreview is not null : dragPreview is null || !previousPreview.SequenceEqual(dragPreview);
         }
-        if(!LargeVertexValidationRunning && !LargeCompletionRunning) owner.SetStatus($"{ToolGuidance(owner.ActiveTool)}  ·  X {cursor.X:0.##} mm  Y {cursor.Y:0.##} mm  ·  Yakınlaşma {scale*100:0}%");
+        if(!LargeVertexValidationRunning && !LargeCompletionRunning) owner.SetStatus($"{ToolGuidance(owner.ActiveTool)}  ·  X {cursor.X:0.##} mm  Y {cursor.Y:0.##} mm  ·  Yakınlaşma {scale*100:0}%",announce:false);
         if(ShouldInvalidatePointerMove(panned,previewChanged,drawing.Count>0,previousCursor,cursor))InvalidateVisual();
     }
     // A free pointer is not drawn; its coordinate text updates without rebuilding all contours.

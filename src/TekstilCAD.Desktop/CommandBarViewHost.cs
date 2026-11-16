@@ -33,6 +33,8 @@ internal sealed class CommandBarViewHost : ICommandBarHost
 
     public void ClearPreview() => view.ClearPreview();
 
+    public bool ShowsMessage => view.PreviewRow.Visibility == Visibility.Visible;
+
     public void ShowSuggestions(bool show) => view.ShowSuggestions(show);
 
     // The tool rail sits left of the canvas: the preview card starts at the canvas's left edge, so it never covers a tool button.

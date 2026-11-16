@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -50,7 +51,8 @@ public partial class MainWindow
         private readonly MainWindow w;
         private Border? root;
         private TextBox? search;
-        private TextBlock? emptyResult;
+        private TextBlock? emptyResult, resultCount;
+        private readonly List<(UIElement Element, KeyboardNavigationMode Mode)> blocked = [];
         private Grid? body;
         private ScrollViewer? scroller;
         private readonly Dictionary<string, Button> rows = [];
@@ -126,7 +128,11 @@ public partial class MainWindow
             notice.SetBinding(UIElement.VisibilityProperty, new Binding(nameof(UIElement.Visibility)) { Source = w.historyCapacityNotice, Mode = BindingMode.OneWay });
             AutomationProperties.SetName(notice, "İşlem geçmişi kapasite uyarısı");
 
+            // Both texts are polite live regions: the count while there are hits, the "no result" sentence when there are none.
             emptyResult = new TextBlock { Text = "Bu sözle eşleşen araç bulunamadı. Başka bir söz deneyin; örneğin: kopyala, ayna, kaydet.", FontSize = 14, Foreground = StudioTheme.Muted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 14, 0, 0), Visibility = Visibility.Collapsed, Focusable = true };
+            AutomationProperties.SetLiveSetting(emptyResult, AutomationLiveSetting.Polite);
+            resultCount = new TextBlock { FontSize = 14, Foreground = StudioTheme.Muted, Margin = new Thickness(2, 10, 0, 0), Visibility = Visibility.Collapsed, Focusable = true };
+            AutomationProperties.SetLiveSetting(resultCount, AutomationLiveSetting.Polite);
 
             foreach (var entry in CommandCatalogue.Entries) rows[entry.Id] = BuildRow(entry);
 
@@ -137,8 +143,8 @@ public partial class MainWindow
             layout.RowDefinitions.Add(new() { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new() { Height = GridLength.Auto });
             layout.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-            Grid.SetRow(notice, 1); Grid.SetRow(emptyResult, 2); Grid.SetRow(scroller, 3);
-            layout.Children.Add(top); layout.Children.Add(notice); layout.Children.Add(emptyResult); layout.Children.Add(scroller);
+            Grid.SetRow(notice, 1); Grid.SetRow(emptyResult, 2); Grid.SetRow(resultCount, 2); Grid.SetRow(scroller, 3);
+            layout.Children.Add(top); layout.Children.Add(notice); layout.Children.Add(emptyResult); layout.Children.Add(resultCount); layout.Children.Add(scroller);
 
             root = new Border { Background = StudioTheme.Background, BorderBrush = StudioTheme.Border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 12, 8, 8), Child = layout, Tag = SheetTag };
             AutomationProperties.SetName(root, "Tüm araçlar");
@@ -215,6 +221,13 @@ public partial class MainWindow
 
         // ---------------------------------------------------------------- arrange
 
+        private static void Say(TextBlock live, string spoken)
+        {
+            AutomationProperties.SetName(live, spoken);
+            if (AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
+                UIElementAutomationPeer.FromElement(live)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+
         private void Arrange()
         {
             if (body is null || search is null) return;
@@ -226,12 +239,14 @@ public partial class MainWindow
                 // Ranked list, best match first, one column.
                 var hits = CommandCatalogue.Search(query);
                 emptyResult!.Visibility = hits.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                if (hits.Count == 0) { resultCount!.Visibility = Visibility.Collapsed; Say(emptyResult, "Sonuç yok. " + emptyResult.Text); }
+                else { resultCount!.Text = hits.Count + " sonuç"; resultCount.Visibility = Visibility.Visible; Say(resultCount, resultCount.Text); }
                 var list = new StackPanel { MaxWidth = 620, HorizontalAlignment = HorizontalAlignment.Left };
                 foreach (var entry in hits) list.Children.Add(rows[entry.Id]);
                 body.Children.Add(list);
                 return;
             }
-            emptyResult!.Visibility = Visibility.Collapsed;
+            emptyResult!.Visibility = Visibility.Collapsed; resultCount!.Visibility = Visibility.Collapsed;
             var count = Math.Max(2, columns);
             for (var i = 0; i < count; i++) body.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
             var panels = Enumerable.Range(0, count).Select(_ => new StackPanel { Margin = new Thickness(0, 0, 4, 0) }).ToArray();
@@ -258,6 +273,13 @@ public partial class MainWindow
             Build();
             columns = 0;
             w.workspaceGrid.Children.Add(root!);
+            // The page hides the rail and the canvas; Tab and the arrow keys must not wander into them.
+            foreach (UIElement under in new UIElement[] { w.railScroller, w.canvasShellBorder })
+            {
+                blocked.Add((under, KeyboardNavigation.GetTabNavigation(under)));
+                KeyboardNavigation.SetTabNavigation(under, KeyboardNavigationMode.None);
+                KeyboardNavigation.SetDirectionalNavigation(under, KeyboardNavigationMode.None);
+            }
             Arrange();
             w.Dispatcher.BeginInvoke(() => search?.Focus(), System.Windows.Threading.DispatcherPriority.Input);
             w.SetStatus("Tüm araçlar açık · Aramak için yazın, kapatmak için Esc.");
@@ -268,6 +290,8 @@ public partial class MainWindow
             if (root is null || !w.workspaceGrid.Children.Contains(root)) return;
             var hadFocus = root.IsKeyboardFocusWithin;
             w.workspaceGrid.Children.Remove(root);
+            foreach (var (under, mode) in blocked) { KeyboardNavigation.SetTabNavigation(under, mode); KeyboardNavigation.SetDirectionalNavigation(under, mode); }
+            blocked.Clear();
             foreach (var row in rows.Values) (row.Parent as System.Windows.Controls.Panel)?.Children.Remove(row);
             rows.Clear();
             root = null; body = null; scroller = null; search = null;

@@ -639,7 +639,7 @@ internal sealed class CommandBarView : Border
         var shown=0;var limit=offerUndo ? 2 : 3;
         if(offerUndo)
         {
-            var undo=new Button { Content="Geri al",MinHeight=40,FontSize=14,Padding=new Thickness(12,4,12,4),Margin=new Thickness(0,0,8,6) };
+            var undo=new Button { Content="Geri al",MinHeight=44,FontSize=14,Padding=new Thickness(12,4,12,4),Margin=new Thickness(0,0,8,6) };
             AutomationProperties.SetName(undo,"Yapılan son işlemi geri al");
             undo.Click+=(_,_)=>{ ShowInfo(host.HistoryStep(false));RefreshChips();FocusBox(); };
             chips.Children.Add(undo);
