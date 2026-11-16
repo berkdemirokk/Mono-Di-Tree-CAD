@@ -1,4 +1,5 @@
 using TekstilCAD.Core;
+using TekstilCAD.Core.Commands;
 using Geometry = TekstilCAD.Core.Geometry;
 
 namespace TekstilCAD.Desktop;
@@ -45,12 +46,15 @@ internal enum CommandResult
     Refused,
     /// <summary>The project or selection changed after the preview; nothing was applied.</summary>
     Stale,
+    /// <summary>The command ran and the project content is unchanged by design (selection, view, tool, undo, window hand-off).</summary>
+    Done,
 }
 
 /// <summary>What the command executor tells its caller. <c>Message</c> is shown to the user as is (Turkish).</summary>
 /// <param name="Guard">Name of the guard that refused (see <see cref="CommandGuards"/>), or null.</param>
 /// <param name="RefreshFailed">True when the project changed but refreshing the screen failed afterwards.</param>
-internal sealed record CommandOutcome(CommandResult Result,string Message,string? Guard=null,bool RefreshFailed=false)
+/// <param name="Caveats">Short permanent notes the result row keeps whole (they come from the plan).</param>
+internal sealed record CommandOutcome(CommandResult Result,string Message,string? Guard=null,bool RefreshFailed=false,IReadOnlyList<string>? Caveats=null)
 {
     internal bool Changed=>Result==CommandResult.Applied;
 }
@@ -72,6 +76,9 @@ internal static class CommandGuards
     internal const string Stamp="stamp";
     internal const string Commit="commit";
     internal const string Planner="planner";
+    internal const string Confirm="confirm";
+    internal const string Unsupported="unsupported";
+    internal const string TargetMissing="target-missing";
 }
 
 /// <summary>
@@ -87,8 +94,10 @@ internal sealed record CommandStamp(ProjectDocument Document,Guid Epoch,Guid? Se
 /// <param name="NeedsSelection">The edit targets the selected piece: it must exist and sit on an unlocked layer.</param>
 /// <param name="AddsPiece">The edit adds a piece: a visible, unlocked layer must be available to receive it.</param>
 /// <param name="Stamp">The preview this edit was made from, or null when there is none.</param>
+/// <param name="PlanStamp">The planner's stamp of the preview (document, epoch, selection, piece content, window facts), or null.</param>
+/// <param name="TargetPieceId">The piece the edit changes when the command names it; its layer lock is checked by id.</param>
 internal sealed record CommandEdit(string Description,string ActionName,Action<ProjectDocument> Apply,
-    bool NeedsSelection=true,bool AddsPiece=false,CommandStamp? Stamp=null);
+    bool NeedsSelection=true,bool AddsPiece=false,CommandStamp? Stamp=null,PieceStamp? PlanStamp=null,Guid? TargetPieceId=null);
 
 public partial class MainWindow
 {
@@ -112,13 +121,7 @@ public partial class MainWindow
         return target is { Visible: true, Locked: false } ? target : null;
     }
 
-    /// <summary>Text to turn into an edit. The planner that parses it is not wired yet; this never changes anything.</summary>
-    internal CommandOutcome PreviewCommand(string text)
-        =>new(CommandResult.Refused,string.IsNullOrWhiteSpace(text)
-            ? "Bir komut yazın."
-            : "Komut çözümleyici henüz bağlı değil; komut önizlenemedi.",CommandGuards.Planner);
-
-    /// <summary>Applies one edit through the guard ladder. The planner's plan will be turned into a <see cref="CommandEdit"/> here.</summary>
+    /// <summary>Applies one edit through the guard ladder (see <see cref="TryExecute"/>). Plans go through <see cref="ApplyCommand(Plan,bool)"/>.</summary>
     internal CommandOutcome ApplyCommand(CommandEdit edit)=>TryExecute(edit);
 
     /// <summary>
@@ -158,6 +161,17 @@ public partial class MainWindow
             }
             if(BlockIfSelectionLocked(edit.ActionName))return Refuse(CommandGuards.Locked);
         }
+        if(edit.TargetPieceId is { } targetId)
+        {
+            var target=Document.Pieces.FirstOrDefault(p=>p.Id==targetId);
+            if(target is null)
+            {
+                SetStatus($"{edit.ActionName} yapılmadı · Parça artık projede yok. Komutu yeniden önizleyin.");
+                return new(CommandResult.Stale,status.Text,CommandGuards.TargetMissing);
+            }
+            if(!IsPieceEditable(target))
+            { SetStatus($"{edit.ActionName} yapılmadı · Parçanın katmanı kilitli. Önce katmanın kilidini açın."); return Refuse(CommandGuards.Locked); }
+        }
         if(edit.AddsPiece && NewPieceLayer() is null)
         {
             SetStatus($"{edit.ActionName} yapılmadı · Seçili ve varsayılan katman gizli veya kilitli. Önce bir katmanı görünür ve kilitsiz yapın.");
@@ -166,6 +180,11 @@ public partial class MainWindow
         if(edit.Stamp is { } stamp && !CommandStampMatches(stamp))
         {
             SetStatus($"{edit.ActionName} yapılmadı · Önizlemeden sonra proje veya seçim değişti. Komutu yeniden önizleyin.");
+            return new(CommandResult.Stale,status.Text,CommandGuards.Stamp);
+        }
+        if(edit.PlanStamp is { } planStamp && planStamp.Check(CommandView(),CommandSelection())!=StampState.Current)
+        {
+            SetStatus($"{edit.ActionName} yapılmadı · {Refusals.TemplatePreviewStale}");
             return new(CommandResult.Stale,status.Text,CommandGuards.Stamp);
         }
         var committed=false;
