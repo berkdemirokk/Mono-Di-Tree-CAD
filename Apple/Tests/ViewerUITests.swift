@@ -125,6 +125,60 @@ final class ViewerUITests: XCTestCase {
         archived.tap()
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 10))
     }
+    func testResumedDraftNewerThanSavedProjectCanBeSavedAgain() {
+        let app = launchClean()
+        app.buttons["Örnekle dene"].tap()
+        XCTAssertTrue(countLabel(2, in: app).waitForExistence(timeout: 10))
+        // An edit creates the local draft; then the project is saved once.
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["Projeyi kaydet"], in: app)
+        app.buttons["Kapat"].tap()
+
+        // Continue the same drawing so the draft becomes newer than the saved project.
+        let resume = app.buttons["Son çizime devam et"]
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        resume.tap()
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 10))
+        app.buttons["Çizgi ekle"].tap()
+        XCTAssertTrue(countLabel(4, in: app).waitForExistence(timeout: 5))
+        app.buttons["Kapat"].tap()
+
+        // Resuming that newer draft must still allow saving the project itself.
+        XCTAssertTrue(resume.waitForExistence(timeout: 10))
+        resume.tap()
+        XCTAssertTrue(countLabel(4, in: app).waitForExistence(timeout: 10))
+        tapBelow(app.buttons["Projeyi kaydet"], in: app)
+        XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 3),
+                       "Saving a resumed draft over its own saved project must not report a conflict")
+        XCTAssertTrue(app.staticTexts["Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."].exists)
+    }
+
+    func testUnreadableDraftCanBeSetAsideInsteadOfBlockingNewWork() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+                                "--ui-test-reset-draft", "--ui-test-unreadable-draft"]
+        app.launch()
+
+        let notice = app.alerts["Dosya açılamadı"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 15), "The unreadable draft should be reported at launch")
+        notice.buttons["Tamam"].tap()
+        XCTAssertFalse(app.buttons["Son çizime devam et"].exists)
+
+        app.buttons["Yeni proje oluştur"].tap()
+        let blocked = app.alerts["Önceki taslak okunamıyor"]
+        XCTAssertTrue(blocked.waitForExistence(timeout: 10))
+        blocked.buttons["Vazgeç"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını kolayca oluştur"].waitForExistence(timeout: 5))
+
+        app.buttons["Yeni proje oluştur"].tap()
+        XCTAssertTrue(blocked.waitForExistence(timeout: 10))
+        blocked.buttons["Taslağı ayır ve devam et"].tap()
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 10))
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
+    }
+
     func testLaunchAndCancelFilePicker() {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

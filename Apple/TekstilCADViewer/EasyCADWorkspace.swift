@@ -458,6 +458,14 @@ struct EasyCADWorkspace: View {
                             // A resumed scene must not silently overwrite a
                             // different revision with the same project UUID.
                             guard stored == document else { throw SketchStoreError.changed }
+                            // This is the resumed current draft. Switching projects archives
+                            // the draft first, so the saved project with the same UUID is the
+                            // revision this draft continues from, even when the draft is newer.
+                            // Without it, "Projeyi kaydet" was always refused as a conflict.
+                            // A revision saved after this point still rejects the save.
+                            if savedLibrarySnapshot == nil {
+                                savedLibrarySnapshot = try? CADProjectLibrary.open(document.id)
+                            }
                         } else {
                             try CADLocalDraftStore.save(document, replacing: nil)
                         }
