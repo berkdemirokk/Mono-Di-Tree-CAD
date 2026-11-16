@@ -20,7 +20,7 @@ final class CommandFieldUITests: XCTestCase {
     }
 
     private func countLabel(_ count: Int, in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts["\(count) parça • Önizleme ölçüye göre ekrana sığdırılır"]
+        app.staticTexts["\(count) parça • Tümü ekranda"]
     }
 
     private func text(startingWith prefix: String, in app: XCUIApplication) -> XCUIElement {
@@ -220,7 +220,7 @@ final class CommandFieldUITests: XCTestCase {
         openWorkshop(app)
         app.buttons["Dikdörtgen ekle"].tap()
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
-        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğiniz kalıp önizlemesi"]
+        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğin kalıp çizimi"]
         XCTAssertTrue(drawing.waitForExistence(timeout: 5))
         let field = app.textFields["command-field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))

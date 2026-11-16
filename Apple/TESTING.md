@@ -83,7 +83,13 @@ xcodegen generate --spec project.ci.yml
 | Sınıf | Test metotları |
 |-------|---------------|
 | `ViewerUITests` | Başlangıç, örnek çizim, taslak kurtarma, dosya seçici, bozuk alan ve arama, yakınlaştırma düğmeleri ve "şimdi ne yapmalıyım" ipucu testleri |
-| `ScreenshotTourTests` | Ekran görüntüsü turu; `testTour06SystemDarkStaysLight` sistem koyu moddayken uygulamanın açık kaldığını görüntüler (iki ekran) |
+| `ScreenshotTourTests` | Ekran görüntüsü turu; `testTour06` telefon koyu moddayken uygulamanın açık kaldığını denetler, `testTour07` `-appearance dark` ile koyu görünümü, `testTour08`–`10` proje "…" menüsünü, Parmakla çiz sayfasını ve köşe noktası düzenleyicisini görüntüler |
+| `PointEditorUITests` | Nokta ekleme/silme, uygulanmamış değerin başka noktaya geçince uygulanması, geçersiz değerde noktanın seçili kalması |
+| `ComposerUITests` | Parmakla çizimde nokta sayısı, Tümünü temizle, Vazgeç onayı, alan boyutu değişiminde soru, şekli çizime ekleme |
+| `ProjectLibraryUITests` | Proje silme (iptal ve onay), ad değiştirme, boş ad hatası, Tümünü göster (12), okunamayan satır, arşiv bildirimi (`--ui-test-seed-projects`, `--ui-test-unreadable-project`) |
+| `WorkshopPanelUITests` | Daire/üçgen ekleme, tek adımlı paylaşma, geçersiz alanla Kapat seçenekleri, yatay ekranda yan yana düzen |
+| `CanvasUITests` | Izgara ve (0, 0) bilgisinin ekran okuyucu değerinde olması, yakınlaştırılmışken sürüklemenin kaydırması, sığdırmada sürüklemenin parçayı taşıması, Ekrana sığdır |
+| Birim testleri (`Apple/UnitTests/`) | `PointEditingTests`, `ComposerTests`, `DraftShapesTests`, `ViewportAnchorTests` (parmak altı yakınlaştırma, ızgara adımı, köşe boşluğu), `DraftLibraryInteractionTests` (silme/ad değiştirmenin taslakla etkileşimi) |
 | `DraftContourGeometryTests` (`Apple/UnitTests/`) | Çizim eşlemesi ve `DraftViewport`: yakınlaştırma sınırı (1×–24×), kaydırma sınırı, yakınlaştırılmış eşlemenin tersinirliği, yakınlaştırmada sürükleme mesafesi |
 | `FixtureLoadingTests` | Sürüm zarfı, veri sınırları, parça seçimi, yalın iPhone çizimini kopya açma ve metaverili fabrika dosyası reddi |
 
@@ -131,7 +137,7 @@ Kimlik bilgilerini **kaynak koda, sohbete veya günlüklere asla eklemeyin**; Gi
 2. **Yeni proje oluştur** > **Dikdörtgen ekle**: önizlemede bir parça görünmeli.
 3. Parçanın adını ve en/boyunu (`100`/`150` mm), X/Y konumunu değiştirip uygula; önizleme güncellenmeli.
 4. Parçayı sağa taşı, 90° döndür, kopyala, sil; her işlemde geri al/ileri al doğru sonucu vermeli.
-5. **Dosyayı hazırla (.tcad)** > **Paylaş veya Dosyalara kaydet** ile gerçekten `.tcad` dosyası dışa aktar; dosya adı proje adından türetilmeli (örn. "Örnek kalıp.tcad"), rastgele kimlik olmamalı. Windows masaüstünde açıp kimlik, ölçü ve geometriyi bağımsız doğrula.
+5. Tek dokunuşla **Paylaş veya Dosyalara kaydet** ile (dosya o an çizimden yazılır, paylaşma ekranı açılır; düzenlemeden sonra düğme kaybolmamalı) gerçekten `.tcad` dosyası dışa aktar; dosya adı proje adından türetilmeli (örn. "Örnek kalıp.tcad"), rastgele kimlik olmamalı. Windows masaüstünde açıp kimlik, ölçü ve geometriyi bağımsız doğrula.
 6. **Örnekle dene** seçeneği iki örnek parçayla açılmalı; yeni kullanıcı önceki CAD bilgisi olmadan işlemleri bulabilmeli.
 7. Boş projede dışa aktar reddedilmeli; 0/negatif/büyük, bozuk veya sonsuz sayılar kabul edilmemeli.
 8. VoiceOver, Dynamic Type, küçük ekran, iPhone/iPad, Türkçe/İngilizce sistem dili, Dosyalar ve iCloud sağlayıcıları ile gerçek cihaz kabulü yapılmalı.
@@ -180,14 +186,14 @@ UI simülatör testleri lokal taslak test verisini özel bir debug argümanıyla
 ## Son projeler için eşzamanlı kayıt güvenliği
 
 - **Projeyi kaydet**, açıldığı anda doğrulanmış kütüphane sürümüyle karşılaştırarak kaydeder. Arada başka bir oturum tarafından değiştirilmiş veya silinmiş dosya sessizce ezilmez.
-- Çakışma uyarısı görülürse **Farklı kopya kaydet** yeni proje UUID'siyle ikinci bir bağımsız kayıt üretir. Mevcut kütüphane dosyası korunur; çalışma alanı da kapanmaz.
-- **Farklı kopya kaydet** mevcut taslak veya başka bir proje üzerine yazmaz. Bir kopyanın oluştuğunu ana ekrandaki **Son projeler** listesinde doğrulayın.
+- Çakışma uyarısı görülürse **Kopyasını kaydet** yeni proje UUID'siyle ikinci bir bağımsız kayıt üretir. Mevcut kütüphane dosyası korunur; çalışma alanı da kapanmaz.
+- **Kopyasını kaydet** mevcut taslak veya başka bir proje üzerine yazmaz. Bir kopyanın oluştuğunu ana ekrandaki **Son projeler** listesinde doğrulayın.
 - `CADStorageTests`, aynı UUID'ye sahip eski kayıt sürümü, yanlış UUID ve idempotent yeniden kaydetme senaryolarını çalıştırır.
 - Taslak ve kütüphane kayıtlarında, uygulamanın kendi yazıcıları arasında `.json.lock` yan dosyasıyla işlem/kontrol/kayıt bir dosya kilidi altında tutulur; mevcut taslağın arşivlenmesi ve silinmesi de aynı kilitle yapılır. Yan kilit dosyaları başka açık süreçlerin kilidini geçersiz kılmamak için silinmez. Eşzamanlı eski-sürüm yazımlarını reddeden bir regresyon testi bulunur. Kilidi kullanmayan harici yazıcılar, farklı dosya alias'ları ve fiziksel cihaz testi bu garantinin dışındadır.
 
 ## Devam edilen taslağı projeye kaydetme
 
-- **Son çizime devam et** ile açılan taslak, aynı proje kimliğiyle daha önce kaydedilmiş sürümden yeniyse **Projeyi kaydet** artık o kayıtlı sürümün yerine yazar. Önceden bu durumda kayıt her zaman "başka bir çalışma tarafından değiştirildi" hatasıyla reddediliyordu ve yalnız **Farklı kopya kaydet** çalışıyordu.
+- **Son çizime devam et** ile açılan taslak, aynı proje kimliğiyle daha önce kaydedilmiş sürümden yeniyse **Projeyi kaydet** artık o kayıtlı sürümün yerine yazar. Önceden bu durumda kayıt her zaman "başka bir çalışma tarafından değiştirildi" hatasıyla reddediliyordu ve yalnız **Kopyasını kaydet** çalışıyordu.
 - Gerekçe: başka bir projeye geçilirken geçerli taslak önce arşivlendiği için, geçerli taslak ile aynı kimlikli kayıtlı proje her zaman aynı çalışmanın devamıdır. Atölye açıldıktan sonra kayıtlı sürüm değişirse kayıt yine reddedilir.
 - Son projelerden ya da dosyadan açılan belgelerde kural değişmedi: kayıtlı sürüm yalnız açılan belgeyle birebir aynıysa yerine yazılabilir.
 - Kayıtlı sürüm taslaktan yeni de olabilir: **Projeyi kaydet**, **Geri al**, **Kapat**, **Son çizime devam et**, **Projeyi kaydet** sırasında kayıtlı sürümün yerine geri alınmış hâl yazılır. Aynı oturumda geri alıp kaydetmekle aynı sonuçtur; yineleme geçmişi atölye kapanınca zaten silinir.
@@ -227,12 +233,14 @@ Doğrulanmayanlar: gerçek cihaz, VoiceOver, Türkçe klavyedeki sesle yazmanın
 
 ## Parmakla şekil çizme ve kayıp koruması
 
-1. Atölyede **Parmakla şekil çiz**'i aç; sabit 300 × 300 mm karenin dışına dokun: kısa bir uyarı görünmeli, nokta eklenmemeli.
+1. Atölyede **Parmakla şekil çiz**'i aç; seçilen alanın (varsayılan 300 × 300 mm) dışına dokun: kısa bir uyarı görünmeli, nokta eklenmemeli.
 2. Yeterli nokta yokken **Şekli çizime ekle** pasif olmalı ve altında kaç nokta gerektiği yazmalı.
 3. En az bir nokta varken **Vazgeç**'e bas: "Çizdiğin N nokta silinsin mi?" sorulmalı. **Çizmeye devam et** noktaları korumalı; sayfayı aşağı çekmek de kapatmamalı. Hiç nokta yokken **Vazgeç** hemen kapatmalı.
 4. Zoom açıkken parça seçiliyse **Seçili parçayı göster** parçayı çizim alanının ortasına getirmeli (sürükleme gerekmeden).
+5. Alan boyutunu 100 / 300 / 1000 mm arasında değiştir. Noktalar yeni alana sığıyorsa hemen değişmeli; sığmıyorsa üç seçenek sorulmalı ve «Alanı değiştirme» hiçbir şeyi değiştirmemeli.
+6. Sol alt köşedeki kırmızı nokta 0,0 olmalı; kenarlarda mm sayıları görünmeli. **Tümünü temizle** onay istemeli; onaydan sonra "0 nokta" yazmalı.
 
-Bu adımlar yalnız koddan çıkarıldı; simülatör testi yoktur ve gerçek cihazda denenmedi.
+1–3, 5 ve 6. adımlar `ComposerUITests` ile simülatörde sınanır; gerçek cihazda denenmedi.
 
 ## Taşıma, kayıt durumu, nokta düzenleme ve proje yönetimi
 
@@ -243,4 +251,29 @@ Bu adımlar yalnız koddan çıkarıldı; simülatör testi yoktur ve gerçek ci
 5. Ana ekranda bir projenin "…" menüsünden **Adı değiştir** (1–120 karakter) ve **Sil** (onay ister) dene. Sildikten sonra yeni proje açınca silinen projenin geri **gelmediğini** doğrula. Adı değiştirdikten sonra yeni proje açınca "(taslak)" adlı ikinci bir proje **oluşmadığını** doğrula.
 6. 10'dan fazla proje varken **Tümünü göster (N)** görünmeli.
 
-Bu adımlar yalnız koddan çıkarıldı; simülatör testi yalnız 1. ve 3. adımı (taşıma ve hatalı değer) kapsar; gerçek cihazda denenmedi. 5. adımın birim testi yalnız yol-enjekte edilebilir silme/ad değiştirmeyi kapsar, taslakla etkileşimi kapsamaz.
+Simülatör testleri 1., 3., 5. ve 6. adımı kapsar (`ViewerUITests`, `ProjectLibraryUITests`); silme/ad değiştirmenin taslakla etkileşimi `DraftLibraryInteractionTests` birim testlerinde. Gerçek cihazda denenmedi.
+
+## Bu turda eklenenler (16 Kasım 2026)
+
+1. **Nokta düzenleyici:** Nokta 2'nin X değerini yaz, Uygula'ya basmadan **Sonraki nokta**'ya bas: değer uygulanmalı ve durum satırı bunu söylemeli. X'e ",," yazıp başka noktaya geçmeyi dene: uyarı çıkmalı, nokta seçili kalmalı; **Yazdığımı geri al** eski değeri getirmeli. **Nokta ekle** sayıyı 1 artırmalı; üç noktalı kapalı parçada **Noktayı sil** nedenini söyleyerek reddetmeli.
+2. **Şekiller:** Daire ekle / Üçgen ekle ile parça ekle; En/Boy, döndür, kopyala çalışmalı.
+3. **Kapat:** bir kutuya geçersiz değer yazıp Kapat: «Değişikliği at ve kapat» / «Düzeltmeye dön» seçenekleri çıkmalı; atınca kayıtlı çizim bozulmamalı.
+4. **iPad ya da yatay iPhone:** çizim solda, araçlar sağda.
+5. **Tuval:** soluk ızgara ve sol üstte «Kare: N mm» görünmeli; (0, 0) noktası ve X/Y okları görünmeli. Yakınlaştırınca bir kez ipucu çıkmalı ve «Anladım» ile kapanmalı. Yakınlaştırılmışken parçanın içinden sürüklemek X/Y'yi değiştirmemeli, görünümü kaydırmalı; seçili parçanın kenarından tutunca parça taşınmalı. Büyük bir parça sığdırılmışken sağ alttaki düğmelerin altında kalmamalı. iOS 17+ cihazda iki parmakla yakınlaştırma parmakların olduğu yere doğru olmalı. VoiceOver açıkken «Ekrana sığdır»a dokununca odak «Yakınlaştır»a geçmeli.
+6. **Ana ekran:** «Son çizime devam et» adı, parça sayısını ve zamanı söylemeli. Yeni proje açınca "Önceki çizimin «ad» Son projeler'e kaydedildi." satırı çıkmalı. Okunamayan proje «Okunamıyor» görünmeli ve açılmamalı, «…» menüsünden silinebilmeli.
+7. **Dosya önizlemesi:** bir `.tcad` aç; **Ana ekrana dön** ana ekrana götürmeli; "kontur", "iplik yönü" gibi sözcükler görünmemeli.
+8. **Görünüm:** telefon koyu moddayken uygulama açık kalmalı. Ana ekrandaki **Görünüm** menüsünden Koyu seçince ana ekran, atölye ve Parmakla çiz sayfası koyu olmalı; Telefona uy seçilince telefonun ayarına hemen uymalı. Kontrastı Artır açıkken kart kenarları ve çerçeveli düğmeler belirgin olmalı (görüntüyle doğrulanmadı).
+
+Bu adımların çoğu yeni arayüz testleriyle simülatörde sınanır (yukarıdaki tablo); iki parmakla yakınlaştırma, VoiceOver, Kontrastı Artır ve gerçek cihaz sınanmadı.
+
+## Ekran incelemesi düzeltmeleri (16 Kasım 2026)
+
+CI ekran görüntüleri tasarım incelemesinden geçirildi; bulunan sorunlar düzeltildi:
+
+1. **Yatay ekran:** Atölyede araç sütunu kaydırılınca Geri al / İleri al düğmeleri artık kutuların üstüne binmemeli; üst çubuğun kendi zemini var.
+2. **Tam genişlik düğmeler:** "Ölçüleri, konumu ve adı uygula" ve "Köşe noktalarını düzenle" kartın tüm genişliğini kaplamalı, dar bir hap gibi kırılmamalı.
+3. **Durum satırı:** Ekrana sığdırılmışken "N parça • Tümü ekranda" yazmalı (eskiden "Önizleme ölçüye göre ekrana sığdırılır").
+4. **Türkçe biçim:** Telefonun bölgesi İngilizce olsa da son projeler listesindeki tarih Türkçe yazmalı; parmakla çiz alanı "1000 mm" göstermeli ("1,000 mm" değil) ve "300 mm" seçiliyken tek satıra sığmalı.
+5. **Dil:** Nokta düzenleyici ve hata iletileri de uygulamanın geri kalanı gibi "sen" diliyle yazar. "Farklı kopya kaydet" düğmesinin adı **Kopyasını kaydet** oldu; dışa aktarma notundaki teknik sözcükler sadeleşti.
+
+Bu düzeltmeler simülatör görüntülerinden çıkarıldı; düzeltilmiş hâlin görüntüsü bir sonraki CI çalışmasında üretilir.

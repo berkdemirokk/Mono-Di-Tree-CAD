@@ -66,8 +66,8 @@ final class FixtureLoadingTests: XCTestCase {
         for version in [6, 7, 8, 9] {
             let app = launch(json: versionedProject(version, includeRequiredMetadata: true))
             XCTAssertTrue(app.staticTexts["Windows Önizleme"].waitForExistence(timeout: 15))
-            XCTAssertTrue(app.staticTexts["1 parça • Ölçekli üretim çıktısı değildir"].exists)
-            let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Sürüm \(version) yalnız kontur önizlemesi")).firstMatch
+            XCTAssertTrue(app.staticTexts["1 parça • Ekrana sığdırıldı; kesim için kullanmayın"].exists)
+            let notice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "(sürüm \(version))")).firstMatch
             XCTAssertTrue(notice.exists)
             XCTAssertFalse(app.buttons["Kopyasını düzenle"].exists,
                            "A versioned production project must remain read-only.")
@@ -116,17 +116,17 @@ final class FixtureLoadingTests: XCTestCase {
         let edit = app.buttons["Kopyasını düzenle"]
         XCTAssertTrue(edit.waitForExistence(timeout: 10))
         edit.tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"]
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"]
             .waitForExistence(timeout: 15))
         app.buttons["Dikdörtgen ekle"].tap()
-        XCTAssertTrue(app.staticTexts["3 parça • Önizleme ölçüye göre ekrana sığdırılır"].exists)
+        XCTAssertTrue(app.staticTexts["3 parça • Tümü ekranda"].exists)
         app.buttons["Kapat"].tap()
         let resume = app.buttons["Son çizime devam et"]
         XCTAssertTrue(resume.waitForExistence(timeout: 10))
         resume.tap()
-        XCTAssertTrue(app.staticTexts["3 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["3 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         app.buttons["Kapat"].tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Ölçekli üretim çıktısı değildir"].exists)
+        XCTAssertTrue(app.staticTexts["2 parça • Ekrana sığdırıldı; kesim için kullanmayın"].exists)
     }
 
     func testSketchWithProductionMetadataIsReadOnly() {
@@ -146,14 +146,14 @@ final class FixtureLoadingTests: XCTestCase {
     func testEmptyProjectLoadsWithoutError() {
         let app = launch(with: "empty-project")
         XCTAssertTrue(app.staticTexts["Boş Proje"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Bu projede görüntülenebilir kontur yok."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["0 parça • Ölçekli üretim çıktısı değildir"].exists)
+        XCTAssertTrue(app.staticTexts["Bu dosyada gösterilecek parça yok."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["0 parça • Ekrana sığdırıldı; kesim için kullanmayın"].exists)
     }
 
     func testMinimalPieceLoads() {
         let app = launch(with: "minimal-piece")
         XCTAssertTrue(app.staticTexts["Minimal Parça"].waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["1 parça • Ölçekli üretim çıktısı değildir"].exists)
+        XCTAssertTrue(app.staticTexts["1 parça • Ekrana sığdırıldı; kesim için kullanmayın"].exists)
         selectPiece("İki Nokta", in: app)
     }
 
@@ -161,7 +161,7 @@ final class FixtureLoadingTests: XCTestCase {
         let app = launch(with: "turkish-utf8")
         XCTAssertTrue(app.staticTexts["Türkçe Örnek"].waitForExistence(timeout: 15))
         selectPiece("Göğüs Ölçümü", in: app)
-        for detail in ["Rol: Kesim", "Beden: M", "Malzeme: Pamuk", "Adet: 5", "İplik yönü: Kayıtlı"] {
+        for detail in ["Rol: Kesim", "Beden: M", "Malzeme: Pamuk", "Adet: 5", "Kumaş yönü: Dosyada var"] {
             XCTAssertTrue(hasAccessibleDetail(detail, in: app), "Missing detail: \(detail)")
         }
     }
@@ -170,14 +170,14 @@ final class FixtureLoadingTests: XCTestCase {
         let app = launch(with: "no-grainline")
         XCTAssertTrue(app.staticTexts["İplik Yoksuz"].waitForExistence(timeout: 15))
         selectPiece("Yoksuz Parça", in: app)
-        XCTAssertTrue(hasAccessibleDetail("İplik yönü: Belirtilmemiş", in: app))
+        XCTAssertTrue(hasAccessibleDetail("Kumaş yönü: Dosyada yok", in: app))
     }
 
     func testOpenContourLoads() {
         let app = launch(with: "open-contour")
         XCTAssertTrue(app.staticTexts["Açık Kontur"].waitForExistence(timeout: 15))
         selectPiece("Açık Çizgi", in: app)
-        XCTAssertTrue(hasAccessibleDetail("Açık kontur", in: app))
+        XCTAssertTrue(hasAccessibleDetail("Açık çizgi", in: app))
     }
 
     func testLargeCoordinatesLoadWithoutCrash() {
@@ -196,7 +196,7 @@ final class FixtureLoadingTests: XCTestCase {
         XCTAssertTrue(app.buttons["Ön Beden"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Arka Beden"].exists)
         app.buttons["Arka Beden"].tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Ölçekli üretim çıktısı değildir"].exists)
+        XCTAssertTrue(app.staticTexts["2 parça • Ekrana sığdırıldı; kesim için kullanmayın"].exists)
     }
 
     func testInvalidJSONShowsError() {

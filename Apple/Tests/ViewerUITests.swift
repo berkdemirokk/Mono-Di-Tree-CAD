@@ -9,7 +9,7 @@ final class ViewerUITests: XCTestCase {
     }
 
     private func countLabel(_ count: Int, in app: XCUIApplication) -> XCUIElement {
-        app.staticTexts["\(count) parça • Önizleme ölçüye göre ekrana sığdırılır"]
+        app.staticTexts["\(count) parça • Tümü ekranda"]
     }
 
     /// The workshop's tools scroll under a pinned drawing. Scrolling must start inside that tools
@@ -67,7 +67,7 @@ final class ViewerUITests: XCTestCase {
         let demo = app.buttons["Örnekle dene"]
         XCTAssertTrue(demo.waitForExistence(timeout: 15))
         demo.tap()
-        XCTAssertTrue(app.staticTexts["2 parça • Önizleme ölçüye göre ekrana sığdırılır"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["2 parça • Tümü ekranda"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Dikdörtgen ekle"].exists)
     }
 
@@ -152,7 +152,7 @@ final class ViewerUITests: XCTestCase {
         app.buttons["Dikdörtgen ekle"].tap()
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
 
-        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğiniz kalıp önizlemesi"]
+        let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğin kalıp çizimi"]
         XCTAssertTrue(drawing.waitForExistence(timeout: 5))
         let width = app.textFields["En"]
         tapBelow(width, in: app)
@@ -237,7 +237,7 @@ final class ViewerUITests: XCTestCase {
         tapBelow(app.buttons["Projeyi kaydet"], in: app)
         XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 3),
                        "Saving a resumed draft over its own saved project must not report a conflict")
-        XCTAssertTrue(app.staticTexts["Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsiniz."].exists)
+        XCTAssertTrue(app.staticTexts["Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsin."].exists)
     }
 
     func testUnreadableDraftCanBeSetAsideInsteadOfBlockingNewWork() {
@@ -246,7 +246,7 @@ final class ViewerUITests: XCTestCase {
                                 "--ui-test-reset-draft", "--ui-test-unreadable-draft"]
         app.launch()
 
-        let notice = app.alerts["Dosya açılamadı"]
+        let notice = app.alerts["Son çizim açılamadı"]
         XCTAssertTrue(notice.waitForExistence(timeout: 15), "The unreadable draft should be reported at launch")
         notice.buttons["Tamam"].tap()
         XCTAssertFalse(app.buttons["Son çizime devam et"].exists)
@@ -334,20 +334,20 @@ final class ViewerUITests: XCTestCase {
 
         let selected = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Arka Beden")).firstMatch
         XCTAssertTrue(selected.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any)["Arka Beden kontur önizlemesi"].exists)
-        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "İplik yönü: Kontrol bekliyor")).firstMatch
+        XCTAssertTrue(app.descendants(matching: .any)["Arka Beden önizlemesi"].exists)
+        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Kumaş yönü: Kontrol edilmeli")).firstMatch
         XCTAssertTrue(details.waitForExistence(timeout: 10))
         XCTAssertTrue(details.label.contains("Pamuk"))
         XCTAssertTrue(details.label.contains("Adet: 2"))
-        let hideGrain = app.buttons["İplik yönlerini gizle"]
+        let hideGrain = app.buttons["Kumaş yönünü gizle"]
         XCTAssertTrue(hideGrain.waitForExistence(timeout: 10))
         hideGrain.tap()
-        XCTAssertTrue(app.buttons["İplik yönlerini göster"].exists)
+        XCTAssertTrue(app.buttons["Kumaş yönünü göster"].exists)
         selected.tap()
         XCTAssertTrue(app.buttons["Tüm parçalar"].waitForExistence(timeout: 10))
         app.buttons["Tüm parçalar"].tap()
         XCTAssertTrue(picker.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["2 parçanın önizlemesi"].exists)
     }
 
     func testVerticalMoveButtonsShiftThePieceAndUndoRestoresIt() {
