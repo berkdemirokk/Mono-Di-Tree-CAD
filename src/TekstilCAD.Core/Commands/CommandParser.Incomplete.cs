@@ -47,7 +47,7 @@ public static partial class CommandParser
         " santim yukarı", " santim sağa", " mm sağa", " milim sağa", " cm", " mm", " 50 konumuna taşı", " pastal", " payı",
         " 80 yap", " seç", " sil", " olsun", " yap", " tema", " 3 adım geri", " adım geri", " geri", " 60 yap",
         " 2 yap", " kaydır", " aracı", " 90 derece", " döndür", " beden büyüt", " 10 çizgi", " x 80 dikdörtgen", " çarpı seksen dikdörtgen",
-        " dikdörtgen", " yukarı", " aşağı", " sağa", " konumuna taşı", " üst aynala", " santim aşağı", "0 yukarı", "0 konumuna taşı", "0 çizgi", "0 sağa",
+        " dikdörtgen", " yukarı", " aşağı", " sağa", " konumuna taşı", " üst aynala", " aynala", " santim aşağı", "0 yukarı", "0 konumuna taşı", "0 çizgi", "0 sağa",
     };
 
     private static readonly Lazy<string[]> PrefixVocabulary = new(() =>

@@ -223,11 +223,11 @@ public static partial class CommandParser
     /// </summary>
     private static NameMatch ResolvePieceName(string phrase, IReadOnlyList<string> names)
     {
-        var typedLower = TurkishText.ToLower(phrase).Trim();
+        var typedLower = TurkishText.ToLower(phrase.Replace('-', ' ')).Trim();
         var typedFold = TurkishText.Fold(typedLower);
         if (typedFold.Length < 2 || names.Count == 0) return new NameMatch(Array.Empty<string>(), typedLower);
 
-        var folded = names.Select(n => TurkishText.Fold(n)).ToArray();
+        var folded = names.Select(n => TurkishText.Fold(n.Replace('-', ' '))).ToArray();
 
         var exact = new List<string>();
         for (var i = 0; i < names.Count; i++) if (folded[i] == typedFold) exact.Add(names[i]);
@@ -258,8 +258,9 @@ public static partial class CommandParser
             var softened = last switch { 'b' => 'p', 'd' => 't', 'ğ' => 'k', 'g' => 'k', _ => '\0' };
             if (softened != '\0') yield return one.Substring(0, one.Length - 1) + softened;
         }
-        if (word.Length > 3 && (word.EndsWith("yi", StringComparison.Ordinal) || word.EndsWith("yu", StringComparison.Ordinal)))
-            yield return lower.Substring(0, lower.Length - 2);
+        if (word.Length > 3 && (word.EndsWith("yi", StringComparison.Ordinal) || word.EndsWith("yu", StringComparison.Ordinal)
+            || word.EndsWith("ni", StringComparison.Ordinal) || word.EndsWith("nu", StringComparison.Ordinal)))
+            yield return lower.Substring(0, lower.Length - 2); // "payı" → "pay", "kartını" → "kartı"
     }
 
 
