@@ -75,7 +75,8 @@ public partial class MainWindow
             }
             catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
             { return ex.Message; }
-        });
+        },
+        scene=> { canvas?.SetGhost(scene); });
 
     /// <summary>Ctrl+K: shows the command box (built on first use) and puts the keyboard cursor in it.</summary>
     internal void OpenCommandBox()
@@ -97,12 +98,14 @@ public partial class MainWindow
 
     internal void CloseCommandBox()
     {
+        commandBox?.ClearPreview();
         if(commandBoxHost is { IsOpen:true })commandBoxHost.Close();
         else OnCommandBoxClosed();
     }
 
     internal void OnCommandBoxClosed()
     {
+        commandBox?.ClearPreview();
         var target=commandBoxReturnFocus;commandBoxReturnFocus=null;
         // Back to where the user was (the canvas by default); a control that vanished is simply skipped.
         if(target is UIElement element && element.IsVisible && element.IsEnabled)element.Focus();

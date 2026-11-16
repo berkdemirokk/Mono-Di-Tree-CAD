@@ -1097,8 +1097,65 @@ public sealed class CadCanvas : FrameworkElement
             if(owner.ActiveTool=="Yay" && drawing.Count==2)DrawContour(dc,Arc(drawing[0],drawing[1],cursor),false,null,new Pen(B("#4DE1C1"),2));
         }
         catch(ArgumentException) { /* Incomplete preview is allowed; final input is validated. */ }
+        if(ghost is not null)DrawGhost(dc,ghost);
         if(IsKeyboardFocused && ActualWidth>4 && ActualHeight>4)
             dc.DrawRectangle(null,new Pen(B("#4DE1C1"),2),new Rect(2,2,ActualWidth-4,ActualHeight-4));
+    }
+    // ---- command preview frame ("see, then apply"): dashed outline and measure labels, never part of the document ----
+    private TekstilCAD.Core.Commands.GhostScene? ghost;
+    /// <summary>The dashed frame currently shown, or null.</summary>
+    internal TekstilCAD.Core.Commands.GhostScene? Ghost=>ghost;
+    /// <summary>
+    /// Shows (or, with null or an empty scene, clears) the preview frame. Changes only what is drawn: never the document,
+    /// the selection or the undo history. Returns false when a frame exists but lies completely outside the visible area, in which
+    /// case the status line tells the user how to bring it into view.
+    /// </summary>
+    internal bool SetGhost(TekstilCAD.Core.Commands.GhostScene? scene)
+    {
+        var next=scene is { IsEmpty:false } ? scene : null;
+        if(ReferenceEquals(next,ghost))return true;
+        ghost=next;InvalidateVisual();
+        if(next is null)return true;
+        var inView=GhostIsInView(next);
+        if(!inView)owner.SetStatus("Önizleme görünümün dışında; Tümünü göster düğmesine basın.");
+        return inView;
+    }
+    private bool GhostIsInView(TekstilCAD.Core.Commands.GhostScene scene)
+    {
+        if(scene.Bounds is not { } box || ActualWidth<1 || ActualHeight<1)return true;
+        var a=Screen(new Point2(box.MinX,box.MinY));var b=Screen(new Point2(box.MaxX,box.MaxY));
+        return new Rect(a,b).IntersectsWith(new Rect(0,0,ActualWidth,ActualHeight));
+    }
+    private void DrawGhost(DrawingContext dc,TekstilCAD.Core.Commands.GhostScene scene)
+    {
+        var danger=scene.Style==TekstilCAD.Core.Commands.GhostStyle.Danger;
+        var color=danger ? Color.FromRgb(0xFF,0x8A,0x8A) : Color.FromRgb(0x7C,0xC4,0xFF);
+        var pen=new Pen(new SolidColorBrush(color),2) { DashStyle=DashStyles.Dash,LineJoin=PenLineJoin.Round };
+        var fill=new SolidColorBrush(Color.FromArgb(0x26,color.R,color.G,color.B));
+        foreach(var polygon in scene.Polygons)
+        {
+            if(polygon.Points.Count<2)continue;
+            var figure=new PathFigure(Screen(polygon.Points[0]),[new PolyLineSegment(polygon.Points.Skip(1).Select(Screen).ToList(),true)],polygon.Closed);
+            dc.DrawGeometry(polygon.Closed ? fill : null,pen,new PathGeometry([figure]));
+        }
+        var text=new SolidColorBrush(Color.FromRgb(0xEA,0xF4,0xFF));
+        var plate=new SolidColorBrush(Color.FromArgb(0xD0,0x0D,0x18,0x27));
+        foreach(var label in scene.Labels)
+        {
+            var formatted=Format(label.Text,text,13);var at=Screen(label.Anchor);
+            double x=at.X,y=at.Y;
+            switch(label.Placement)
+            {
+                case TekstilCAD.Core.Commands.GhostLabelPlacement.Above:x-=formatted.Width/2;y-=formatted.Height+4;break;
+                case TekstilCAD.Core.Commands.GhostLabelPlacement.Below:x-=formatted.Width/2;y+=4;break;
+                case TekstilCAD.Core.Commands.GhostLabelPlacement.Left:x-=formatted.Width+6;y-=formatted.Height/2;break;
+                case TekstilCAD.Core.Commands.GhostLabelPlacement.Right:x+=6;y-=formatted.Height/2;break;
+                default:x-=formatted.Width/2;y-=formatted.Height/2;break;
+            }
+            x=Math.Clamp(x,2,Math.Max(2,ActualWidth-formatted.Width-2));y=Math.Clamp(y,2,Math.Max(2,ActualHeight-formatted.Height-2));
+            dc.DrawRoundedRectangle(plate,null,new Rect(x-3,y-1,formatted.Width+6,formatted.Height+2),3,3);
+            dc.DrawText(formatted,new Point(x,y));
+        }
     }
     // The ring is 14 DIP across and the label starts 8 DIP to the right.
     // Leave ample room for the complete indexed label and font overhang so a

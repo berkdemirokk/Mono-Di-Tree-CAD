@@ -30,6 +30,7 @@ internal static partial class CommandVerification
         VerifyExecutor(checks);
         VerifyPlanExecution(checks);
         VerifyCommandBox(checks,reportPath);
+        VerifyGhost(checks,reportPath);
         VerifyOpenTextileToolsAt(checks);
     }
 

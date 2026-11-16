@@ -829,6 +829,7 @@ public partial class MainWindow : Window
         selection.Clear();selection.AddRange(ids);
         if(primary is { } value && !selection.Contains(value))selection.Add(value);
         SelectedId=primary;
+        commandBox?.OnContextChanged();
     }
     private void ApplyListSelection(IReadOnlyList<Guid> ids)
     {

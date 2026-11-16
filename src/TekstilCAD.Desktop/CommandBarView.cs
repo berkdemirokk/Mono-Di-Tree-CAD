@@ -18,7 +18,7 @@ internal sealed record CommandBarContext(bool EmptyProject,IReadOnlyList<string>
 /// <param name="Context">Facts used to choose the example chips.</param>
 /// <param name="HistoryStep">Undoes (false) or redoes (true) one project step and tells what happened.</param>
 internal sealed record CommandBarHost(Func<string,bool,CommandPreview> Preview,Func<Plan,bool,CommandOutcome> Apply,
-    Func<CommandBarContext> Context,Func<bool,string> HistoryStep);
+    Func<CommandBarContext> Context,Func<bool,string> HistoryStep,Action<GhostScene?>? ShowGhost=null);
 
 internal enum CommandBarState { Idle, Preview, DangerPreview, Question, Refusal, Result }
 
@@ -67,6 +67,7 @@ internal sealed class CommandBarView : Border
     private Plan? shownPlan;
     private string? shownText;
     private string lastAnnounced="";
+    private bool applying;
 
     internal CommandBarView(CommandBarHost host)
     {
@@ -231,6 +232,21 @@ internal sealed class CommandBarView : Border
     }
 
     /// <summary>Called by the host whenever it opens the box: starts from a clean row and fresh chips.</summary>
+    /// <summary>The project or the selection changed behind the preview (another piece was selected): the frame and the preview go.</summary>
+    internal void OnContextChanged()
+    {
+        if(applying)return;
+        if(State is CommandBarState.Preview or CommandBarState.DangerPreview)DropPreview();
+    }
+
+    /// <summary>The box is being closed: nothing of it may stay on the canvas.</summary>
+    internal void ClearPreview()
+    {
+        previewTimer.Stop();
+        shownPlan=null;shownText=null;ClearGhost();
+        if(State is CommandBarState.Preview or CommandBarState.DangerPreview)DropPreview();
+    }
+
     internal void Reset()
     {
         ClearText();DropPreview();ShowExamples(false);RefreshChips();
@@ -412,12 +428,14 @@ internal sealed class CommandBarView : Border
                 rowButtons.Visibility=Visibility.Visible;
                 FillAlternatives(plan.Alternatives);
                 chips.Visibility=Visibility.Collapsed;
+                // The dashed frame on the canvas shows what the sentence says; it is never part of the project.
+                host.ShowGhost?.Invoke(plan.Ghost);
                 break;
             }
             case CommandPreviewKind.Question:
             case CommandPreviewKind.Refusal:
             {
-                shownPlan=null;shownText=null;
+                shownPlan=null;shownText=null;ClearGhost();
                 var notice=preview.Notice!;
                 State=preview.Kind==CommandPreviewKind.Question ? CommandBarState.Question : CommandBarState.Refusal;
                 SetRow(notice.Message,[],StudioTheme.Warning,0x30);
@@ -446,9 +464,12 @@ internal sealed class CommandBarView : Border
     }
 
     /// <summary>Drops the shown preview, result or refusal; the box and the history stay.</summary>
+    private void ClearGhost()=>host.ShowGhost?.Invoke(null);
+
     private void DropPreview()
     {
         shownPlan=null;shownText=null;
+        ClearGhost();
         if(State==CommandBarState.Idle && rowBorder.Visibility==Visibility.Collapsed)return;
         State=CommandBarState.Idle;
         rowBorder.Visibility=Visibility.Collapsed;caveatText.Visibility=Visibility.Collapsed;
@@ -493,7 +514,12 @@ internal sealed class CommandBarView : Border
         if(shownPlan is not { } plan || !string.Equals(shownText,box.Text,StringComparison.Ordinal))return;
         previewTimer.Stop();
         var text=shownText!;
-        var outcome=host.Apply(plan,confirmed);
+        // The frame goes away the moment the plan is applied; a refusal or a stale plan shows a fresh one if needed.
+        ClearGhost();
+        applying=true;
+        CommandOutcome outcome;
+        try { outcome=host.Apply(plan,confirmed); }
+        finally { applying=false; }
         switch(outcome.Result)
         {
             case CommandResult.Applied:
@@ -516,7 +542,7 @@ internal sealed class CommandBarView : Border
 
     private void ShowResult(CommandOutcome outcome)
     {
-        shownPlan=null;shownText=null;
+        shownPlan=null;shownText=null;ClearGhost();
         ClearText();
         State=CommandBarState.Result;
         var tint=outcome.RefreshFailed ? StudioTheme.Warning : StudioTheme.Accent;
@@ -529,7 +555,7 @@ internal sealed class CommandBarView : Border
 
     private void ShowInfo(string message)
     {
-        shownPlan=null;shownText=null;
+        shownPlan=null;shownText=null;ClearGhost();
         State=CommandBarState.Refusal;
         SetRow(message,[],StudioTheme.Warning,0x30);
         HideRowButtons();alternatives.Children.Clear();alternatives.Visibility=Visibility.Collapsed;
