@@ -260,7 +260,7 @@ final class ViewerUITests: XCTestCase {
         let prompt = app.alerts["Adı değiştir"]
         let field = prompt.textFields["Yeni ad"]
         field.tap()
-        field.typeText(" Rev2")
+        field.typeText("Rev2")
         let renamed = try XCTUnwrap(field.value as? String)
         XCTAssertTrue(renamed.contains("Rev2"))
         prompt.buttons["Kaydet"].tap()
