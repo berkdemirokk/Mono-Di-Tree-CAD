@@ -1,6 +1,6 @@
 # Mono Di Tree CAD: bitirme planı
 
-16 Kasım 2026. Kaynak: altı araştırma ajanı ve iki eleştirmen ajanın, birleşmiş dalı (`integration/rc-trial`, taslak PR #47) yalnızca okuyarak çıkardığı bulgular; ham bulgular bu depoda tutulmuyor, aşağıdaki özet yeterli. Bu belge onaylanmadan kod yazılmaz.
+16 Kasım 2026. Kaynak: altı araştırma ajanı ve iki eleştirmen ajanın, 16 Kasım’da `main` dalına alınan `integration/rc-trial` dalını ([PR #47](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/pull/47)) yalnızca okuyarak çıkardığı bulgular; ham bulgular bu depoda tutulmuyor, aşağıdaki özet yeterli. Bu belge onaylanmadan kod yazılmaz.
 
 ## 1. Dürüst durum
 
@@ -21,7 +21,7 @@
 | Sesle komut | Kısmen | Düğme yalnızca Windows'un Win+H özelliğine yönlendiriyor; gerçek Türkçe konuşmayla hiç denenmedi. |
 
 İki genel gerçek:
-- **Hiçbir şey gerçek bir bilgisayarda, gerçek bir kişi tarafından denenmedi.** Bütün kanıt penceresiz CI.
+- Windows’ta örnek proje, dikdörtgen çizme, geri alma ve Farklı Kaydet penceresini açma gözlemlendi. Pencereden kaydın tamamlanması ve gerçek operatörün uçtan uca kabulü açık. [Masaüstü deneme kaydı](reviews/ui-smoke.md)
 - **Birim tuzağı:** yazılan çıplak sayı milimetre sayılıyor; terzi santim düşünür.
 
 ## 2. Hatalar neden tekrarladı ve kural olarak ne değişiyor
@@ -54,10 +54,10 @@ Ayrıca sizden gerekenler: 5–10 gerçek kalıp dosyası (DXF ve varsa PLT), il
 Her iş sırayla yapılır. Her iş için: kabul kontrolü (başka ajan) → kod (küçük ajan) → inceleme (ayrı ajan) → CI → ekran görüntüsüne bakış. Bir iş yeşil olmadan sonraki başlamaz.
 
 ### Aşama 1: Gövdeyi sabitle (yaklaşık 1 gün)
-- #47'nin iPhone CI sonucunu oku; kırmızıysa nedenini bul (rastgele mi gerçek mi).
+- #47’nin son Windows kontrolü geçti, iPhone simülatör kontrolü başarısız oldu. #30’un sonraki sürümünde simülatör kontrolü geçti. Birleşecek sürümü yeniden sınayın. [#47 iPhone sonucu](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/43908897596) · [#30 iPhone sonucu](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/43915992531)
 - Eskimiş belgeleri düzelt: `docs/RELEASE_CHECKLIST.md`, `CLAUDE.md` durum bölümü.
 - `AGENTS.md`'ye dal kuralları: tek gövde `main`, dallar hep güncel `main`'den, üst üste PR yok, birleştirme yalnız sahibinde.
-- K8 onayıyla #47 → `main`; `main` için kural (zorunlu Windows kontrolü, zorla gönderme yok); eski PR'ları #47'ye işaret ederek kapat.
+- #47, 16 Kasım’da `main` dalına birleşti. Kalan dal yönetimi işleri: `main` için kural (zorunlu Windows kontrolü, zorla gönderme yok); eski PR'ları #47'ye işaret ederek kapat.
 - Birleşmeden sonra `main` üzerindeki CI'ın doğrulamayı ve ekran görüntülerini ürettiğini doğrula.
 
 ### Aşama 2: Kabul düzeneği (2–3 gün; ürün kodu değişmez)
@@ -108,8 +108,8 @@ Kapalı eğriler (kol evi, yaka), çentik çizme aracı, tam AAMA, kesici/plotte
 - Win+H'nin bu programın kutusuna Türkçe yazdığı hiç denenmedi.
 - Store'un imzasız-engel sorununu çözdüğü ve paketin veri klasörlerini bozmadığı denenmedi.
 - Türkiye'den bireysel geliştirici hesabı ve sertifika seçeneklerinin uygunluğu ve fiyatı doğrulanmadı.
-- A4 PDF'in birden çok parçayı sayfalara böldüğü belirsiz: belge "tek parça" diyor, pencere "bütün proje" seçeneği sunuyor.
+- “Seçili parçayı A4 PDF çıkar…” seçili parçayı yazar. Dışa aktarım penceresinde “PDF A4 sayfalar” bütün projeyi yazar. Gerçek yazıcıda ölçek için Aşama 2’deki 50 mm ölçümü açık.
 - Dikiş payının gerçek, eğri kenarlı parçalarda çalışıp çalışmadığı yalnız belgeden biliniyor.
 - iPhone–Windows dosya yönü uyumsuzluğu yalnız koddan okundu.
 - CI'ın gerçek bir pencereyi sürüp kaydet penceresini doldurabileceği denenmedi; olmazsa etkileşimli kanıt yalnız sizin elle denemenizdir.
-- #47'nin iPhone CI'ının son sonucu okunmadı.
+- Gerçek iPhone’da kurulum ve testçi grubuna dağıtım doğrulanmayı bekliyor. Apple, 1.03 (14) derlemesini 16 Kasım’da kabul etti. [TestFlight yükleme kaydı](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/43797711367)
