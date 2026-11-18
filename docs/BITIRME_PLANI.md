@@ -64,7 +64,7 @@ Her iş sırayla yapılır. Her iş için: kabul kontrolü (başka ajan) → kod
 - **Yolculuk doğrulaması:** gerçek açılış yolunu (`App.OnStartup`) ve gerçek tuş olaylarını kullanan, bölüm 1'deki her adımı uçtan uca sınayan kontrol dosyası. Bugün geçmeyen adımlar "bekleniyor" olarak görünür.
 - Doğrulama ilk hatada durmak yerine bütün hataları raporlasın.
 - CI'da Türkçe (tr-TR) kültürle bir tur: ondalık virgül, ı/İ harfleri.
-- **Elle deneme betiği** (Türkçe, adım adım, geçti/kaldı kutulu): kurulum, kaydet/aç pencereleri, Win+H ile 10 cümle, yazıcıda 50 mm ölçüm, gerçek DXF.
+- [Windows operatör kabul formu](OPERATOR_KABUL_FORMU.md) ile kurulum, kaydet/aç pencereleri, Win+H ile 10 cümle, yazıcıda 50 mm ölçüm ve bağımsız DXF kopyasını deneyin.
 - **Yayın kapısı:** otomatik kapı yeşil + elle betik sizin imzanızla, aynı sürüm için.
 
 ### Aşama 3: Yolculuk boşlukları (yaklaşık 1–2 hafta; sırayla)
