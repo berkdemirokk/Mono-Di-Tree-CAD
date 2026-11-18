@@ -38,7 +38,7 @@ final class CanvasUITests: XCTestCase {
         XCTAssertTrue(zoomIn.waitForExistence(timeout: 5))
         zoomIn.tap()
         zoomIn.tap()
-        XCTAssertTrue(app.staticTexts["1 parça • 2.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • 2,6× yakınlaştırıldı"].waitForExistence(timeout: 5))
     }
 
     /// The drag rule is explained once per installation; a later run may not show it.
@@ -85,7 +85,7 @@ final class CanvasUITests: XCTestCase {
         drag(canvas, from: 0.35, to: 0.65)
         XCTAssertTrue(waitFor(canvas, "value CONTAINS %@", "Görünüm kaydırılmış"),
                       String(describing: canvas.value))
-        XCTAssertTrue(app.staticTexts["1 parça • 2.6× yakınlaştırıldı"].exists)
+        XCTAssertTrue(app.staticTexts["1 parça • 2,6× yakınlaştırıldı"].exists)
         // The piece itself did not move.
         XCTAssertEqual(app.textFields["X"].value as? String, "0")
         XCTAssertEqual(app.textFields["Y"].value as? String, "0")

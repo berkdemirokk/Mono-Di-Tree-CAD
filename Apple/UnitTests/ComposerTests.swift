@@ -32,6 +32,23 @@ final class ComposerTests: XCTestCase {
         XCTAssertEqual(ComposerArea.clamped(repeats, extent: 100), [p(10, 10), p(100, 100), p(50, 50)])
     }
 
+    func testClosedShapeNeverEndsOnItsFirstPoint() {
+        // A shape with two corners outside a 100 mm area: clamping moves the last corner onto the
+        // first one, which a closed shape must not keep as a duplicate.
+        let square = [p(100, 100), p(150, 50), p(50, 50), p(150, 150)]
+        let openResult = ComposerArea.clamped(square, extent: 100)
+        XCTAssertEqual(openResult.last, openResult.first, "An open line keeps its end point")
+        let closedResult = ComposerArea.clamped(square, extent: 100, closed: true)
+        XCTAssertEqual(closedResult, [p(100, 100), p(100, 50), p(50, 50)])
+        XCTAssertNotEqual(closedResult.last, closedResult.first)
+
+        let tail = [p(10, 10), p(50, 50), p(10, 10)]
+        XCTAssertEqual(ComposerArea.mergingRepeats(tail, closed: true), [p(10, 10), p(50, 50)])
+        XCTAssertEqual(ComposerArea.mergingRepeats(tail), tail)
+        XCTAssertEqual(ComposerArea.removingOutside(tail + [p(300, 5)], extent: 100, closed: true),
+                       [p(10, 10), p(50, 50)])
+    }
+
     func testGridAndLabelStepsDivideEachArea() {
         for extent in ComposerArea.sizes {
             let grid = ComposerArea.gridStep(extent: extent)
