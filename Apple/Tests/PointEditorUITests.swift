@@ -99,7 +99,7 @@ final class PointEditorUITests: XCTestCase {
 
         // Moving on must apply the typed value, not drop it.
         tap(app.buttons["Sonraki nokta"], inEditor: app)
-        waitFor("label CONTAINS %@", "Nokta 2 için yazdığınız değer uygulandı", on: status)
+        waitFor("label CONTAINS %@", "Nokta 2 için yazdığın değer uygulandı", on: status)
         XCTAssertTrue(app.textFields["Nokta 3 X koordinatı, milimetre"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.alerts["Bu değişiklik yapılamadı"].exists)
 

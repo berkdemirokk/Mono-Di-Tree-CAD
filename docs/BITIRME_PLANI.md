@@ -54,7 +54,7 @@ Ayrıca sizden gerekenler: 5–10 gerçek kalıp dosyası (DXF ve varsa PLT), il
 Her iş sırayla yapılır. Her iş için: kabul kontrolü (başka ajan) → kod (küçük ajan) → inceleme (ayrı ajan) → CI → ekran görüntüsüne bakış. Bir iş yeşil olmadan sonraki başlamaz.
 
 ### Aşama 1: Gövdeyi sabitle (yaklaşık 1 gün)
-- #47’nin son Windows kontrolü geçti, iPhone simülatör kontrolü başarısız oldu. #30’un sonraki sürümünde simülatör kontrolü geçti. Birleşecek sürümü yeniden sınayın. [#47 iPhone sonucu](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/43908897596) · [#30 iPhone sonucu](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/43915992531)
+- #47’nin son Windows kontrolü geçti, iPhone simülatör kontrolü başarısız oldu. #30’un son sürümü hem Windows hem iPhone simülatör kontrollerini geçti ve 20 Kasım 2026’da `538774ff` ile `main` dalına birleşti. [#47 iPhone sonucu](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/43908897596) · [#30 Windows sonucu](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/44346805350) · [#30 iPhone sonucu](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/44346805738)
 - Eskimiş belgeleri düzelt: `docs/RELEASE_CHECKLIST.md`, `CLAUDE.md` durum bölümü.
 - `AGENTS.md`'ye dal kuralları: tek gövde `main`, dallar hep güncel `main`'den, üst üste PR yok, birleştirme yalnız sahibinde.
 - #47, 16 Kasım’da `main` dalına birleşti. Kalan dal yönetimi işleri: `main` için kural (zorunlu Windows kontrolü, zorla gönderme yok); eski PR'ları #47'ye işaret ederek kapat.

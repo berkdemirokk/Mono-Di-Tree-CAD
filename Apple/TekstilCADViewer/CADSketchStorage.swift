@@ -346,28 +346,50 @@ enum CADProjectLibrary {
     // Path-injectable for deterministic tests; production always uses url(id) and the current draft.
     // Lock order is the same as in `archiveBeforeSwitch`: the draft first, then the project file.
     static func rename(_ id: UUID, to proposed: String, file: URL, draft draftURL: URL) throws {
+        guard let name = validatedName(proposed) else { throw SketchStoreError.name }
         try CADFileIO.withExclusiveLock(for: draftURL) { () throws -> Void in
-            let before = try? CADLocalDraftStore.read(file)
-            try rename(id, to: proposed, at: file)
-            // An untouched autosave of this project would otherwise differ from the renamed saved
-            // copy and be archived as a second "(taslak)" project. A draft with edits is left alone.
-            guard let before = before, let name = validatedName(proposed),
-                  var draft = try? CADLocalDraftStore.read(draftURL),
-                  draft == before else { return }
-            draft.name = name
-            try CADLocalDraftStore.write(draft, to: draftURL)
+            try CADFileIO.withExclusiveLock(for: file) { () throws -> Void in
+                var stored = try readProject(id, at: file)
+                if var draft = try readableDraft(at: draftURL), draft.id == id && draft.name != name {
+                    // Geometry edits can coexist with this rename. A conflicting draft name
+                    // is an independent edit and must be resolved before renaming.
+                    guard draft.name == stored.name else { throw SketchStoreError.changed }
+                    draft.name = name
+                    try CADLocalDraftStore.write(draft, to: draftURL)
+                }
+                // Write the library last. If it fails, retrying the same rename completes
+                // the operation with the already-renamed draft and preserves both geometries.
+                if stored.name != name {
+                    stored.name = name
+                    try CADLocalDraftStore.write(stored, to: file)
+                }
+            }
         }
     }
 
-    /// Changes only the name of a readable project. The compare-and-write runs under the
-    /// project's lock sidecar, on the bytes read inside the lock, so a concurrent editor
-    /// save cannot be overwritten with an older copy. Path-injectable for tests.
+    private static func readableDraft(at file: URL) throws -> DraftProject? {
+        do {
+            return try CADLocalDraftStore.read(file)
+        } catch let failure as NSError {
+            if failure.domain == NSCocoaErrorDomain && failure.code == NSFileReadNoSuchFileError { return nil }
+            // Preserve unreadable content for the existing recovery flow. Transient I/O
+            // failures must abort the rename because the draft might still be readable.
+            if CADLocalDraftStore.hasUnreadableContent(file) { return nil }
+            throw failure
+        }
+    }
+
+    private static func readProject(_ id: UUID, at file: URL) throws -> DraftProject {
+        guard FileManager.default.fileExists(atPath: file.path) else { throw SketchStoreError.missing }
+        let stored = try CADLocalDraftStore.read(file)
+        guard stored.id == id else { throw SketchStoreError.identity }
+        return stored
+    }
+
     static func rename(_ id: UUID, to proposed: String, at file: URL) throws {
         guard let name = validatedName(proposed) else { throw SketchStoreError.name }
         try CADFileIO.withExclusiveLock(for: file) {
-            guard FileManager.default.fileExists(atPath: file.path) else { throw SketchStoreError.missing }
-            var stored = try CADLocalDraftStore.read(file)
-            guard stored.id == id else { throw SketchStoreError.identity }
+            var stored = try readProject(id, at: file)
             if stored.name == name { return }
             stored.name = name
             try CADLocalDraftStore.write(stored, to: file)

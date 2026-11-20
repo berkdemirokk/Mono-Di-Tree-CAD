@@ -183,14 +183,14 @@ final class ViewerUITests: XCTestCase {
         zoomIn.tap()
         zoomIn.tap()
         XCTAssertTrue(app.buttons["Ekrana sığdır"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["1 parça • 2.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • 2,6× yakınlaştırıldı"].waitForExistence(timeout: 5))
 
         app.buttons["Uzaklaştır"].tap()
-        XCTAssertTrue(app.staticTexts["1 parça • 1.6× yakınlaştırıldı"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 parça • 1,6× yakınlaştırıldı"].waitForExistence(timeout: 5))
         // A gesture-free way to bring the selected piece back to the middle.
         XCTAssertTrue(app.buttons["Seçili parçayı göster"].exists)
         app.buttons["Seçili parçayı göster"].tap()
-        XCTAssertTrue(app.staticTexts["1 parça • 1.6× yakınlaştırıldı"].exists)
+        XCTAssertTrue(app.staticTexts["1 parça • 1,6× yakınlaştırıldı"].exists)
         app.buttons["Ekrana sığdır"].tap()
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Ekrana sığdır"].exists)
@@ -238,6 +238,50 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 3),
                        "Saving a resumed draft over its own saved project must not report a conflict")
         XCTAssertTrue(app.staticTexts["Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsin."].exists)
+    }
+
+    func testRenamingSavedProjectPreservesEditedDraftWhenResumedAndSaved() throws {
+        let app = launchClean()
+        app.buttons["Yeni proje oluştur"].tap()
+        app.buttons["Dikdörtgen ekle"].tap()
+        XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 10))
+        tapBelow(app.buttons["Projeyi kaydet"], in: app)
+        tapBelow(app.buttons["Çizgi ekle"], in: app)
+        XCTAssertTrue(countLabel(2, in: app).waitForExistence(timeout: 5))
+        app.buttons["Kapat"].tap()
+
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "recent-")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        let savedRow = app.buttons[row.identifier]
+        let actions = app.buttons["project-actions-" + String(row.identifier.dropFirst("recent-".count))]
+        for _ in 0..<5 where !actions.isHittable { app.swipeUp() }
+        actions.tap()
+        app.buttons["Adı değiştir"].tap()
+        let prompt = app.alerts["Adı değiştir"]
+        let field = prompt.textFields["Yeni ad"]
+        field.tap()
+        field.typeText("Rev2")
+        let renamed = try XCTUnwrap(field.value as? String)
+        XCTAssertTrue(renamed.contains("Rev2"))
+        prompt.buttons["Kaydet"].tap()
+        let updated = NSPredicate(format: "label == %@", renamed)
+        expectation(for: updated, evaluatedWith: savedRow)
+        waitForExpectations(timeout: 10)
+
+        let resume = app.buttons["Son çizime devam et"]
+        for _ in 0..<5 where !resume.isHittable { app.swipeDown() }
+        resume.tap()
+        XCTAssertTrue(countLabel(2, in: app).waitForExistence(timeout: 10))
+        tapBelow(app.buttons["Projeyi kaydet"], in: app)
+        XCTAssertTrue(app.staticTexts["Proje kaydedildi. Ana ekrandaki Son projeler bölümünden açabilirsin."].waitForExistence(timeout: 5))
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-test-reset-draft" }
+        app.launch()
+        XCTAssertTrue(savedRow.waitForExistence(timeout: 10))
+        XCTAssertEqual(savedRow.label, renamed)
+        for _ in 0..<5 where !savedRow.isHittable { app.swipeUp() }
+        savedRow.tap()
+        XCTAssertTrue(countLabel(2, in: app).waitForExistence(timeout: 10))
     }
 
     func testUnreadableDraftCanBeSetAsideInsteadOfBlockingNewWork() {

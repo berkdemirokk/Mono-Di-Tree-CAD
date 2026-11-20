@@ -110,17 +110,35 @@ final class DraftLibraryInteractionTests: XCTestCase {
         XCTAssertEqual(draft.pieces, fixture.project.pieces)
     }
 
-    func testRenamingLeavesAnEditedDraftUnchanged() throws {
+    func testResumingEditedDraftAndSavingPreservesRenameAndGeometry() throws {
         let fixture = try makeFixture(name: "Eski ad")
-        try CADLocalDraftStore.write(edited(fixture.project), to: fixture.draft)
-        let draftBytes = try Data(contentsOf: fixture.draft)
-
+        let working = edited(fixture.project)
+        try CADLocalDraftStore.write(working, to: fixture.draft)
         try CADProjectLibrary.rename(fixture.project.id, to: "Yeni ad",
                                      file: fixture.file, draft: fixture.draft)
+        let stored = try CADLocalDraftStore.read(fixture.file)
+        let resumed = try CADLocalDraftStore.read(fixture.draft)
+        XCTAssertEqual(stored.pieces, fixture.project.pieces)
+        XCTAssertEqual(resumed.pieces, working.pieces)
+        XCTAssertEqual(resumed.name, "Yeni ad")
+        XCTAssertThrowsError(try CADLocalDraftStore.save(working, replacing: working, to: fixture.draft))
+        try CADProjectLibrary.save(resumed, replacing: stored, to: fixture.file)
+        XCTAssertEqual(try CADLocalDraftStore.read(fixture.file), resumed)
+    }
 
-        XCTAssertEqual(try CADLocalDraftStore.read(fixture.file).name, "Yeni ad")
-        XCTAssertEqual(try Data(contentsOf: fixture.draft), draftBytes,
-                       "A draft with its own changes must keep its name and content")
+    func testIndependentDraftRenameIsPreservedOnConflictAndRetry() throws {
+        let fixture = try makeFixture()
+        var working = edited(fixture.project)
+        working.name = "Taslak adı"
+        try CADLocalDraftStore.write(working, to: fixture.draft)
+        XCTAssertThrowsError(try CADProjectLibrary.rename(fixture.project.id, to: "Başka ad",
+                                                          file: fixture.file, draft: fixture.draft))
+        XCTAssertEqual(try CADLocalDraftStore.read(fixture.file), fixture.project)
+        XCTAssertEqual(try CADLocalDraftStore.read(fixture.draft), working)
+        try CADProjectLibrary.rename(fixture.project.id, to: working.name,
+                                     file: fixture.file, draft: fixture.draft)
+        XCTAssertEqual(try CADLocalDraftStore.read(fixture.file).name, working.name)
+        XCTAssertEqual(try CADLocalDraftStore.read(fixture.draft), working)
     }
 
     func testRenamingLeavesTheDraftOfAnotherDrawingAlone() throws {
