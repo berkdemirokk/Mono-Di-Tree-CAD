@@ -1164,7 +1164,9 @@ private struct DrawingView: View {
             let offsetX = (Double(size.width) - width * scale) / 2
             let offsetY = (Double(size.height) - height * scale) / 2
             func position(_ p: Drawing.Point) -> CGPoint {
-                CGPoint(x: offsetX + (p.x - bounds.minX) * scale, y: Double(size.height) - offsetY - (p.y - bounds.minY) * scale)
+                DrawingProjection.screen(CGPoint(x: p.x, y: p.y),
+                                         minimum: CGPoint(x: bounds.minX, y: bounds.minY),
+                                         offset: CGPoint(x: offsetX, y: offsetY), scale: scale)
             }
             for piece in pieces {
                 guard let first = piece.points.first else { continue }

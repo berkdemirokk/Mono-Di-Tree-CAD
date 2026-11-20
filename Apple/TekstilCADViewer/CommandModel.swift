@@ -4,7 +4,7 @@ import Foundation
 // ParseResult.cs one to one, so the Swift and .NET parsers answer the shared vectors
 // (Apple/Tests/Fixtures/command-vectors.json) with the same values.
 // Lengths are millimetres; directions are SCREEN directions (right is +, down is +, so "up" is a
-// negative `down`). The iPhone executor turns them into its own axes (Y up, lower-left corner).
+// negative `down`). Both editors use positive Y downwards.
 
 enum PieceTarget: Equatable { case selected, named, next, previous, none }
 enum LineOrientation: Equatable { case horizontal, vertical }

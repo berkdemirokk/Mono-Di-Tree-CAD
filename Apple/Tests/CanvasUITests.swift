@@ -64,7 +64,7 @@ final class CanvasUITests: XCTestCase {
         // The rectangle starts at (0, 0), so at fit the origin marker is on screen.
         XCTAssertTrue(waitFor(canvas, "value CONTAINS %@", "Başlangıç noktası (0, 0) ekranda"),
                       String(describing: canvas.value))
-        XCTAssertTrue(waitFor(canvas, "value CONTAINS %@", "X sağa, Y yukarı doğru artar"))
+        XCTAssertTrue(waitFor(canvas, "value CONTAINS %@", "X sağa, Y aşağı doğru artar"))
         XCTAssertTrue(waitFor(canvas, "value CONTAINS %@", "her kare"))
 
         // Zoomed in about the middle, the corner at (0, 0) leaves the small drawing area.

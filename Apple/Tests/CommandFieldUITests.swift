@@ -81,7 +81,7 @@ final class CommandFieldUITests: XCTestCase {
         enter("120 x 80 dikdortgen", in: app)
         prepare(in: app)
 
-        let sentence = "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol alt köşe: 0 mm, 0 mm."
+        let sentence = "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol üst köşe: 0 mm, 0 mm."
         XCTAssertTrue(app.staticTexts[sentence].waitForExistence(timeout: 5), "One line says what will happen")
         XCTAssertFalse(countLabel(1, in: app).exists, "Nothing is drawn before the user confirms")
         XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].exists)
@@ -115,7 +115,7 @@ final class CommandFieldUITests: XCTestCase {
         XCTAssertTrue(countLabel(1, in: app).waitForExistence(timeout: 5))
         enter("25 saga tasi", in: app)
         prepare(in: app)
-        let sentence = text(startingWith: "‘Dikdörtgen 1’ 25 mm sağa taşınacak (2,5 cm). Sol alt köşe 0, 0 mm iken 25, 0 mm olacak.", in: app)
+        let sentence = text(startingWith: "‘Dikdörtgen 1’ 25 mm sağa taşınacak (2,5 cm). Sol üst köşe 0, 0 mm iken 25, 0 mm olacak.", in: app)
         XCTAssertTrue(sentence.waitForExistence(timeout: 5))
         app.buttons["command-apply"].tap()
         XCTAssertTrue(text(startingWith: "Yapıldı: ‘Dikdörtgen 1’ taşındı: 25 mm sağa.", in: app).waitForExistence(timeout: 5))
