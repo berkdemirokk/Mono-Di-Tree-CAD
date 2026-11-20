@@ -71,12 +71,20 @@ internal static partial class SimpleViewVerification
             var view = InlineBox(fresh)!; view.AutoPreview = false;
             var canvas = F<CadCanvas>(fresh, "canvas"); var session = F<DocumentSession>(fresh, "session");
             var before = fresh.Document.Clone(); var undoBefore = session.UndoCount;
-            view.SetText(BoxCommand); view.HandleKey(Key.Enter, ModifierKeys.None);
+            var turkish = System.Globalization.CultureInfo.CurrentCulture.Name == "tr-TR";
+            view.SetText(turkish ? "DİKDÖRTGEN 12,5 CM X 8 CM" : BoxCommand);
+            view.HandleKey(Key.Enter, ModifierKeys.None);
             var previewed = view.State == CommandBarState.Preview && view.ShownPlan is not null && canvas.Ghost is not null;
             var untouched = DocumentSession.ContentEquals(fresh.Document, before) && session.UndoCount == undoBefore && fresh.Document.Pieces.Count == 0;
             Render(fresh, ReportPng(reportPath, 1440, 900), 1440, 900);
             view.HandleKey(Key.Enter, ModifierKeys.None);
             var applied = fresh.Document.Pieces.Count == 1 && session.UndoCount == undoBefore + 1;
+            if (applied)
+            {
+                var bounds = Geometry.Bounds(fresh.Document.Pieces[0].Points);
+                Check(bounds.Width == (turkish ? 125 : 120) && bounds.Height == 80,
+                    $"Command box produced {bounds.Width} x {bounds.Height} mm under {System.Globalization.CultureInfo.CurrentCulture.Name}", checks);
+            }
             Invoke(fresh, "Undo");
             var undone = fresh.Document.Pieces.Count == 0 && DocumentSession.ContentEquals(fresh.Document, before);
             Check(previewed && untouched && applied && undone,

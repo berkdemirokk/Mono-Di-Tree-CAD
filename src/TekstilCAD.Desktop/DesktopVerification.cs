@@ -1093,6 +1093,12 @@ internal static class DesktopVerification
         try
         {
             reportPath = AllowedReportPath(reportPath);
+            if (Environment.GetEnvironmentVariable("TEKSTILCAD_VERIFY_CULTURE") == "tr-TR")
+            {
+                var turkish = CultureInfo.GetCultureInfo("tr-TR");
+                CultureInfo.DefaultThreadCurrentCulture = CultureInfo.CurrentCulture = turkish;
+                CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.CurrentUICulture = turkish;
+            }
             var work = Path.Combine(RepositoryRoot(reportPath), "work", "desktop-verification", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(work);
             AppPaths.UseVerificationDirectory(Path.Combine(work, "application-data"));
@@ -1940,6 +1946,8 @@ internal static class DesktopVerification
             reportPath = AllowedReportPath(reportPath);
             Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
             File.WriteAllText(reportPath, JsonSerializer.Serialize(new { status = failure is null ? "PASS" : "FAIL", checks, failure, imagePath,
+                culture = CultureInfo.CurrentCulture.Name, uiCulture = CultureInfo.CurrentUICulture.Name,
+                decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator,
                 scope = "Background construction/layout and command checks only. No interactive input, dialogs, physical machine, or full workflow certification." }, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { return 2; }
