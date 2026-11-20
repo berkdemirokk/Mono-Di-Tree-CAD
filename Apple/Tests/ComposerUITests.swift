@@ -57,7 +57,8 @@ final class ComposerUITests: XCTestCase {
         let composerScroll = app.scrollViews["composer-scroll"]
         let scroll = composerScroll.exists ? composerScroll : app.scrollViews.firstMatch
         let screen = app.windows.firstMatch.frame
-        let top = screen.minY + 120, bottom = screen.maxY - 40
+        // The action bar pinned at the bottom of the sheet covers roughly the last 150 pt.
+        let top = screen.minY + 120, bottom = screen.maxY - 160
         for _ in 0..<10 {
             let frame = element.frame
             if element.isHittable && frame.minY >= top && frame.maxY <= bottom { return }
@@ -161,8 +162,9 @@ final class ComposerUITests: XCTestCase {
         tapCanvas(canvas, 0.5, 0.38)
         expectCount(3, in: app)
 
+        // Pinned at the bottom of the sheet: no scrolling needed.
         let add = app.buttons["Şekli çizime ekle"]
-        reveal(add, in: app)
+        XCTAssertTrue(add.isHittable, "The add button is always visible")
         XCTAssertTrue(add.isEnabled)
         add.tap()
         XCTAssertTrue(app.staticTexts["1 parça • Tümü ekranda"].waitForExistence(timeout: 10),

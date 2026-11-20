@@ -19,23 +19,31 @@ enum ComposerArea {
     }
 
     /// Drops the points outside the area. Neighbours that end up on the same spot are merged.
-    static func removingOutside(_ points: [DraftPoint], extent: Double) -> [DraftPoint] {
-        mergingRepeats(points.filter { contains($0, extent: extent) })
+    static func removingOutside(_ points: [DraftPoint], extent: Double, closed: Bool = false) -> [DraftPoint] {
+        mergingRepeats(points.filter { contains($0, extent: extent) }, closed: closed)
     }
 
     /// Moves the points outside the area onto its nearest edge. Neighbours that end up on the
-    /// same spot are merged, so the result never has two equal points in a row.
-    static func clamped(_ points: [DraftPoint], extent: Double) -> [DraftPoint] {
+    /// same spot are merged, so the result never has two equal points in a row (and, for a
+    /// closed shape, the last point never equals the first).
+    static func clamped(_ points: [DraftPoint], extent: Double, closed: Bool = false) -> [DraftPoint] {
         mergingRepeats(points.map {
             DraftPoint(x: min(extent, max(0, $0.x)), y: min(extent, max(0, $0.y)))
-        })
+        }, closed: closed)
     }
 
-    static func mergingRepeats(_ points: [DraftPoint]) -> [DraftPoint] {
+    /// Drops consecutive equal points. A closed shape also wraps around, so trailing points equal
+    /// to the first one are dropped too (while more than one point remains).
+    static func mergingRepeats(_ points: [DraftPoint], closed: Bool = false) -> [DraftPoint] {
         var result: [DraftPoint] = []
         result.reserveCapacity(points.count)
         for p in points where result.last != p {
             result.append(p)
+        }
+        if closed, let first = result.first {
+            while result.count > 1, result.last == first {
+                result.removeLast()
+            }
         }
         return result
     }
@@ -265,11 +273,11 @@ struct TouchContourComposer: View {
                             presenting: pendingExtent) { size in
             let outside = ComposerArea.outsideCount(points, extent: size)
             Button("Dışarıdaki \(outside) noktayı sil", role: .destructive) {
-                let kept = ComposerArea.removingOutside(points, extent: size)
+                let kept = ComposerArea.removingOutside(points, extent: size, closed: closed)
                 applyArea(size, points: kept, note: "\(points.count - kept.count) nokta silindi.")
             }
             Button("Noktaları alanın kenarına taşı") {
-                let moved = ComposerArea.clamped(points, extent: size)
+                let moved = ComposerArea.clamped(points, extent: size, closed: closed)
                 let merged = points.count - moved.count
                 applyArea(size, points: moved,
                           note: merged > 0 ? "Noktalar kenara taşındı, üst üste gelen \(merged) nokta birleşti."
@@ -311,10 +319,50 @@ struct TouchContourComposer: View {
     private var undoButton: some View {
         Button(action: removeLastPoint) {
             Label("Son noktayı sil", systemImage: "arrow.uturn.backward")
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 44)
         }
         .disabled(points.isEmpty)
         .buttonStyle(.appSecondary)
+    }
+
+    private var canFinish: Bool { points.count >= (closed ? 3 : 2) }
+
+    private var finishButton: some View {
+        Button(action: finish) {
+            Label("Şekli çizime ekle", systemImage: "checkmark.circle.fill")
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.appPrimary)
+        .disabled(!canFinish)
+    }
+
+    /// Point count, undo and the finishing button, pinned below the scrolling sheet.
+    private var actionBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(points.count) nokta")
+                .font(.subheadline.bold())
+                .accessibilityIdentifier("composer-point-count")
+            if !canFinish {
+                Text("En az \(closed ? 3 : 2) nokta gerekli. Şu an \(points.count) nokta var.")
+                    .font(.caption).foregroundStyle(AppTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    undoButton
+                    finishButton
+                }
+                VStack(spacing: 10) {
+                    finishButton
+                    undoButton
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.page)
+        .overlay(alignment: .top) { Divider() }
     }
 
     private var clearButton: some View {
@@ -371,19 +419,7 @@ struct TouchContourComposer: View {
                         Text("Dokunuşun çizim alanının dışında kaldı. Karenin içine dokun.")
                             .font(.caption).foregroundStyle(AppTheme.danger)
                     }
-                    Text("\(points.count) nokta")
-                        .font(.subheadline.bold())
-                        .accessibilityIdentifier("composer-point-count")
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 10) {
-                            undoButton
-                            clearButton
-                        }
-                        VStack(spacing: 10) {
-                            undoButton
-                            clearButton
-                        }
-                    }
+                    clearButton
                     .confirmationDialog("Çizdiğin \(points.count) noktanın hepsi silinsin mi?",
                                         isPresented: $confirmingClear, titleVisibility: .visible) {
                         Button("Tüm noktaları sil", role: .destructive) { clearAll() }
@@ -396,16 +432,6 @@ struct TouchContourComposer: View {
                             .font(.caption).foregroundStyle(AppTheme.muted)
                     }
 
-                    Button(action: finish) {
-                        Label("Şekli çizime ekle", systemImage: "checkmark.circle.fill")
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                    }
-                    .buttonStyle(.appPrimary)
-                    .disabled(points.count < (closed ? 3 : 2))
-                    if points.count < (closed ? 3 : 2) {
-                        Text("En az \(closed ? 3 : 2) nokta gerekli. Şu an \(points.count) nokta var.")
-                            .font(.caption).foregroundStyle(AppTheme.muted)
-                    }
                     Text("Bu bir taslaktır. Çizgileri birbirini kesen ya da üretime uygun olmayan parçaları ayrıca kontrol et.")
                         .font(.caption).foregroundStyle(AppTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -413,6 +439,9 @@ struct TouchContourComposer: View {
                 .padding()
             }
             .accessibilityIdentifier("composer-scroll")
+            // The most-used actions stay in reach while the canvas is being tapped.
+            .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
+            .background(AppTheme.page.ignoresSafeArea())
             // Swiping the sheet down would also drop the points without asking.
             .interactiveDismissDisabled(!points.isEmpty)
             .confirmationDialog("Çizdiğin \(points.count) nokta silinsin mi?",

@@ -107,6 +107,19 @@ Beklenen sonuç: **4+**. Anketteki soru adları App Store Connect'te farklı gö
 - Gizlilik politikası URL'si (zorunlu): `privacy-policy.md` herkese açık bir adreste yayımlandıktan sonra o adres.
 - Telif hakkı satırı: `2026 <hak sahibinin adı>` — kullanıcı yazacak.
 
+### Neler var? 1.04 (taslak, TestFlight "Neyi test etmeli?")
+
+1.03 (14) derlemesinden sonra kodda olan değişikliklere göre yazıldı (16 Kasım 2026, `feat/ios-zoom-pan`).
+
+```text
+• Daire ve üçgen ekle; parmakla çizerken alanı 100, 300 ya da 1000 mm seç.
+• Köşe noktası ekle ya da sil; yazdığın değer başka noktaya geçince kendiliğinden uygulanır.
+• Çizimde milimetre ızgarası ve (0, 0) noktası; iki parmakla parmaklarının olduğu yere yakınlaştır.
+• Paylaş tek dokunuş; iPad'de ve yatay ekranda çizim solda, araçlar sağda.
+• Açık, koyu ya da telefona uyan görünüm; çok büyük yazıda daha fazla yer.
+• Ana ekranda son çizimin adı, parça sayısı ve zamanı görünür.
+```
+
 ### Bu sürümde neler var? — 1.03 (taslak)
 
 Not: App Store'daki **ilk** sürümde bu alan istenmez. 1.03 App Store'daki ilk sürüm olacaksa bu metin yalnız TestFlight "Neyi test etmeli?" alanında kullanılabilir. Metin, `ios/gap-store` dalında kodda bulunan son değişikliklere göre yazıldı; kullanıcının en son dağıttığı derlemeye göre kısaltılmalıdır.
