@@ -69,7 +69,7 @@
    <Setter Property="BorderBrush" Value="{DynamicResource Studio.BorderStrong}"/><Setter Property="BorderThickness" Value="1"/>
    <Setter Property="Padding" Value="9,7"/><Setter Property="MinHeight" Value="34"/>
    <Setter Property="VerticalContentAlignment" Value="Center"/>
-   <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+   <Setter Property="FocusVisualStyle" Value="{StaticResource Studio.KeyboardFocus}"/>
    <Setter Property="Template"><Setter.Value>
     <ControlTemplate TargetType="TextBox">
      <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5">
