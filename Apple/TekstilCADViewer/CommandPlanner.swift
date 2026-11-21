@@ -6,10 +6,10 @@ import Foundation
 // one undo step, saved to the draft the same way, and refused when the drawing changed meanwhile.
 //
 // iPhone facts that differ from the Windows program (the shared vectors mark them):
-//  - Y grows upwards and a piece's position is its lower-left corner.
+//  - Y grows downwards and a piece's position is its upper-left corner.
 //  - New pieces go where the buttons put them: (20·n, 20·n) with n = pieces already there.
-//  - The "90° döndür" button turns counter-clockwise; clockwise turns are three of those.
-//  - Resizing exists (scales a piece from its lower-left corner), mirroring does not.
+//  - The "90° döndür" button turns clockwise; counter-clockwise turns are three of those.
+//  - Resizing exists (scales a piece from its upper-left corner), mirroring does not.
 
 /// The state a command is planned against.
 struct CommandContext {
@@ -142,7 +142,7 @@ enum CommandPlanner {
         let piece = base.pieces[index]
         switch command {
         case .moveBy(let right, let down):
-            return planMove(right: right, up: -down, index: index, piece: piece, base: base, context: context, note: note)
+            return planMove(right: right, down: down, index: index, piece: piece, base: base, context: context, note: note)
         case .moveTo(let x, let y):
             return planMoveTo(x: x, y: y, index: index, piece: piece, base: base, context: context, note: note)
         case .rotate(let degrees, let direction):
@@ -357,7 +357,7 @@ enum CommandPlanner {
         guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
         let size = CommandFormat.size(width, height)
         let word = isSquare ? "Kare" : "Dikdörtgen"
-        let sentence = "\(word) çizilecek: \(size). Sol alt köşe: \(n(start)) mm, \(n(start)) mm."
+        let sentence = "\(word) çizilecek: \(size). Sol üst köşe: \(n(start)) mm, \(n(start)) mm."
         return .plan(make(sentence, note, .edit(updated, .piece(piece.id)), "\(word) eklendi: \(size).", base, context))
     }
 
@@ -382,23 +382,23 @@ enum CommandPlanner {
 
     // MARK: Moving
 
-    private static func planMove(right: Double, up: Double, index: Int, piece: DraftPiece, base: DraftProject,
+    private static func planMove(right: Double, down: Double, index: Int, piece: DraftPiece, base: DraftProject,
                                  context: CommandContext, note: String?) -> PlanResult {
-        let points = piece.points.map { DraftPoint(x: $0.x + right, y: $0.y + up) }
+        let points = piece.points.map { DraftPoint(x: $0.x + right, y: $0.y + down) }
         guard withinLimit(points) else { return .refusal(limitRefusal()) }
         var updated = base
         updated.pieces[index].points = points
         var parts: [String] = []
         if right != 0 { parts.append("\(n(abs(right))) mm \(right > 0 ? "sağa" : "sola")") }
-        if up != 0 { parts.append("\(n(abs(up))) mm \(up > 0 ? "yukarı" : "aşağı")") }
+        if down != 0 { parts.append("\(n(abs(down))) mm \(down > 0 ? "aşağı" : "yukarı")") }
         let what = parts.joined(separator: " ve ")
         var centimetres = ""
         if parts.count == 1 {
-            let distance = abs(right != 0 ? right : up)
+            let distance = abs(right != 0 ? right : down)
             centimetres = " (\(n(distance / 10)) cm)"
         }
         let moved = updated.pieces[index]
-        let sentence = "\(quoted(piece.name)) \(what) taşınacak\(centimetres). Sol alt köşe \(corner(piece)) iken \(corner(moved)) olacak."
+        let sentence = "\(quoted(piece.name)) \(what) taşınacak\(centimetres). Sol üst köşe \(corner(piece)) iken \(corner(moved)) olacak."
         return .plan(make(sentence, note, .edit(updated, .piece(piece.id)),
                           "\(quoted(piece.name)) taşındı: \(what).", base, context))
     }
@@ -414,8 +414,8 @@ enum CommandPlanner {
         guard withinLimit(points) else { return .refusal(limitRefusal()) }
         var updated = base
         updated.pieces[index].points = points
-        let sentence = "\(quoted(piece.name)) sol alt köşesi \(n(x)), \(n(y)) mm noktasına taşınacak."
-        let extra = "X ve Y, alanlardaki değerlerdir; Y alttan ölçülür."
+        let sentence = "\(quoted(piece.name)) sol üst köşesi \(n(x)), \(n(y)) mm noktasına taşınacak."
+        let extra = "X ve Y, alanlardaki değerlerdir; Y üstten ölçülür."
         return .plan(make(sentence, [note, extra].compactMap { $0 }.joined(separator: " "),
                           .edit(updated, .piece(piece.id)),
                           "\(quoted(piece.name)) \(n(x)), \(n(y)) mm noktasına taşındı.", base, context))
@@ -426,8 +426,8 @@ enum CommandPlanner {
     private static func planRotate(_ degrees: Int, clockwise: Bool, index: Int, piece: DraftPiece, base: DraftProject,
                                    context: CommandContext, note: String?) -> PlanResult {
         let quarters = degrees / 90
-        // The app turns counter-clockwise; a clockwise turn is the other three quarters.
-        let turns = clockwise ? (4 - quarters % 4) % 4 : quarters % 4
+        // The app turns clockwise; a counter-clockwise turn is the other three quarters.
+        let turns = clockwise ? quarters % 4 : (4 - quarters % 4) % 4
         var turned = piece
         for _ in 0..<turns { turned.points = turned.rotatedQuarterTurn() }
         guard withinLimit(turned.points) else {
@@ -452,8 +452,8 @@ enum CommandPlanner {
         var extra: String?
         if degrees != 180 {
             extra = clockwise
-                ? "“90° döndür” düğmesi saat yönünün tersine döndürür; bu komut saat yönünde döndürüyor."
-                : "Bu, “90° döndür” düğmesiyle aynı yöndür."
+                ? "Bu, “90° döndür” düğmesiyle aynı yöndür."
+                : "Bu, “90° döndür” düğmesinin ters yönüdür."
         }
         let combined = [note, extra].compactMap { $0 }.joined(separator: " ")
         return .plan(make(sentence, combined.isEmpty ? nil : combined, .edit(updated, .piece(piece.id)),
@@ -494,13 +494,13 @@ enum CommandPlanner {
         let name = quoted(piece.name)
         var sentence: String
         if !piece.closed {
-            sentence = "\(name) uzunluğu \(n(oldWidth)) mm iken \(n(newWidth)) mm olacak (\(n(newWidth / 10)) cm). Sol alt köşe yerinde durur."
+            sentence = "\(name) uzunluğu \(n(oldWidth)) mm iken \(n(newWidth)) mm olacak (\(n(newWidth / 10)) cm). Sol üst köşe yerinde durur."
         } else if width != nil && height != nil {
-            sentence = "\(name) ölçüsü \(n(oldWidth)) × \(n(oldHeight)) mm iken \(n(newWidth)) × \(n(newHeight)) mm olacak (\(n(newWidth / 10)) × \(n(newHeight / 10)) cm). Sol alt köşe yerinde durur."
+            sentence = "\(name) ölçüsü \(n(oldWidth)) × \(n(oldHeight)) mm iken \(n(newWidth)) × \(n(newHeight)) mm olacak (\(n(newWidth / 10)) × \(n(newHeight / 10)) cm). Sol üst köşe yerinde durur."
         } else if width != nil {
-            sentence = "\(name) genişliği \(n(oldWidth)) mm iken \(n(newWidth)) mm olacak (\(n(newWidth / 10)) cm). Yükseklik \(n(oldHeight)) mm aynı kalır; sol alt köşe yerinde durur."
+            sentence = "\(name) genişliği \(n(oldWidth)) mm iken \(n(newWidth)) mm olacak (\(n(newWidth / 10)) cm). Yükseklik \(n(oldHeight)) mm aynı kalır; sol üst köşe yerinde durur."
         } else {
-            sentence = "\(name) yüksekliği \(n(oldHeight)) mm iken \(n(newHeight)) mm olacak (\(n(newHeight / 10)) cm). Genişlik \(n(oldWidth)) mm aynı kalır; sol alt köşe yerinde durur."
+            sentence = "\(name) yüksekliği \(n(oldHeight)) mm iken \(n(newHeight)) mm olacak (\(n(newHeight / 10)) cm). Genişlik \(n(oldWidth)) mm aynı kalır; sol üst köşe yerinde durur."
         }
         var extra: String?
         if piece.closed && !isAxisRectangle(piece) { extra = "Bu parça dikdörtgen değil; bütün konturu oranlı ölçeklenir." }
@@ -544,7 +544,7 @@ enum CommandPlanner {
         var updated = base
         updated.pieces.append(copy)
         guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
-        let sentence = "\(quoted(piece.name)) kopyalanacak. Kopya 20 mm sağa ve 20 mm yukarı kayık, \(quoted(copy.name)) adıyla eklenir."
+        let sentence = "\(quoted(piece.name)) kopyalanacak. Kopya 20 mm sağa ve 20 mm aşağı kayık, \(quoted(copy.name)) adıyla eklenir."
         return .plan(make(sentence, note, .edit(updated, .piece(copy.id)),
                           "Kopya eklendi: \(quoted(copy.name)).", base, context))
     }

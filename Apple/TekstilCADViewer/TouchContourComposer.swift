@@ -182,7 +182,7 @@ struct TouchContourComposer: View {
         guard let t = transform(size) else { return }
         let origin = t.screen(DraftPoint(x: 0, y: 0))
         let far = t.screen(DraftPoint(x: extent, y: extent))
-        let area = CGRect(x: origin.x, y: far.y, width: far.x - origin.x, height: origin.y - far.y)
+        let area = CGRect(x: origin.x, y: origin.y, width: far.x - origin.x, height: far.y - origin.y)
         context.fill(Path(area), with: .color(AppTheme.card))
 
         let minor = ComposerArea.gridStep(extent: extent)
@@ -217,12 +217,12 @@ struct TouchContourComposer: View {
             context.draw(label("\(Int(mm.rounded()))"), at: CGPoint(x: area.minX - 4, y: y), anchor: .trailing)
         }
 
-        // The origin really is the bottom-left corner: X grows to the right, Y upwards.
-        context.draw(label("0"), at: CGPoint(x: area.minX - 4, y: area.maxY + 3), anchor: .topTrailing)
+        // The origin really is the top-left corner: X grows to the right, Y downwards.
+        context.draw(label("0"), at: CGPoint(x: origin.x - 4, y: origin.y - 3), anchor: .bottomTrailing)
         let originDot = Path(ellipseIn: CGRect(x: origin.x - 4.5, y: origin.y - 4.5, width: 9, height: 9))
         context.fill(originDot, with: .color(AppTheme.danger))
         context.draw(label("X →"), at: CGPoint(x: origin.x + 9, y: origin.y - 3), anchor: .bottomLeading)
-        context.draw(label("↑ Y"), at: CGPoint(x: origin.x + 4, y: origin.y - 20), anchor: .bottomLeading)
+        context.draw(label("↓ Y"), at: CGPoint(x: origin.x + 4, y: origin.y + 10), anchor: .topLeading)
 
         if let first = points.first {
             var contour = Path()
@@ -247,7 +247,7 @@ struct TouchContourComposer: View {
     }
 
     private var canvasValue: String {
-        var value = "\(points.count) nokta. Alan \(ComposerArea.name(extent)). Sol alt köşe 0,0 noktasıdır."
+        var value = "\(points.count) nokta. Alan \(ComposerArea.name(extent)). Sol üst köşe 0,0 noktasıdır."
         if let last = points.last {
             value += " Son nokta X \(last.x.formatted()), Y \(last.y.formatted()) mm."
         }
@@ -411,7 +411,7 @@ struct TouchContourComposer: View {
                     .accessibilityAddTraits(.allowsDirectInteraction)
                     .accessibilityIdentifier("composer-canvas")
 
-                    Text("Alan \(ComposerArea.name(extent)). İnce çizgiler \(Int(ComposerArea.gridStep(extent: extent))) mm aralıklı; kenarlardaki sayılar milimetredir. Kırmızı nokta 0,0'dır (sol alt köşe): X sağa, Y yukarı doğru büyür.")
+                    Text("Alan \(ComposerArea.name(extent)). İnce çizgiler \(Int(ComposerArea.gridStep(extent: extent))) mm aralıklı; kenarlardaki sayılar milimetredir. Kırmızı nokta 0,0'dır (sol üst köşe): X sağa, Y aşağı doğru büyür.")
                         .font(.caption).foregroundStyle(AppTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)
 

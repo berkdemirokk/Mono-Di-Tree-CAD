@@ -117,11 +117,11 @@ final class ViewportAnchorTests: XCTestCase {
                                                    minY: 20, maxY: 20 + spanY, inset: 30, keepingClear: buttons))
             XCTAssertFalse(map.overlapsCorner(width: 106, height: 56, in: phone), "\(spanX) x \(spanY)")
             // The drawing still stays inside the area.
-            let bottomLeft = map.screen(p(-50, 20)), topRight = map.screen(p(-50 + spanX, 20 + spanY))
-            XCTAssertGreaterThanOrEqual(bottomLeft.x, 30 - 1e-9)
-            XCTAssertLessThanOrEqual(topRight.x, phone.width - 30 + 1e-9)
-            XCTAssertGreaterThanOrEqual(topRight.y, 30 - 1e-9)
-            XCTAssertLessThanOrEqual(bottomLeft.y, phone.height - 30 + 1e-9)
+            let topLeft = map.screen(p(-50, 20)), bottomRight = map.screen(p(-50 + spanX, 20 + spanY))
+            XCTAssertGreaterThanOrEqual(topLeft.x, 30 - 1e-9)
+            XCTAssertLessThanOrEqual(bottomRight.x, phone.width - 30 + 1e-9)
+            XCTAssertGreaterThanOrEqual(topLeft.y, 30 - 1e-9)
+            XCTAssertLessThanOrEqual(bottomRight.y, phone.height - 30 + 1e-9)
         }
     }
 
