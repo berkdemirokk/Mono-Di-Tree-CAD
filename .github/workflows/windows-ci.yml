@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
 
@@ -51,20 +51,29 @@ jobs:
       - name: Run headless desktop verification
         shell: pwsh
         run: |
-          $out = Join-Path $PWD 'work\ci-verify'
-          New-Item -ItemType Directory -Force $out | Out-Null
-          $report = Join-Path $out 'report.json'
-          $exe = Join-Path $PWD 'src\TekstilCAD.Desktop\bin\Release\net10.0-windows\TekstilCAD.Studio.exe'
-          $process = Start-Process -FilePath $exe -ArgumentList '--verify', "`"$report`"" -WorkingDirectory $PWD -PassThru
-          $null = $process.Handle   # keeps ExitCode readable after the process ends
-          if (!$process.WaitForExit(15 * 60 * 1000)) { $process.Kill(); throw 'Desktop verification did not finish within 15 minutes.' }
-          if (!(Test-Path -LiteralPath $report)) { throw "Desktop verification wrote no report (exit code $($process.ExitCode))." }
-          $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
-          Write-Host "status=$($result.status) checks=$($result.checks.Count) exit=$($process.ExitCode)"
-          if ($result.status -ne 'PASS' -or $process.ExitCode -ne 0) {
-            Write-Host "Last passed check: $($result.checks | Select-Object -Last 1)"
-            Write-Host $result.failure
-            throw 'Desktop verification failed.'
+          foreach ($culture in 'default', 'tr-TR') {
+            $out = Join-Path $PWD 'work\ci-verify'
+            if ($culture -eq 'tr-TR') {
+              $env:TEKSTILCAD_VERIFY_CULTURE = $culture
+              $out = Join-Path $out $culture
+            }
+            New-Item -ItemType Directory -Force $out | Out-Null
+            $report = Join-Path $out 'report.json'
+            $exe = Join-Path $PWD 'src\TekstilCAD.Desktop\bin\Release\net10.0-windows\TekstilCAD.Studio.exe'
+            $process = Start-Process -FilePath $exe -ArgumentList '--verify', "`"$report`"" -WorkingDirectory $PWD -WindowStyle Hidden -PassThru
+            $null = $process.Handle   # keeps ExitCode readable after the process ends
+            if (!$process.WaitForExit(15 * 60 * 1000)) { $process.Kill(); throw 'Desktop verification did not finish within 15 minutes.' }
+            if (!(Test-Path -LiteralPath $report)) { throw "Desktop verification wrote no report (exit code $($process.ExitCode))." }
+            $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+            Write-Host "status=$($result.status) checks=$($result.checks.Count) exit=$($process.ExitCode)"
+            if ($result.status -ne 'PASS' -or $process.ExitCode -ne 0) {
+              Write-Host "Last passed check: $($result.checks | Select-Object -Last 1)"
+              Write-Host $result.failure
+              throw 'Desktop verification failed.'
+            }
+            if ($culture -eq 'tr-TR' -and ($result.culture -cne 'tr-TR' -or $result.uiCulture -cne 'tr-TR' -or $result.decimalSeparator -ne ',')) {
+              throw "Unexpected Turkish pass culture: $($result.culture), $($result.uiCulture), decimal separator '$($result.decimalSeparator)'"
+            }
           }
 
       - name: Upload desktop verification report and renders
