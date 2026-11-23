@@ -25,7 +25,7 @@ final class DraftShapesTests: XCTestCase {
 
     func testTriangleIsValidAndFillsItsBox() {
         let points = DraftShapes.triangle(left: 0, bottom: 0, width: 100, height: 80)
-        XCTAssertEqual(points.count, 3)
+        XCTAssertEqual(points, [DraftPoint(x: 0, y: 80), DraftPoint(x: 100, y: 80), DraftPoint(x: 50, y: 0)])
         XCTAssertNil(DraftContourGeometry.validationError(points: points, closed: true))
         let triangle = piece("Üçgen", points)
         XCTAssertEqual(triangle.maxX - triangle.minX, 100)

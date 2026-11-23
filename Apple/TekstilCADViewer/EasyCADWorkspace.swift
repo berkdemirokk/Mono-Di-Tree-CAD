@@ -380,7 +380,7 @@ struct EasyCADWorkspace: View {
         }
         var boxes = [
             Box(title: "X (soldan uzaklık)", text: pieceX, original: piece.minX, positive: false),
-            Box(title: "Y (alttan uzaklık)", text: pieceY, original: piece.minY, positive: false),
+            Box(title: "Y (üstten uzaklık)", text: pieceY, original: piece.minY, positive: false),
             Box(title: piece.closed ? "En" : "Uzunluk", text: pieceWidth,
                 original: piece.lineLength, positive: true)
         ]
@@ -783,16 +783,16 @@ struct EasyCADWorkspace: View {
         .accessibilityHint("Seçili parçayı 10 milimetre sağa taşır")
     }
 
-    // CAD Y grows upwards, so "up" adds to Y.
+    // CAD Y grows downwards, so moving up subtracts from Y.
     private var moveUpButton: some View {
-        Button { move(dx: 0, dy: 10) } label: {
+        Button { move(dx: 0, dy: -10) } label: {
             Text("↑ 10 mm").frame(maxWidth: .infinity, minHeight: 44)
         }
         .accessibilityHint("Seçili parçayı 10 milimetre yukarı taşır")
     }
 
     private var moveDownButton: some View {
-        Button { move(dx: 0, dy: -10) } label: {
+        Button { move(dx: 0, dy: 10) } label: {
             Text("↓ 10 mm").frame(maxWidth: .infinity, minHeight: 44)
         }
         .accessibilityHint("Seçili parçayı 10 milimetre aşağı taşır")
@@ -850,7 +850,7 @@ struct EasyCADWorkspace: View {
         HStack {
             millimetreField("X", label: "Soldan uzaklık (mm)", text: $pieceX,
                             current: DraftPiece.display(document.pieces[index].minX))
-            millimetreField("Y", label: "Alttan uzaklık (mm)", text: $pieceY,
+            millimetreField("Y", label: "Üstten uzaklık (mm)", text: $pieceY,
                             current: DraftPiece.display(document.pieces[index].minY))
         }
         if document.pieces[index].closed {
@@ -1393,10 +1393,10 @@ struct EasyCADWorkspace: View {
         arrows.move(to: CGPoint(x: o.x + arm - head, y: o.y - head))
         arrows.addLine(to: CGPoint(x: o.x + arm, y: o.y))
         arrows.addLine(to: CGPoint(x: o.x + arm - head, y: o.y + head))
-        arrows.move(to: o); arrows.addLine(to: CGPoint(x: o.x, y: o.y - arm))
-        arrows.move(to: CGPoint(x: o.x - head, y: o.y - arm + head))
-        arrows.addLine(to: CGPoint(x: o.x, y: o.y - arm))
-        arrows.addLine(to: CGPoint(x: o.x + head, y: o.y - arm + head))
+        arrows.move(to: o); arrows.addLine(to: CGPoint(x: o.x, y: o.y + arm))
+        arrows.move(to: CGPoint(x: o.x - head, y: o.y + arm - head))
+        arrows.addLine(to: CGPoint(x: o.x, y: o.y + arm))
+        arrows.addLine(to: CGPoint(x: o.x + head, y: o.y + arm - head))
         let ink = AppTheme.muted
         context.stroke(arrows, with: .color(ink.opacity(0.8)),
                        style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round))
@@ -1406,7 +1406,7 @@ struct EasyCADWorkspace: View {
         guard !dynamicTypeSize.isAccessibilitySize else { return }
         let font = Font.caption2.weight(.semibold)
         context.draw(Text("X").font(font).foregroundColor(ink), at: CGPoint(x: o.x + arm, y: o.y + 10), anchor: .center)
-        context.draw(Text("Y").font(font).foregroundColor(ink), at: CGPoint(x: o.x - 10, y: o.y - arm), anchor: .center)
+        context.draw(Text("Y").font(font).foregroundColor(ink), at: CGPoint(x: o.x - 10, y: o.y + arm), anchor: .center)
         context.draw(Text("0").font(font).foregroundColor(ink), at: CGPoint(x: o.x - 8, y: o.y + 9), anchor: .center)
     }
 
@@ -1623,8 +1623,8 @@ struct EasyCADWorkspace: View {
                 text += " Arkadaki her kare \(DraftPiece.display(squares.step)) milimetre."
             }
             text += originVisible(on: mapper, size: canvasSize)
-                ? " Başlangıç noktası (0, 0) ekranda; X sağa, Y yukarı doğru artar."
-                : " Başlangıç noktası (0, 0) şu an ekranda değil; X sağa, Y yukarı doğru artar."
+                ? " Başlangıç noktası (0, 0) ekranda; X sağa, Y aşağı doğru artar."
+                : " Başlangıç noktası (0, 0) şu an ekranda değil; X sağa, Y aşağı doğru artar."
         }
         return text
     }

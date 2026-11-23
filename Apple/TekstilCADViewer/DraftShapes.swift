@@ -1,14 +1,14 @@
 import Foundation
 
 /// Ready-made shapes for the workshop's "add" buttons. Pure functions, so they can be tested
-/// without a view. Coordinates are in mm and CAD Y grows upwards.
+/// without a view. Coordinates are in mm and CAD Y grows downwards.
 enum DraftShapes {
     /// Corners of a circle. It looks round at every zoom the drawing allows, and it stays far
     /// below the 250-point limit of the point editor, so its corners can still be edited.
     static let circleCorners = 72
 
     /// A circle as a closed polygon that exactly fills the square from (`left`, `bottom`) with
-    /// side `diameter`, so its width and height read as the diameter. Counter-clockwise, starting
+    /// side `diameter`, so its width and height read as the diameter. Clockwise, starting
     /// at the right-most point. Empty when the input cannot form a circle.
     static func circle(left: Double, bottom: Double, diameter: Double,
                        corners: Int = circleCorners) -> [DraftPoint] {
@@ -22,15 +22,15 @@ enum DraftShapes {
         }
     }
 
-    /// A triangle with a flat bottom edge and its top in the middle, filling the box from
+    /// A triangle with a flat lower edge and its upper tip in the middle, filling the box from
     /// (`left`, `bottom`) with the given width and height. Empty when the box has no area.
     static func triangle(left: Double, bottom: Double, width: Double, height: Double) -> [DraftPoint] {
         guard width.isFinite, height.isFinite, width > 0, height > 0,
               left.isFinite, bottom.isFinite else { return [] }
         return [
-            DraftPoint(x: left, y: bottom),
-            DraftPoint(x: left + width, y: bottom),
-            DraftPoint(x: left + width / 2, y: bottom + height)
+            DraftPoint(x: left, y: bottom + height),
+            DraftPoint(x: left + width, y: bottom + height),
+            DraftPoint(x: left + width / 2, y: bottom)
         ]
     }
 

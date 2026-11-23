@@ -53,7 +53,32 @@ final class DraftContourGeometryTests: XCTestCase {
             XCTAssertEqual(map.nearestVertex(to: CGPoint(x: screen.x + 18, y: screen.y), points: vertices), index)
             XCTAssertNil(map.nearestVertex(to: CGPoint(x: screen.x + 23, y: screen.y), points: vertices))
         }
-        XCTAssertLessThan(map.screen(vertices[1]).y, map.screen(vertices[0]).y)
+        XCTAssertGreaterThan(map.screen(vertices[1]).y, map.screen(vertices[0]).y)
+    }
+
+    func testWindowsContourPlacementAndScreenEditKeepFileCoordinates() throws {
+        let data = Data(#"{"Name":"Windows","GradingRules":[],"Pieces":[{"Id":"88E8B892-60A4-4479-B39D-0274F21AFAD4","Name":"Front","Closed":true,"Points":[{"X":0,"Y":0},{"X":100,"Y":0},{"X":30,"Y":50}]}]}"#.utf8)
+        let root = try JSONSerialization.jsonObject(with: data)
+        var project = try XCTUnwrap(CADSketchImport.loadEditableCopy(from: data, jsonRoot: root))
+        let map = try XCTUnwrap(DraftCanvasMap(size: CGSize(width: 220, height: 120),
+                                               minX: 0, maxX: 100, minY: 0, maxY: 50, inset: 10))
+        // CadCanvas.Screen at two points per millimetre and an offset of (10, 10).
+        let expected = [CGPoint(x: 10, y: 10), CGPoint(x: 210, y: 10), CGPoint(x: 70, y: 110)]
+        let vertices = project.pieces[0].points
+        XCTAssertEqual(vertices.map { map.screen($0) }, expected)
+        let preview = vertices.map {
+            DrawingProjection.screen(CGPoint(x: $0.x, y: $0.y), minimum: .zero,
+                                     offset: CGPoint(x: 10, y: 10), scale: 2)
+        }
+        XCTAssertEqual(preview, expected)
+
+        let tap = CGPoint(x: 90, y: 80)
+        project.pieces[0].points[2] = try XCTUnwrap(map.sketchPoint(at: tap, extent: 100, snapToFive: true))
+        let exported = try CADSketchImport.encode(project)
+        let document = try XCTUnwrap(JSONSerialization.jsonObject(with: exported) as? [String: Any])
+        let pieces = try XCTUnwrap(document["Pieces"] as? [[String: Any]])
+        let coordinates = try XCTUnwrap(pieces.first?["Points"] as? [[String: Double]])
+        XCTAssertEqual(coordinates, [["X": 0, "Y": 0], ["X": 100, "Y": 0], ["X": 40, "Y": 35]])
     }
 
     func testComposerSnapsInModelSpaceAndRejectsOutsideBorder() throws {
