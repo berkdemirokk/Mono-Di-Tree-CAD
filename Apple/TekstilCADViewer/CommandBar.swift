@@ -218,7 +218,7 @@ struct CommandBar: View {
                 .controlSize(.large)
                 .accessibilityIdentifier("command-apply")
         }
-        Button("Vazgeç") { card = nil }
+        Button("Vazgeç") { text = state.source; card = nil }
             .buttonStyle(.bordered)
             .controlSize(.large)
             .accessibilityIdentifier("command-cancel")
@@ -269,7 +269,7 @@ struct CommandBar: View {
                         .controlSize(.large)
                 }
             }
-            Button("Vazgeç") { card = nil }
+            Button("Vazgeç") { text = state.source; card = nil }
                 .buttonStyle(.borderless)
                 .controlSize(.large)
                 .accessibilityIdentifier("command-cancel")
