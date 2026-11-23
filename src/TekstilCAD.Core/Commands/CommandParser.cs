@@ -94,6 +94,9 @@ public static partial class CommandParser
     {
         var index = 0;
         while (index < lexed.Count && lexed[index].Kind == TokKind.Word && (FillerWords.Contains(lexed[index].Text) || lexed[index].Text is "parcanin" or "parcamin")) index++;
+        var project = index < lexed.Count && lexed[index].Kind == TokKind.Word
+            && lexed[index].Text is "proje" or "projenin" or "projemin";
+        if (project) index++;
         if (index >= lexed.Count) return null;
         var label = lexed[index];
         if (label.Kind != TokKind.Word || !RenameLabels.Contains(label.Text)) return null;
@@ -122,7 +125,7 @@ public static partial class CommandParser
         }
         if (!hasLetterOrDigit) return ParseResult.Refused(Refusals.EmptyNameRefusal());
         if (name.Length > MaxNameLength) return ParseResult.Refused(Refusals.Unrecognized(s.Norm));
-        return ParseResult.Understood(new RenameCommand(name));
+        return ParseResult.Understood(project ? new RenameProjectCommand(name) : new RenameCommand(name));
     }
 
     // ================================================================================================================

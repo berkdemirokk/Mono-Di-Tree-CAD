@@ -220,7 +220,7 @@ public static partial class PieceOperations
         return Replace(document, index, renamed, null, $"{Quote(piece.Name)} parçasının adı {Quote(trimmed)} yapıldı.", []);
     }
 
-    private static bool IsWellFormed(string value)
+    internal static bool IsWellFormed(string value)
     {
         for (var i = 0; i < value.Length; i++)
         {

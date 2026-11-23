@@ -45,6 +45,10 @@ internal static class CommandCatalogueData
             "Projenizi dosyaya yazar; ilk kayıtta dosya adı sorulur.",
             "Kaydet", ["kaydet", "projeyi kaydet"],
             ["sakla", "dosyaya yaz", "kaydet"]));
+        all.Add(F("start.rename", GStart, "Projeye ad ver",
+            "Açık projenin adını değiştirir.",
+            ["projenin adı Yaz Koleksiyonu olsun", "proje adını Kışlık Etek yap"],
+            "proje adı", "projeyi adlandır"));
         all.Add(D("start.save-as", GStart, "Başka adla kaydet…",
             "Projeyi yeni bir ad vererek ayrı bir dosyaya kaydeder.",
             "Farklı kaydet…", ["farklı kaydet", "başka adla kaydet"],

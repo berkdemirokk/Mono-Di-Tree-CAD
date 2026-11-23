@@ -46,6 +46,8 @@ internal static partial class CommandVerification
         new("C15", "boyu 60 yap", "plain"),
         new("C16", "95 x 60 yap", "plain"),
         new("C17", "adı kol olsun", "plain"),
+        new("-", "projenin adı Yaz Koleksiyonu olsun", "empty",
+            After: (window, _) => window.Document.Name == "Yaz Koleksiyonu"),
         new("C18", "çoğalt", "piece", "Handoff.Duplicate", "DuplicateSelectedPiece", true),
         new("C19", "sil", "piece", Confirm: true),
         new("C20", "kolu sil", "two", Confirm: true),

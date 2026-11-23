@@ -41,6 +41,7 @@ public sealed record MirrorCommand(MirrorAxis Axis) : Command;
 public sealed record ResizeCommand(double? WidthMm, double? HeightMm) : Command;
 
 /// <summary>"adı ön beden olsun" (C17). The name keeps the letters as typed (1-128 characters).</summary>
+public sealed record RenameProjectCommand(string Name) : Command;
 public sealed record RenameCommand(string Name) : Command;
 
 public enum PieceTarget { Selected, Named, Next, Previous, None }

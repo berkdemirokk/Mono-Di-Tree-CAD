@@ -10,7 +10,7 @@ public enum PlanKind
     Undo, Redo,
     View, Tool, FinishDrawing,
     File, Window,
-    Help, CancelPreview,
+    Help, CancelPreview, RenameProject,
 }
 
 /// <summary>The approval class of FINAL_COMMANDS.md section 1, item 9.</summary>
@@ -130,6 +130,7 @@ public sealed class Plan
         if (!DocumentSession.ContentEquals(source, target))
             throw new PlanStaleException();
         var fresh = edited.Clone();
+        target.Name = fresh.Name;
         target.Pieces = fresh.Pieces;
         target.GradingRules = fresh.GradingRules;
     }
