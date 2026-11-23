@@ -214,6 +214,8 @@ internal sealed partial class PlannerContext
         if (ProjectGuards() is { } guard) return Refuse(guard);
         var name = (c.Name ?? "").Trim();
         if (name.Length == 0) return Refuse(Refusals.EmptyNameRefusal());
+        if (name.Length > CommandParser.MaxNameLength || name.Any(char.IsControl) || !PieceOperations.IsWellFormed(name))
+            return Refuse(Custom(Refusals.EmptyName, $"Tek satırda, en fazla {CommandParser.MaxNameLength} karakterlik geçerli bir ad yazın."));
         if (name == Doc.Name)
             return Refuse(Custom(Refusals.NoChange, $"Projenin adı zaten {QuoteFull(name)}."));
         var edited = Doc.Clone();

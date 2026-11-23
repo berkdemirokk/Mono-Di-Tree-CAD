@@ -63,7 +63,10 @@ public sealed class PlannerHostileTests
 
         foreach (var name in new string?[]
                  { "Ön Beden", "", "   ", "\t", new string('x', 500), new string('x', 128), new string('x', 129), "a\nb\tc\0", "\uD800abc", "abc\uDC00", "😀 beden", null, "Ön beden", "Kol", "  padded  ", new string('ş', 10000) })
+        {
             list.Add(new RenameCommand(name!));
+            list.Add(new RenameProjectCommand(name!));
+        }
 
         var targets = new[] { PieceTarget.Selected, PieceTarget.Next, PieceTarget.Previous, PieceTarget.None, (PieceTarget)99 };
         foreach (var target in targets)
@@ -241,7 +244,7 @@ public sealed class PlannerHostileTests
         Assert.NotNull(plan.Stamp);
         if (view is not null) Assert.True(plan.Stamp.IsCurrent(view, selection), $"{context}: a fresh stamp is not current");
 
-        var core = plan.Kind is PlanKind.AddRectangle or PlanKind.AddLine or PlanKind.ResizePiece or PlanKind.RenamePiece or PlanKind.DeletePiece or PlanKind.DuplicatePiece;
+        var core = plan.Kind is PlanKind.AddRectangle or PlanKind.AddLine or PlanKind.ResizePiece or PlanKind.RenamePiece or PlanKind.RenameProject or PlanKind.DeletePiece or PlanKind.DuplicatePiece;
         Assert.True(core == plan.AppliesInCore, $"{context}: {plan.Kind} AppliesInCore={plan.AppliesInCore}");
         var operation = plan.Kind is PlanKind.MovePiece or PlanKind.MovePieceTo or PlanKind.RotatePiece or PlanKind.MirrorPiece;
         Assert.True(operation == (plan.Operation is not null), $"{context}: {plan.Kind} has Operation={plan.Operation}");
