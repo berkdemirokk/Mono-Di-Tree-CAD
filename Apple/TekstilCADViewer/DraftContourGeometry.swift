@@ -173,21 +173,27 @@ struct DraftGrid: Equatable {
     }
 }
 
-/// A centered aspect-fit map shared by drawing and picking. CAD Y increases upwards.
+enum DrawingProjection {
+    static func screen(_ p: CGPoint, minimum: CGPoint, offset: CGPoint, scale: Double) -> CGPoint {
+        CGPoint(x: offset.x + (p.x - minimum.x) * scale, y: offset.y + (p.y - minimum.y) * scale)
+    }
+}
+
+/// A centered aspect-fit map shared by drawing and picking. CAD Y increases downwards.
 struct DraftCanvasMap {
     private let scale: Double
     private let left: Double
-    private let bottom: Double
+    private let top: Double
     private let minX: Double
     private let minY: Double
     private let contentWidth: Double
     private let contentHeight: Double
 
-    private init(scale: Double, left: Double, bottom: Double, minX: Double, minY: Double,
+    private init(scale: Double, left: Double, top: Double, minX: Double, minY: Double,
                  contentWidth: Double, contentHeight: Double) {
         self.scale = scale
         self.left = left
-        self.bottom = bottom
+        self.top = top
         self.minX = minX
         self.minY = minY
         self.contentWidth = contentWidth
@@ -212,7 +218,7 @@ struct DraftCanvasMap {
         let z = viewport.zoom
         return DraftCanvasMap(scale: scale * z,
                               left: cx + (left - cx) * z + Double(viewport.pan.width),
-                              bottom: cy + (bottom - cy) * z + Double(viewport.pan.height),
+                              top: cy + (top - cy) * z + Double(viewport.pan.height),
                               minX: minX, minY: minY,
                               contentWidth: contentWidth, contentHeight: contentHeight)
     }
@@ -259,7 +265,7 @@ struct DraftCanvasMap {
         let spanX = maxX - minX, spanY = maxY - minY
         scale = min(areaWidth / max(spanX, 1), areaHeight / max(spanY, 1))
         left = insetLeft + (areaWidth - spanX * scale) / 2
-        bottom = insetTop + (areaHeight + spanY * scale) / 2
+        top = insetTop + (areaHeight - spanY * scale) / 2
         self.minX = minX
         self.minY = minY
         contentWidth = spanX * scale
@@ -274,15 +280,16 @@ struct DraftCanvasMap {
     func overlapsCorner(width cornerWidth: Double, height cornerHeight: Double, in size: CGSize) -> Bool {
         // A drawing that only touches the corner's edge (to round-off) does not count.
         left + contentWidth > Double(size.width) - cornerWidth + 1e-6 &&
-            bottom > Double(size.height) - cornerHeight + 1e-6
+            top + contentHeight > Double(size.height) - cornerHeight + 1e-6
     }
 
     func screen(_ p: DraftPoint) -> CGPoint {
-        CGPoint(x: left + (p.x - minX) * scale, y: bottom - (p.y - minY) * scale)
+        DrawingProjection.screen(CGPoint(x: p.x, y: p.y), minimum: CGPoint(x: minX, y: minY),
+                                 offset: CGPoint(x: left, y: top), scale: scale)
     }
 
     func model(at p: CGPoint) -> DraftPoint {
-        DraftPoint(x: minX + (Double(p.x) - left) / scale, y: minY + (bottom - Double(p.y)) / scale)
+        DraftPoint(x: minX + (Double(p.x) - left) / scale, y: minY + (Double(p.y) - top) / scale)
     }
 
     func translation(_ drag: CGSize, for piece: DraftPiece, snap: Bool) -> DraftPoint {
@@ -292,7 +299,7 @@ struct DraftCanvasMap {
             return snap ? ((origin + distance) / 5).rounded() * 5 - origin : distance
         }
         return DraftPoint(x: delta(Double(drag.width), origin: piece.minX),
-                          y: delta(-Double(drag.height), origin: piece.minY))
+                          y: delta(Double(drag.height), origin: piece.minY))
     }
 
     func sketchPoint(at location: CGPoint, extent: Double, snapToFive: Bool) -> DraftPoint? {

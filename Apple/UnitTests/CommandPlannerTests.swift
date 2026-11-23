@@ -2,7 +2,7 @@ import XCTest
 @testable import TekstilCADViewer
 
 /// Plans are made against a drawing without touching it; these tests check the sentence shown
-/// before anything happens, the resulting geometry (in the iPhone's own axes: Y up, lower-left
+/// before anything happens, the resulting geometry (in the iPhone's own axes: Y down, upper-left
 /// corner) and the refusals that depend on the drawing.
 final class CommandPlannerTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> DraftPoint { DraftPoint(x: x, y: y) }
@@ -80,7 +80,7 @@ final class CommandPlannerTests: XCTestCase {
         let doc = sample()
         let planned = plan(.rectangle(width: 120, height: 80, isSquare: false), context(doc))
         XCTAssertEqual(planned?.sentence,
-                       "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol alt köşe: 40 mm, 40 mm.")
+                       "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol üst köşe: 40 mm, 40 mm.")
         let (project, selection) = try XCTUnwrap(edited(planned))
         XCTAssertEqual(project.pieces.count, 3)
         let added = project.pieces[2]
@@ -95,7 +95,7 @@ final class CommandPlannerTests: XCTestCase {
     func testFirstRectangleOfAnEmptyDrawing() throws {
         let doc = DraftProject.blank
         let planned = plan(.rectangle(width: 120, height: 80, isSquare: false), context(doc, selected: nil))
-        XCTAssertEqual(planned?.sentence, "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol alt köşe: 0 mm, 0 mm.")
+        XCTAssertEqual(planned?.sentence, "Dikdörtgen çizilecek: 120 × 80 mm (12 × 8 cm). Sol üst köşe: 0 mm, 0 mm.")
         let (project, _) = try XCTUnwrap(edited(planned))
         XCTAssertEqual(project.pieces[0].points[2], p(120, 80))
     }
@@ -122,34 +122,34 @@ final class CommandPlannerTests: XCTestCase {
 
     // MARK: Moving
 
-    func testMoveUsesScreenDirectionsOnTheUpwardsAxis() throws {
+    func testMoveUsesWindowsScreenDirections() throws {
         let doc = sample()
         let right = plan(.moveBy(right: 25, down: 0), context(doc))
         XCTAssertEqual(right?.sentence,
-                       "‘Ön beden’ 25 mm sağa taşınacak (2,5 cm). Sol alt köşe 0, 0 mm iken 25, 0 mm olacak.")
+                       "‘Ön beden’ 25 mm sağa taşınacak (2,5 cm). Sol üst köşe 0, 0 mm iken 25, 0 mm olacak.")
         var (project, selection) = try XCTUnwrap(edited(right))
         XCTAssertEqual(project.pieces[0].points, [p(25, 0), p(125, 0), p(125, 150), p(25, 150)])
         XCTAssertEqual(selection, .piece(doc.pieces[0].id))
         XCTAssertEqual(project.pieces[1], doc.pieces[1])
 
-        // "yukarı" is +Y on the iPhone (the shared vectors say down = -10).
+        // "yukarı" reduces Y on both platforms (the shared vectors say down = -10).
         let up = plan(.moveBy(right: 0, down: -10), context(doc))
         XCTAssertTrue(up?.sentence.contains("10 mm yukarı taşınacak") == true)
         (project, selection) = try XCTUnwrap(edited(up))
-        XCTAssertEqual(project.pieces[0].minY, 10)
+        XCTAssertEqual(project.pieces[0].minY, -10)
 
         let both = plan(.moveBy(right: -20, down: 5), context(doc))
         XCTAssertTrue(both?.sentence.contains("20 mm sola ve 5 mm aşağı taşınacak.") == true)
         (project, selection) = try XCTUnwrap(edited(both))
         XCTAssertEqual(project.pieces[0].minX, -20)
-        XCTAssertEqual(project.pieces[0].minY, -5)
+        XCTAssertEqual(project.pieces[0].minY, 5)
     }
 
-    func testMoveToUsesTheLowerLeftCorner() throws {
+    func testMoveToUsesTheUpperLeftCorner() throws {
         let doc = sample()
         let planned = plan(.moveTo(x: 50, y: 60), context(doc))
-        XCTAssertTrue(planned?.sentence.contains("sol alt köşesi 50, 60 mm noktasına taşınacak") == true)
-        XCTAssertTrue(planned?.note?.contains("Y alttan ölçülür") == true)
+        XCTAssertTrue(planned?.sentence.contains("sol üst köşesi 50, 60 mm noktasına taşınacak") == true)
+        XCTAssertTrue(planned?.note?.contains("Y üstten ölçülür") == true)
         let (project, _) = try XCTUnwrap(edited(planned))
         XCTAssertEqual(project.pieces[0].minX, 50)
         XCTAssertEqual(project.pieces[0].minY, 60)
@@ -166,28 +166,28 @@ final class CommandPlannerTests: XCTestCase {
 
     func testRotationDirectionsMatchTheButtonAndItsInverse() throws {
         let doc = sample()
-        // The button turns counter-clockwise about the bounding-box centre (50, 75).
+        // The button turns clockwise about the bounding-box centre (50, 75).
         let ccw = plan(.rotate(degrees: 90, direction: .counterClockwise), context(doc))
         XCTAssertTrue(ccw?.sentence.hasPrefix("‘Ön beden’ saat yönünün tersine 90° döndürülecek (ortası sabit).") == true)
         XCTAssertTrue(ccw?.sentence.contains("100 × 150 mm iken 150 × 100 mm olacak.") == true)
-        XCTAssertTrue(ccw?.note?.contains("düğmesiyle aynı") == true)
+        XCTAssertTrue(ccw?.note?.contains("düğmesinin ters yönüdür") == true)
         var (project, _) = try XCTUnwrap(edited(ccw))
-        XCTAssertEqual(project.pieces[0].points[0], p(125, 25))
-        XCTAssertEqual(project.pieces[0].points, doc.pieces[0].rotatedQuarterTurn())
+        XCTAssertEqual(project.pieces[0].points[0], p(-25, 125))
 
-        // Clockwise is the other three quarters: the lower-left corner goes to the upper-left.
+        // Clockwise takes the upper-left corner to the upper-right.
         let cw = plan(.rotate(degrees: 90, direction: .clockwise), context(doc))
         XCTAssertTrue(cw?.sentence.hasPrefix("‘Ön beden’ saat yönünde 90° döndürülecek") == true)
-        XCTAssertTrue(cw?.note?.contains("saat yönünün tersine döndürür") == true)
+        XCTAssertTrue(cw?.note?.contains("düğmesiyle aynı yöndür") == true)
         (project, _) = try XCTUnwrap(edited(cw))
-        XCTAssertEqual(project.pieces[0].points[0], p(-25, 125))
+        XCTAssertEqual(project.pieces[0].points[0], p(125, 25))
+        XCTAssertEqual(project.pieces[0].points, doc.pieces[0].rotatedQuarterTurn())
         XCTAssertEqual(project.pieces[0].minX, -25)
         XCTAssertEqual(project.pieces[0].minY, 25)
 
         // 270° clockwise is one counter-clockwise turn.
         let long = plan(.rotate(degrees: 270, direction: .clockwise), context(doc))
         (project, _) = try XCTUnwrap(edited(long))
-        XCTAssertEqual(project.pieces[0].points[0], p(125, 25))
+        XCTAssertEqual(project.pieces[0].points[0], p(-25, 125))
 
         let half = plan(.rotate(degrees: 180, direction: .clockwise), context(doc))
         XCTAssertTrue(half?.sentence.hasPrefix("‘Ön beden’ 180° döndürülecek (ortası sabit). Boyutları değişmez.") == true)
@@ -208,7 +208,7 @@ final class CommandPlannerTests: XCTestCase {
         let doc = sample()
         let width = plan(.resize(width: 95, height: nil), context(doc))
         XCTAssertEqual(width?.sentence,
-                       "‘Ön beden’ genişliği 100 mm iken 95 mm olacak (9,5 cm). Yükseklik 150 mm aynı kalır; sol alt köşe yerinde durur.")
+                       "‘Ön beden’ genişliği 100 mm iken 95 mm olacak (9,5 cm). Yükseklik 150 mm aynı kalır; sol üst köşe yerinde durur.")
         let (project, _) = try XCTUnwrap(edited(width))
         XCTAssertEqual(project.pieces[0].minX, 0)
         XCTAssertEqual(project.pieces[0].maxX, 95, accuracy: 1e-9)
@@ -218,7 +218,7 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertTrue(height?.sentence.hasPrefix("‘Ön beden’ yüksekliği 150 mm iken 60 mm olacak (6 cm). Genişlik 100 mm aynı kalır") == true)
         let both = plan(.resize(width: 95, height: 60), context(doc))
         XCTAssertEqual(both?.sentence,
-                       "‘Ön beden’ ölçüsü 100 × 150 mm iken 95 × 60 mm olacak (9,5 × 6 cm). Sol alt köşe yerinde durur.")
+                       "‘Ön beden’ ölçüsü 100 × 150 mm iken 95 × 60 mm olacak (9,5 × 6 cm). Sol üst köşe yerinde durur.")
     }
 
     func testResizeRefusals() {
@@ -440,7 +440,7 @@ extension CommandPlannerTests {
 
     func testSquaresAreNamedAsSquares() {
         let planned = plan(.rectangle(width: 100, height: 100, isSquare: true), context(sample()))
-        XCTAssertEqual(planned?.sentence, "Kare çizilecek: 100 × 100 mm (10 × 10 cm). Sol alt köşe: 40 mm, 40 mm.")
+        XCTAssertEqual(planned?.sentence, "Kare çizilecek: 100 × 100 mm (10 × 10 cm). Sol üst köşe: 40 mm, 40 mm.")
     }
 }
 

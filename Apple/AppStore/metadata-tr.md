@@ -109,6 +109,8 @@ Beklenen sonuç: **4+**. Anketteki soru adları App Store Connect'te farklı gö
 
 ### Neler var? 1.04 (taslak, TestFlight "Neyi test etmeli?")
 
+Çizimler Windows ile aynı yönde görünür. Önceki iPhone sürümünde çizilen asimetrik bir parça ekranda dikey olarak ters görünebilir. Dosyadaki noktalar ve ölçüler korunur.
+
 1.03 (14) derlemesinden sonra kodda olan değişikliklere göre yazıldı (16 Kasım 2026, `feat/ios-zoom-pan`).
 
 ```text

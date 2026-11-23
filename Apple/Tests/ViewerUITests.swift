@@ -410,18 +410,18 @@ final class ViewerUITests: XCTestCase {
         }
         expectY("0")
 
-        // CAD Y grows upwards: the up button adds 10 mm, the down button takes it back.
+        // Moving up subtracts 10 mm from Y.
         let up = app.buttons["↑ 10 mm"]
         let down = app.buttons["↓ 10 mm"]
         tapBelow(up, in: app)
-        expectY("10")
+        expectY("-10")
         tapBelow(down, in: app)
         expectY("0")
 
         let undo = app.buttons["Geri al"]
         XCTAssertTrue(undo.isEnabled)
         undo.tap()
-        expectY("10")
+        expectY("-10")
         XCTAssertTrue(app.buttons["İleri al"].isEnabled)
     }
 
