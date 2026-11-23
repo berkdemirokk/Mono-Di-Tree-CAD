@@ -22,6 +22,7 @@ internal sealed class CommandBarViewHost : ICommandBarHost
             // The slot draws the card behind a preview; at rest the box and its chips sit directly on the page.
             Padding = new Thickness(0), BorderThickness = new Thickness(0), Background = null,
         };
+        view.CloseRequested += window.FocusDrawingCanvas;
         slot = new OverlaySlot { Child = view };
         slot.LayoutUpdated += (_, _) => KeepCardRightOfRail();
         window.SetCanvasTopInset(CardCover);

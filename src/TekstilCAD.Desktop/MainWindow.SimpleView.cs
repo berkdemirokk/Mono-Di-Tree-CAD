@@ -118,6 +118,7 @@ public partial class MainWindow
 
     /// <summary>Tells the canvas how much of its top the simple view's command card covers, so a preview frame is kept clear of it.</summary>
     internal void SetCanvasTopInset(Func<double> inset) => canvas.TopInset = inset;
+    internal void FocusDrawingCanvas() => canvas.Focus();
 
     // A closed, axis-parallel, four-point piece without grain line, corner marks, curve data or grading rule.
     internal bool IsPlainRectangle(PatternPiece piece)
