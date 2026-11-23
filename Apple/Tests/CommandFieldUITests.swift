@@ -108,6 +108,20 @@ final class CommandFieldUITests: XCTestCase {
         XCTAssertFalse(countLabel(1, in: app).exists)
     }
 
+    func testTypedConfirmationAppliesOnceAndCanUndoByCommand() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(app.buttons["command-apply"].waitForExistence(timeout: 5))
+        enter("uygula", in: app, submit: true)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["command-apply"].exists)
+        enter("geri al", in: app, submit: true)
+        XCTAssertTrue(app.buttons["command-apply"].waitForExistence(timeout: 5))
+        enter("uygula", in: app, submit: true)
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 5))
+    }
+
     func testReturnOnlyPreparesAndNeverApplies() {
         let app = launchClean()
         openWorkshop(app)

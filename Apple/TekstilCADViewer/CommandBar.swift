@@ -117,7 +117,7 @@ struct CommandBar: View {
     }
 
     private var field: some View {
-        TextField("Ne yapmak istiyorsunuz? Örnek: 120 x 80 dikdörtgen", text: $text)
+        TextField(awaitingConfirmation ? "Onaylamak için uygula yazın" : "Ne yapmak istiyorsunuz? Örnek: 120 x 80 dikdörtgen", text: $text)
             .textFieldStyle(.plain)
             .font(.callout)
             .padding(.horizontal, 10)
@@ -130,10 +130,10 @@ struct CommandBar: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled(true)
             #endif
-            // Return only prepares the preview; it never applies anything.
+            // Submitting an action prepares it. A separate typed confirmation applies the shown plan.
             .onSubmit { prepare() }
             .accessibilityLabel("Komut kutusu")
-            .accessibilityHint("Yapmak istediğinizi yazın ya da klavyedeki mikrofonla söyleyin. Önce ne olacağı gösterilir; Uygula'ya dokunmadan hiçbir şey değişmez.")
+            .accessibilityHint("Yapmak istediğinizi yazın ya da klavyedeki mikrofonla söyleyin. Önizlemeyi onaylamak için uygula yazıp gönderin veya Uygula düğmesine dokunun.")
             .accessibilityIdentifier("command-field")
     }
 
@@ -306,9 +306,16 @@ struct CommandBar: View {
 
     // MARK: Behaviour
 
+    private var awaitingConfirmation: Bool {
+        guard let card, case .preview = card.kind else { return false }
+        return true
+    }
+
     private func textChanged() {
         // Editing the sentence makes whatever was shown for the old one meaningless.
-        if let card, card.source != text { self.card = nil }
+        let typed = TurkishText.fold(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        let enteringConfirmation = awaitingConfirmation && "uygula".hasPrefix(typed)
+        if let card, card.source != text, !enteringConfirmation { self.card = nil }
         if !text.isEmpty { result = nil }
     }
 
@@ -323,13 +330,18 @@ struct CommandBar: View {
         prepare()
     }
 
-    /// Return and "Hazırla": show what would happen. Never applies.
+    /// Prepare a new command or confirm the pending preview with an explicit follow-up.
     private func prepare() {
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty else { return }
         holdOpen = keyboardVisible
         focused = false
         result = nil
+        if TurkishText.fold(typed) == "uygula", let card,
+           case .preview(let command, let plan) = card.kind {
+            confirm(command: command, plan: plan, state: card)
+            return
+        }
         remember(typed)
         // Names as the planner will see them (typed field values applied), so "kol seç" matches.
         let names = (context.base ?? context.document).pieces.map { $0.name }
@@ -372,6 +384,7 @@ struct CommandBar: View {
                     plan.note = [plan.note, "Birim yazmadınız; milimetre sayıldı."].compactMap { $0 }.joined(separator: " ")
                 }
                 show(.preview(command, plan), source: source, banner: banner, unitAssumed: unitAssumed)
+                text = ""
             }
         case .refusal(let refusal):
             show(.refusal(refusal, isQuestion: false), source: source)
