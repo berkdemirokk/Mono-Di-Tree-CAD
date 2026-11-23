@@ -209,6 +209,24 @@ internal sealed partial class PlannerContext
         return Of(plan);
     }
 
+    private PlanResult PlanProjectRename(RenameProjectCommand c)
+    {
+        if (ProjectGuards() is { } guard) return Refuse(guard);
+        var name = (c.Name ?? "").Trim();
+        if (name.Length == 0) return Refuse(Refusals.EmptyNameRefusal());
+        if (name == Doc.Name)
+            return Refuse(Custom(Refusals.NoChange, $"Projenin adı zaten {QuoteFull(name)}."));
+        var edited = Doc.Clone();
+        edited.Name = name;
+        return Of(new Plan(PlanKind.RenameProject, PlanClass.Geometry, c,
+            $"Projenin adı {QuoteFull(name)} olacak.",
+            PieceStamp.Capture(view, selection, null, StampScope.Document), Doc.Clone(), edited)
+        {
+            ResultText = $"Projenin adı {QuoteFull(name)} oldu.",
+            ActionName = "Projeyi adlandırma",
+        });
+    }
+
     private PlanResult PlanRename(RenameCommand c)
     {
         if (!TryEditTarget(out var piece, out var refusal)) return refusal;

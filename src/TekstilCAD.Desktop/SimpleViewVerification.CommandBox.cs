@@ -22,6 +22,22 @@ internal static partial class SimpleViewVerification
     {
         VerifyBoxIsReal(checks);
         VerifyBoxPreviewApplyUndo(reportPath, checks);
+        WithFresh(window =>
+        {
+            window.LoadDocument(new ProjectDocument { Name = "İlk proje" });
+            Simple(window, true);
+            Render(window, Temp("project-name-command"), 1024, 640);
+            var view = InlineBox(window)!;
+            view.AutoPreview = false;
+            view.SetText("projenin adı Yaz Koleksiyonu olsun");
+            view.HandleKey(Key.Enter, ModifierKeys.None);
+            Check(view.State == CommandBarState.Preview && window.Document.Name == "İlk proje",
+                "Project name stays unchanged until the command is confirmed", checks);
+            view.HandleKey(Key.Enter, ModifierKeys.None);
+            Check(window.Document.Name == "Yaz Koleksiyonu", "Project rename preserves Turkish capitalization", checks);
+            Invoke(window, "Undo");
+            Check(window.Document.Name == "İlk proje", "Undo restores the original project name", checks);
+        });
         VerifyBoxPreviewLeavesWithView(checks);
         VerifyBoxFills(checks);
         VerifyBoxChips(checks);
