@@ -534,50 +534,55 @@ private struct ContentView: View {
         .contextMenu { recentActions(entry) }
     }
 
+    @ViewBuilder
+    private var homeFileActions: some View {
+        Button { showingImporter = true } label: {
+            Label("Dosya aç (.tcad)", systemImage: "folder")
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.appSecondary)
+        .accessibilityHint("Dosyayı önizlemek için açar.")
+        Button { openEditor(EditorRoute(example: true)) } label: {
+            Label("Örnekle dene", systemImage: "square.on.square")
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.appSecondary)
+        .accessibilityHint("İki hazır parçayla uygulamayı denersin.")
+    }
+
     private var home: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("MONO DI TREE").font(.caption.bold()).tracking(3)
-                        .foregroundStyle(AppTheme.muted)
-                    Text("Kalıbını kolayca oluştur").font(.largeTitle.bold())
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 12) {
+                    Image("StudioMark")
+                        .resizable()
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .accessibilityHidden(true)
+                    Text("Mono Di Tree CAD")
+                        .font(.headline.weight(.semibold))
                         .foregroundStyle(AppTheme.ink)
-                        .accessibilityAddTraits(.isHeader)
-                    Text("Bir şekil ekle, ölçülerini milimetre olarak gir ve projeni kaydet.")
-                        .font(.body).foregroundStyle(AppTheme.muted)
+                    Spacer(minLength: 0)
                 }
 
-                VStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Kalıbını kolayca oluştur")
+                        .font(.system(.largeTitle, design: .serif).weight(.semibold))
+                        .foregroundStyle(AppTheme.ink)
+                        .accessibilityAddTraits(.isHeader)
+
                     Button { openEditor(EditorRoute()) } label: {
-                        Label("Yeni proje oluştur", systemImage: "plus.square")
+                        Label("Yeni proje oluştur", systemImage: "plus")
                             .frame(maxWidth: .infinity, minHeight: 50)
                     }
                     .buttonStyle(.appPrimary)
-                    Button { openEditor(EditorRoute(example: true)) } label: {
-                        Label("Örnekle dene", systemImage: "hand.tap")
-                            .frame(maxWidth: .infinity, minHeight: 46)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { homeFileActions }
+                        VStack(spacing: 6) { homeFileActions }
                     }
-                    .buttonStyle(.appSecondary)
-                    .accessibilityHint("İki hazır parçayla uygulamayı denersin.")
-                    Button { showingImporter = true } label: {
-                        Label("Dosya aç (.tcad)", systemImage: "folder")
-                            .frame(maxWidth: .infinity, minHeight: 46)
-                    }
-                    .buttonStyle(.appSecondary)
-                    .accessibilityHint("Yalnızca önizleme açar. Düzenlemek için açtıktan sonra kopyasını oluşturun.")
                 }
-
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Nasıl çalışır?").font(.headline).foregroundStyle(AppTheme.ink)
-                        .accessibilityAddTraits(.isHeader)
-                    StepBadge(number: 1, title: "Şekil ekle",
-                              detail: "Dikdörtgen, çizgi, daire ya da üçgen seç; ekranda hemen görünür.")
-                    StepBadge(number: 2, title: "Ölçüyü yaz",
-                              detail: "En ve boyu milimetre olarak yaz ya da parçayı parmağınla sürükle.")
-                    StepBadge(number: 3, title: "Kaydet ve paylaş",
-                              detail: "Projen bu cihazda saklanır; dilersen dosya olarak gönderebilirsin.")
-                }
-                .appCard()
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Son projeler").font(.headline).foregroundStyle(AppTheme.ink)
@@ -605,7 +610,8 @@ private struct ContentView: View {
                 }
                 .appCard()
 
-                // Light is the default; dark and follow-the-phone are opt-in.
+                StudioPatternShelf { openEditor(EditorRoute(document: $0)) }
+
                 AppearancePicker()
             }
             // A readable column on iPad and wide windows; full width on a phone.

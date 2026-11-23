@@ -452,3 +452,21 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(countLabel(1, in: app).exists)
     }
 }
+
+extension ViewerUITests {
+    func testStarterPatternPreviewCanBePlayedAndPaused() {
+        let app = launchClean()
+        let preview = app.buttons["studio-pattern-preview"]
+        for _ in 0..<5 where !preview.isHittable { app.swipeUp() }
+        XCTAssertTrue(preview.isHittable)
+        preview.tap()
+        let play = app.buttons["Çizimi oynat"]
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        play.tap()
+        let pause = app.buttons["Çizimi duraklat"]
+        XCTAssertTrue(pause.waitForExistence(timeout: 2))
+        pause.tap()
+        XCTAssertTrue(play.exists)
+        XCTAssertTrue(app.sliders["Çizim ilerlemesi"].exists)
+    }
+}

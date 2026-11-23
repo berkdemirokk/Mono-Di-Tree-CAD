@@ -134,27 +134,15 @@ struct AppearancePicker: View {
 
 // MARK: - Colours
 
-/// One calm look for the whole app: a pale page, white cards, a single blue accent and large
-/// rounded buttons. Light is the default and its values are unchanged from the light-only design.
-/// Each colour also has a dark variant and, for Increase Contrast, a stronger light and dark one.
-///
-/// Contrast (WCAG 2.x, computed from these sRGB values; "card" = white or dark card, "page" = page):
-/// - light: ink/page 16.4, muted/page 5.4, muted/card 5.8, accent/card 5.2, accent/page 4.9,
-///   accent on accentSoft 4.6, danger/card 5.6, onAccent/accent 5.2, onAccent/accentPressed 7.5.
-/// - light + Increase Contrast: muted/card 10.5, accent/card 8.6, danger/card 8.3, line/card 4.8.
-/// - dark: ink/card 14.5, muted/card 7.1, accent/card 6.7, accent on accentSoft 5.0,
-///   danger/card 6.2, onAccent/accent 7.6, onAccent/accentPressed 9.9.
-/// - dark + Increase Contrast: muted/card 12.1, accent/card 9.8, danger/card 9.2, line/card 6.3.
-/// `line` and the 35 % button outline are decorative in the standard looks (every control there is
-/// identified by its text or fill); with Increase Contrast they reach at least 3:1.
+/// Adaptive paper, graphite and deep teal tones shared by the library and the editing workspace.
 enum AppTheme {
     /// sRGB red, green, blue in 0...1.
     typealias Tone = (Double, Double, Double)
 
-    static let page = adaptive(light: (0.965, 0.972, 0.988),
-                               dark: (0.055, 0.067, 0.090), darkHigh: (0.0, 0.0, 0.0))
+    static let page = adaptive(light: (0.967, 0.967, 0.948),
+                               dark: (0.055, 0.083, 0.075), darkHigh: (0.0, 0.0, 0.0))
     static let card = adaptive(light: (1.0, 1.0, 1.0),
-                               dark: (0.106, 0.122, 0.157), darkHigh: (0.075, 0.085, 0.110))
+                               dark: (0.105, 0.145, 0.134), darkHigh: (0.075, 0.085, 0.110))
     static let accent = adaptive(light: accentLight, lightHigh: accentLightHigh,
                                  dark: accentDark, darkHigh: accentDarkHigh)
     /// Tinted fill behind accent icons and pressed outline buttons.
@@ -163,8 +151,8 @@ enum AppTheme {
                                      lightAlpha: 0.10, darkAlpha: 0.16)
     /// The filled main button while a finger is on it: darker in light, lighter in dark, so its
     /// label keeps its contrast (a see-through accent dropped white text to 3.9:1).
-    static let accentPressed = adaptive(light: (0.10, 0.29, 0.76), lightHigh: (0.04, 0.18, 0.55),
-                                        dark: (0.60, 0.74, 1.0), darkHigh: (0.75, 0.84, 1.0))
+    static let accentPressed = adaptive(light: (0.045, 0.25, 0.215), lightHigh: (0.025, 0.18, 0.155),
+                                        dark: (0.64, 0.87, 0.76), darkHigh: (0.80, 0.95, 0.86))
     /// Text and icons placed on a filled accent: white in light, near-black on the lighter dark accent.
     static let onAccent = adaptive(light: (1.0, 1.0, 1.0),
                                    dark: (0.04, 0.07, 0.13), darkHigh: (0.0, 0.0, 0.0))
@@ -185,10 +173,10 @@ enum AppTheme {
     /// even on a phone set to another region, so the screen never mixes two languages.
     static let locale = Locale(identifier: "tr_TR")
 
-    private static let accentLight: Tone = (0.14, 0.38, 0.93)
-    private static let accentLightHigh: Tone = (0.06, 0.25, 0.72)
-    private static let accentDark: Tone = (0.47, 0.64, 1.0)
-    private static let accentDarkHigh: Tone = (0.62, 0.75, 1.0)
+    private static let accentLight: Tone = (0.065, 0.34, 0.285)
+    private static let accentLightHigh: Tone = (0.04, 0.24, 0.19)
+    private static let accentDark: Tone = (0.54, 0.82, 0.69)
+    private static let accentDarkHigh: Tone = (0.70, 0.94, 0.82)
 
     /// A colour that resolves per appearance and per Increase Contrast. `lightHigh` and `darkHigh`
     /// default to the standard variant.
@@ -301,30 +289,5 @@ struct CoachTip: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("coach-tip")
-    }
-}
-
-/// One numbered step of the "how it works" strip on the home screen.
-struct StepBadge: View {
-    let number: Int
-    let title: String
-    let detail: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(number)")
-                .font(.subheadline.bold())
-                .foregroundStyle(AppTheme.onAccent)
-                .frame(width: 28, height: 28)
-                .background(AppTheme.accent, in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline).foregroundStyle(AppTheme.ink)
-                Text(detail).font(.subheadline).foregroundStyle(AppTheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Adım \(number): \(title). \(detail)")
     }
 }

@@ -50,6 +50,7 @@ struct CommandPlan {
     /// What the plan was made against; a changed drawing makes the plan stale.
     var base: DraftProject
     var baseSelection: UUID?
+    var patternPreview: DraftProject? = nil
     /// Lines for the help card.
     var lines: [String] = []
 }
@@ -66,6 +67,8 @@ enum CommandPlanner {
         "90 sağa döndür · sola döndür · 180 derece",
         "genişliği 95 yap · 95 x 60 yap · adı kol olsun",
         "kopyala · sil · ön bedeni seç · geri al · yinele · kaydet",
+        "önlük modeli ekle · etek modeli ekle · bez çanta modeli ekle",
+        "çizimi önizle",
         "Ölçüler milimetredir; santim için 12 cm yazın."
     ]
 
@@ -79,6 +82,11 @@ enum CommandPlanner {
         if let refusal = unsupported(command) { return .refusal(refusal) }
 
         switch command {
+        case .previewDrawing:
+            guard !context.document.pieces.isEmpty else { return .refusal(noPieces()) }
+            var preview = make("Çizim önizlemesi", nil, .info, "", context.document, context)
+            preview.patternPreview = context.document
+            return .plan(preview)
         case .help:
             return .plan(CommandPlan(
                 sentence: "Örnek komutlar", note: nil, effect: .info, isDestructive: false,
@@ -103,6 +111,22 @@ enum CommandPlanner {
             note = "Alanlara yazdığınız ama uygulamadığınız değerler de bu işlemle uygulanır."
         }
         switch command {
+        case .addStudioPattern(let pattern):
+            let model = pattern.makeProject()
+            let offset = base.pieces.map(\.maxX).max().map { $0 + 20 } ?? 0
+            var additions = model.pieces
+            for i in additions.indices {
+                additions[i].points = additions[i].points.map { DraftPoint(x: $0.x + offset, y: $0.y) }
+            }
+            var updated = base
+            updated.pieces.append(contentsOf: additions)
+            guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
+            let names = additions.map(\.name).joined(separator: ", ")
+            let sentence = "\(pattern.rawValue) modelinden \(additions.count) parça eklenecek: \(names)."
+            var planned = make(sentence, note, .edit(updated, .piece(additions.first?.id)),
+                               "\(pattern.rawValue) modeli eklendi.", base, context)
+            planned.patternPreview = model
+            return .plan(planned)
         case .rectangle(let width, let height, let isSquare):
             return planRectangle(width, height, isSquare: isSquare, base: base, context: context, note: note)
         case .line(let length, let orientation):

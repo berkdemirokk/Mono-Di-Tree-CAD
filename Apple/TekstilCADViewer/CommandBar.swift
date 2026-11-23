@@ -184,6 +184,9 @@ struct CommandBar: View {
             Text(plan.sentence)
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
+            if let model = plan.patternPreview {
+                GarmentTracePreview(project: model)
+            }
             if let note = plan.note, !note.isEmpty {
                 Text(note).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -223,11 +226,18 @@ struct CommandBar: View {
 
     private func helpCard(_ plan: CommandPlan) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Şunları yazabilirsiniz").font(.callout.weight(.semibold))
+            if let project = plan.patternPreview {
+                Text(plan.sentence).font(.callout.weight(.semibold))
+                GarmentTracePreview(project: project)
+            } else {
+                Text("Şunları yazabilirsiniz").font(.callout.weight(.semibold))
+            }
             ForEach(plan.lines, id: \.self) { line in
                 Text(line).font(.caption).fixedSize(horizontal: false, vertical: true)
             }
-            Text("Anlaşılmayan yazı hiçbir şeyi değiştirmez.").font(.caption).foregroundStyle(.secondary)
+            if plan.patternPreview == nil {
+                Text("Anlaşılmayan yazı hiçbir şeyi değiştirmez.").font(.caption).foregroundStyle(.secondary)
+            }
             Button("Anladım") { card = nil }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
@@ -408,7 +418,7 @@ struct CommandBar: View {
         let message: String
         switch kind {
         case .preview(_, let plan): message = plan.sentence
-        case .help: message = "Örnek komutlar gösterildi."
+        case .help(let plan): message = plan.sentence
         case .refusal(let refusal, _): message = refusal.message
         }
         UIAccessibility.post(notification: .announcement, argument: message)

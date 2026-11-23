@@ -164,6 +164,10 @@ final class CommandVectorsTests: XCTestCase {
             d["kind"] = "Help"
         case .cancelPreview:
             d["kind"] = "CancelPreview"
+        case .previewDrawing:
+            d["kind"] = "PreviewDrawing"
+        case .addStudioPattern(let pattern):
+            d["kind"] = "StudioPattern"; d["name"] = pattern.rawValue
         case .selectAt, .deleteAt:
             d["kind"] = "PieceChoice"
         }
