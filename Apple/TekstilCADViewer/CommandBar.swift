@@ -269,7 +269,7 @@ struct CommandBar: View {
                         .controlSize(.large)
                 }
             }
-            Button("Vazgeç") { text = state.source; card = nil }
+            Button("Vazgeç") { card = nil }
                 .buttonStyle(.borderless)
                 .controlSize(.large)
                 .accessibilityIdentifier("command-cancel")
