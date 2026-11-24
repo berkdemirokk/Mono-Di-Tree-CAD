@@ -29,6 +29,9 @@ enum HandoffTarget: Equatable {
 
 /// One understood command. Nothing here knows about a drawing.
 enum ParsedCommand: Equatable {
+    case measuredApron(width: Double, length: Double)
+    case previewDrawing
+    case addStudioPattern(StudioPattern)
     case rectangle(width: Double, height: Double, isSquare: Bool)
     case line(length: Double, orientation: LineOrientation)
     case moveBy(right: Double, down: Double)

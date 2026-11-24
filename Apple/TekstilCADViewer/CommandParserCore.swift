@@ -59,6 +59,15 @@ extension CommandParser {
         let norm = TurkishText.normalize16(trimmed)
         if norm.isEmpty { return refuse(Refusals.unrecognized("")) }
         let folded = TurkishText.fold16(norm)
+        let phrase = TurkishText.string(folded)
+        if phrase.hasPrefix("onluk modeli "), phrase != "onluk modeli ekle" {
+            let dimensions = String(phrase.dropFirst("onluk modeli ".count))
+            let parsed = parseCore(TurkishText.units("dikdörtgen " + dimensions), .empty)
+            guard case .rectangle(let width, let length, _) = parsed.command else {
+                return refuse(CommandRefusal(code: "ApronDimensions", message: "Önlüğün enini ve boyunu yazın. Örnek: önlük modeli 65 cm x 85 cm"))
+            }
+            return .understood(.measuredApron(width: width, length: length))
+        }
         let names = context.pieceNames.filter { !isNullOrWhiteSpace($0) }
         let state = ParseState(norm: norm, folded: folded, names: names)
         let lexed = lex(folded)

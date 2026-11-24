@@ -50,6 +50,42 @@ final class CommandPlannerTests: XCTestCase {
 
     // MARK: Drawing
 
+    func testDrawingPreviewShowsCommittedGeometryWithoutApplyingPendingEdits() throws {
+        let document = sample()
+        let command = try XCTUnwrap(CommandParser.parse("çizimi önizle").command)
+        let planned = try XCTUnwrap(plan(command, context(document, base: .some(nil))))
+        XCTAssertEqual(planned.effect, .info)
+        XCTAssertEqual(planned.patternPreview, document)
+        XCTAssertNotNil(refusal(command, context(.blank, selected: nil)))
+    }
+
+    func testMeasuredApronUsesTypedCentimetresForTheEditableBody() throws {
+        let command = try XCTUnwrap(CommandParser.parse("önlük modeli 65 cm x 85 cm").command)
+        XCTAssertEqual(command, .measuredApron(width: 650, length: 850))
+        let planned = try XCTUnwrap(plan(command, context(.blank, selected: nil)))
+        let body = try XCTUnwrap(planned.patternPreview?.pieces.first)
+        XCTAssertEqual(body.maxX - body.minX, 650, accuracy: 0.001)
+        XCTAssertEqual(body.maxY - body.minY, 850, accuracy: 0.001)
+        XCTAssertNotNil(refusal(.measuredApron(width: 20, length: 850), context(.blank, selected: nil)))
+    }
+
+    func testStudioModelsArePreparedWithoutReplacingTheWorkingProject() throws {
+        for pattern in StudioPattern.allCases {
+            let document = sample()
+            let command = try XCTUnwrap(CommandParser.parse("\(pattern.rawValue) modeli ekle").command)
+            XCTAssertEqual(command, .addStudioPattern(pattern))
+            let planned = try XCTUnwrap(plan(command, context(document)))
+            let (updated, selection) = try XCTUnwrap(edited(planned))
+            let added = Array(updated.pieces.dropFirst(document.pieces.count))
+            XCTAssertEqual(updated.id, document.id)
+            XCTAssertEqual(Array(updated.pieces.prefix(document.pieces.count)), document.pieces)
+            XCTAssertEqual(added.map(\.name), pattern.makeProject().pieces.map(\.name))
+            XCTAssertGreaterThan(try XCTUnwrap(added.map(\.minX).min()), document.pieces.map(\.maxX).max()!)
+            XCTAssertEqual(selection, .piece(added.first?.id))
+            XCTAssertEqual(planned.base, document)
+        }
+    }
+
     func testRectangleIsPlacedLikeTheButtonPlacesIt() throws {
         let doc = sample()
         let planned = plan(.rectangle(width: 120, height: 80, isSquare: false), context(doc))

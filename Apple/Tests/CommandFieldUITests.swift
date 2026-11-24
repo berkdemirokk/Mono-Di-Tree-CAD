@@ -75,6 +75,18 @@ final class CommandFieldUITests: XCTestCase {
 
     // MARK: Preview, confirm, undo
 
+    func testSkirtModelCanBePreviewedInsertedAndUndoneFromTheCommandField() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(text(startingWith: "Etek modelinden 3 parça eklenecek", in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(countLabel(3, in: app).exists)
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-undo"], in: app)
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 5))
+    }
+
     func testACommandIsShownBeforeItChangesAnythingAndCanBeUndone() {
         let app = launchClean()
         openWorkshop(app)
@@ -94,6 +106,20 @@ final class CommandFieldUITests: XCTestCase {
         app.buttons["command-undo"].tap()
         XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 5))
         XCTAssertFalse(countLabel(1, in: app).exists)
+    }
+
+    func testTypedConfirmationAppliesOnceAndCanUndoByCommand() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(app.buttons["command-apply"].waitForExistence(timeout: 5))
+        enter("uygula", in: app, submit: true)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["command-apply"].exists)
+        enter("geri al", in: app, submit: true)
+        XCTAssertTrue(app.buttons["command-apply"].waitForExistence(timeout: 5))
+        enter("uygula", in: app, submit: true)
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 5))
     }
 
     func testReturnOnlyPreparesAndNeverApplies() {

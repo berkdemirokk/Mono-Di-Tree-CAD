@@ -69,7 +69,7 @@ struct CommandBar: View {
         if isShown {
             VStack(alignment: .leading, spacing: 8) {
                 fieldRow
-                if dynamicTypeSize.isAccessibilitySize {
+                if showsOutput && dynamicTypeSize.isAccessibilitySize {
                     // At very large text a card is taller than the screen: it scrolls inside the bar
                     // instead of pushing the bar under the navigation bar.
                     ScrollView { outputs }
@@ -117,7 +117,7 @@ struct CommandBar: View {
     }
 
     private var field: some View {
-        TextField("Ne yapmak istiyorsunuz? Örnek: 120 x 80 dikdörtgen", text: $text)
+        TextField(awaitingConfirmation ? "Onaylamak için uygula yazın" : "Ne yapmak istiyorsunuz? Örnek: 120 x 80 dikdörtgen", text: $text)
             .textFieldStyle(.plain)
             .font(.callout)
             .padding(.horizontal, 10)
@@ -130,10 +130,10 @@ struct CommandBar: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled(true)
             #endif
-            // Return only prepares the preview; it never applies anything.
+            // Submitting an action prepares it. A separate typed confirmation applies the shown plan.
             .onSubmit { prepare() }
             .accessibilityLabel("Komut kutusu")
-            .accessibilityHint("Yapmak istediğinizi yazın ya da klavyedeki mikrofonla söyleyin. Önce ne olacağı gösterilir; Uygula'ya dokunmadan hiçbir şey değişmez.")
+            .accessibilityHint("Yapmak istediğinizi yazın ya da klavyedeki mikrofonla söyleyin. Önizlemeyi onaylamak için uygula yazıp gönderin veya Uygula düğmesine dokunun.")
             .accessibilityIdentifier("command-field")
     }
 
@@ -184,6 +184,9 @@ struct CommandBar: View {
             Text(plan.sentence)
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
+            if let model = plan.patternPreview {
+                GarmentTracePreview(project: model)
+            }
             if let note = plan.note, !note.isEmpty {
                 Text(note).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -215,7 +218,7 @@ struct CommandBar: View {
                 .controlSize(.large)
                 .accessibilityIdentifier("command-apply")
         }
-        Button("Vazgeç") { card = nil }
+        Button("Vazgeç") { text = state.source; card = nil }
             .buttonStyle(.bordered)
             .controlSize(.large)
             .accessibilityIdentifier("command-cancel")
@@ -223,11 +226,18 @@ struct CommandBar: View {
 
     private func helpCard(_ plan: CommandPlan) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Şunları yazabilirsiniz").font(.callout.weight(.semibold))
+            if let project = plan.patternPreview {
+                Text(plan.sentence).font(.callout.weight(.semibold))
+                GarmentTracePreview(project: project)
+            } else {
+                Text("Şunları yazabilirsiniz").font(.callout.weight(.semibold))
+            }
             ForEach(plan.lines, id: \.self) { line in
                 Text(line).font(.caption).fixedSize(horizontal: false, vertical: true)
             }
-            Text("Anlaşılmayan yazı hiçbir şeyi değiştirmez.").font(.caption).foregroundStyle(.secondary)
+            if plan.patternPreview == nil {
+                Text("Anlaşılmayan yazı hiçbir şeyi değiştirmez.").font(.caption).foregroundStyle(.secondary)
+            }
             Button("Anladım") { card = nil }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
@@ -296,9 +306,16 @@ struct CommandBar: View {
 
     // MARK: Behaviour
 
+    private var awaitingConfirmation: Bool {
+        guard let card, case .preview = card.kind else { return false }
+        return true
+    }
+
     private func textChanged() {
         // Editing the sentence makes whatever was shown for the old one meaningless.
-        if let card, card.source != text { self.card = nil }
+        let typed = TurkishText.fold(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        let enteringConfirmation = awaitingConfirmation && "uygula".hasPrefix(typed)
+        if let card, card.source != text, !enteringConfirmation { self.card = nil }
         if !text.isEmpty { result = nil }
     }
 
@@ -313,13 +330,18 @@ struct CommandBar: View {
         prepare()
     }
 
-    /// Return and "Hazırla": show what would happen. Never applies.
+    /// Prepare a new command or confirm the pending preview with an explicit follow-up.
     private func prepare() {
         let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !typed.isEmpty else { return }
         holdOpen = keyboardVisible
         focused = false
         result = nil
+        if TurkishText.fold(typed) == "uygula", let card,
+           case .preview(let command, let plan) = card.kind {
+            confirm(command: command, plan: plan, state: card)
+            return
+        }
         remember(typed)
         // Names as the planner will see them (typed field values applied), so "kol seç" matches.
         let names = (context.base ?? context.document).pieces.map { $0.name }
@@ -362,6 +384,7 @@ struct CommandBar: View {
                     plan.note = [plan.note, "Birim yazmadınız; milimetre sayıldı."].compactMap { $0 }.joined(separator: " ")
                 }
                 show(.preview(command, plan), source: source, banner: banner, unitAssumed: unitAssumed)
+                text = ""
             }
         case .refusal(let refusal):
             show(.refusal(refusal, isQuestion: false), source: source)
@@ -408,7 +431,7 @@ struct CommandBar: View {
         let message: String
         switch kind {
         case .preview(_, let plan): message = plan.sentence
-        case .help: message = "Örnek komutlar gösterildi."
+        case .help(let plan): message = plan.sentence
         case .refusal(let refusal, _): message = refusal.message
         }
         UIAccessibility.post(notification: .announcement, argument: message)
