@@ -161,6 +161,11 @@ internal sealed partial class PlannerContext
                 planClass = PlanClass.Dangerous;
                 text = "Dışa aktarma penceresi açılacak. Dosya yalnız inceleme içindir; üretim onayı değildir ve makineye gönderilmez.";
                 break;
+            case HandoffTarget.ExportProjectA4:
+                if (Doc.Pieces.Count == 0) return Refuse(Refusals.NoPiecesYet());
+                planClass = PlanClass.Dangerous;
+                text = "Tüm proje gerçek boyutlu A4 PDF sayfalarına yazılacak. Dosyayı açıp %100 ölçekte yazdırabilirsiniz.";
+                break;
             case HandoffTarget.ExportSelectedDxf:
                 needsPiece = true;
                 planClass = PlanClass.Dangerous;

@@ -17,6 +17,7 @@ public partial class MainWindow
     {
         HandoffTarget.ImportDxf => new(ImportDxf, "DXF alma isteği gönderildi."),
         HandoffTarget.Export => new(Export, "Dışa aktarma isteği gönderildi."),
+        HandoffTarget.ExportProjectA4 => new(ExportProjectA4, "Projenin A4 PDF çıktısı istendi."),
         HandoffTarget.ExportSelectedDxf => new(ExportSelectedDxf, "Seçili parçayı DXF yazma isteği gönderildi."),
         HandoffTarget.ExportSelectedA4 => new(ExportSelectedA4, "A4 çıktı isteği gönderildi."),
         HandoffTarget.Duplicate => new(DuplicateSelectedPiece, "Çoğaltma isteği gönderildi."),
