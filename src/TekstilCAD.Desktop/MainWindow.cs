@@ -3813,12 +3813,20 @@ public partial class MainWindow : Window
             text=>MessageBox.Show(this,text,"A4 inceleme çıktısı",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
     }
 
-    private void Export() => ExportProject(paperOnly: false);
-    private void ExportProjectA4() => ExportProject(paperOnly: true);
-    private void ExportProject(bool paperOnly)
+    private void Export()
     {
         EnsureNoExport();
         EnsurePropertyDraftsApplied();
+        ExportProject(paperOnly: false);
+    }
+    private void ExportProjectA4()
+    {
+        EnsureNoExport();
+        EnsurePropertyDraftsApplied();
+        ExportProject(paperOnly: true);
+    }
+    private void ExportProject(bool paperOnly)
+    {
         var snapshot=Document.Clone();
         var warning=OutputLossNotice();
         if(warning is not null && MessageBox.Show(this,warning+"\n\nDevam edilsin mi?", "Dışa aktarım bilgisi", MessageBoxButton.YesNo, MessageBoxImage.Information)!=MessageBoxResult.Yes)return;

@@ -8580,7 +8580,7 @@ internal static class DesktopVerification
         try { Invoke(studio,"EnsurePropertyDraftsApplied"); }
         catch(InvalidOperationException ex) { stopped=ex.Message.Contains("taslağı"); }
         Check(stopped,$"{state} property drafts stop the output guard",checks);
-        foreach(var method in new[] { "Export","OpenMachineCenter","OpenTextileTools" })
+        foreach(var method in new[] { "Export","ExportProjectA4","OpenMachineCenter","OpenTextileTools" })
         {
             // Enter the method only after verifying its guard is preceded solely
             // by explicitly safe, non-dialog guard calls.
