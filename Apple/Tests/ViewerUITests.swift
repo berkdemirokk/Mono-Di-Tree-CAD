@@ -121,7 +121,8 @@ final class ViewerUITests: XCTestCase {
             return XCTFail("Parça adı alanda görünmeli.")
         }
         tapBelow(app.buttons["Kopyala"], in: app)
-        XCTAssertEqual(name.value as? String, source + " kopya")
+        // The editor trims outer whitespace when it commits a name before copying.
+        XCTAssertEqual(name.value as? String, source.trimmingCharacters(in: .whitespacesAndNewlines) + " kopya")
         XCTAssertTrue(countLabel(3, in: app).exists)
     }
 
