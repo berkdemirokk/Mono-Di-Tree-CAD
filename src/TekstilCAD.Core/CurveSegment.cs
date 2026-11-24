@@ -26,6 +26,8 @@ public abstract record CurveSegment
         public override Point2 PointAt(double t)
         {
             t = Clamp(t);
+            if (t == 0) return Start;
+            if (t == 1) return End;
             return Start + (End - Start) * t;
         }
     }

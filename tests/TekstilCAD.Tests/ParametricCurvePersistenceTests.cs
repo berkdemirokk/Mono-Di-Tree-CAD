@@ -56,6 +56,27 @@ public sealed class ParametricCurvePersistenceTests
     }
 
     [Fact]
+    public void LineEndingAtDecimalBezierStartSurvivesSaveAndReopen()
+    {
+        var join = new Point2(0.1, 0.1);
+        var line = new CurveSegment.Line(new(1, 1), join);
+        var curve = new CurveSegment.CubicBezier(join, new(1, 2), new(3, 2), new(4, 0));
+        var document = Sample(line);
+        var piece = document.Pieces[0];
+        piece.Curves = [line, curve];
+        ParametricContour.Regenerate(piece);
+        var path = FilePath();
+        try
+        {
+            ProjectStorage.Save(document, path);
+            var restored = ProjectStorage.Load(path);
+            Assert.True(DocumentSession.ContentEquals(document, restored));
+            Assert.Equal(join, restored.Pieces[0].Curves![0].PointAt(1));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void ControlEditsAreUndoableAndInvalidateTheSavedCheckpoint()
     {
         var session = new DocumentSession(Sample(Bezier()));
