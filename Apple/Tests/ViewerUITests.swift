@@ -470,3 +470,59 @@ extension ViewerUITests {
         XCTAssertTrue(app.sliders["Çizim ilerlemesi"].exists)
     }
 }
+
+extension ViewerUITests {
+    func testMeasuredApronOpensAndKeepsItsGeometryAfterLibraryReload() {
+        let app = launchClean()
+        func revealOnHome(_ element: XCUIElement) {
+            for _ in 0..<6 where !element.isHittable { app.swipeUp() }
+            for _ in 0..<6 where !element.isHittable { app.swipeDown() }
+            XCTAssertTrue(element.isHittable)
+        }
+        func setCentimetres(_ identifier: String, _ value: String) {
+            let field = app.textFields[identifier]
+            revealOnHome(field)
+            field.tap()
+            guard let current = field.value as? String else { return XCTFail("Missing measurement value") }
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + value)
+            let done = app.buttons["studio-apron-finish-input"]
+            XCTAssertTrue(done.waitForExistence(timeout: 5))
+            done.tap()
+        }
+        func assertApronGeometry() {
+            XCTAssertTrue(countLabel(2, in: app).waitForExistence(timeout: 10))
+            let drawing = app.descendants(matching: .any)["Dokunarak parça seçebileceğin kalıp çizimi"]
+            let dimensions = drawing.value as? String ?? ""
+            XCTAssertTrue(dimensions.contains("Seçili: Gövde."), dimensions)
+            XCTAssertTrue(dimensions.contains("En 675 milimetre, boy 925 milimetre."), dimensions)
+        }
+
+        let measurements = app.buttons["studio-apron-measurements"]
+        revealOnHome(measurements)
+        measurements.tap()
+        setCentimetres("studio-apron-width-cm", "67,5")
+        setCentimetres("studio-apron-length-cm", "92,5")
+
+        let preview = app.buttons["studio-pattern-preview"]
+        revealOnHome(preview)
+        preview.tap()
+        XCTAssertTrue(app.buttons["Çizimi oynat"].waitForExistence(timeout: 5))
+        app.buttons["Kapat"].tap()
+        let open = app.buttons["studio-pattern-open"]
+        revealOnHome(open)
+        open.tap()
+        assertApronGeometry()
+
+        tapBelow(app.buttons["Projeyi kaydet"], in: app)
+        app.buttons["Kapat"].tap()
+        let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+                                                      "recent-", "Önlük")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-test-reset-draft" }
+        app.launch()
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        saved.tap()
+        assertApronGeometry()
+    }
+}
