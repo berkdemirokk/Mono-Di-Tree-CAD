@@ -12428,6 +12428,8 @@ internal static class DesktopVerification
             {
                 try { return File.Exists(store.DraftRecoveryPath) && DocumentSession.ContentEquals(recoveredDocument,RecoveryEnvelope.Deserialize(File.ReadAllBytes(store.DraftRecoveryPath)).Document); }
                 catch(IOException) { return false; }
+                // Windows may deny opening the old snapshot while its replacement is pending.
+                catch(UnauthorizedAccessException) { return false; }
                 catch(InvalidDataException) { return false; }
             }
             PumpUntil(NewSnapshotPresent);
