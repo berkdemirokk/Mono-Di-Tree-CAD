@@ -68,6 +68,7 @@ enum CommandPlanner {
         "genişliği 95 yap · 95 x 60 yap · adı kol olsun",
         "kopyala · sil · ön bedeni seç · geri al · yinele · kaydet",
         "önlük modeli ekle · etek modeli ekle · bez çanta modeli ekle",
+        "Ölçülü önlük: önlük modeli 65 cm x 85 cm",
         "çizimi önizle",
         "Ölçüler milimetredir; santim için 12 cm yazın."
     ]
@@ -113,20 +114,12 @@ enum CommandPlanner {
         switch command {
         case .addStudioPattern(let pattern):
             let model = pattern.makeProject()
-            let offset = base.pieces.map(\.maxX).max().map { $0 + 20 } ?? 0
-            var additions = model.pieces
-            for i in additions.indices {
-                additions[i].points = additions[i].points.map { DraftPoint(x: $0.x + offset, y: $0.y) }
+            return planStudioModel(model, base: base, context: context, note: note)
+        case .measuredApron(let width, let length):
+            guard let model = StudioPattern.makeApron(width: width, length: length) else {
+                return .refusal(CommandRefusal(code: "ApronDimensions", message: "Önlük eni 30–120 cm, boyu 35–150 cm olmalı."))
             }
-            var updated = base
-            updated.pieces.append(contentsOf: additions)
-            guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
-            let names = additions.map(\.name).joined(separator: ", ")
-            let sentence = "\(pattern.rawValue) modelinden \(additions.count) parça eklenecek: \(names)."
-            var planned = make(sentence, note, .edit(updated, .piece(additions.first?.id)),
-                               "\(pattern.rawValue) modeli eklendi.", base, context)
-            planned.patternPreview = model
-            return .plan(planned)
+            return planStudioModel(model, base: base, context: context, note: note)
         case .rectangle(let width, let height, let isSquare):
             return planRectangle(width, height, isSquare: isSquare, base: base, context: context, note: note)
         case .line(let length, let orientation):
@@ -256,6 +249,23 @@ enum CommandPlanner {
     }
 
     // MARK: Helpers
+
+    private static func planStudioModel(_ model: DraftProject, base: DraftProject, context: CommandContext, note: String?) -> PlanResult {
+        let offset = base.pieces.map(\.maxX).max().map { $0 + 20 } ?? 0
+        var additions = model.pieces
+        for i in additions.indices {
+            additions[i].points = additions[i].points.map { DraftPoint(x: $0.x + offset, y: $0.y) }
+        }
+        var updated = base
+        updated.pieces.append(contentsOf: additions)
+        guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
+        let names = additions.map(\.name).joined(separator: ", ")
+        let sentence = "\(model.name) modelinden \(additions.count) parça eklenecek: \(names)."
+        var planned = make(sentence, note, .edit(updated, .piece(additions.first?.id)),
+                           "\(model.name) modeli eklendi.", base, context)
+        planned.patternPreview = model
+        return .plan(planned)
+    }
 
     private static func make(_ sentence: String, _ note: String?, _ effect: CommandPlan.Effect, _ notice: String,
                              _ base: DraftProject, _ context: CommandContext, destructive: Bool = false) -> CommandPlan {

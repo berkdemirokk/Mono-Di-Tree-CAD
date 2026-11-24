@@ -164,6 +164,8 @@ final class CommandVectorsTests: XCTestCase {
             d["kind"] = "Help"
         case .cancelPreview:
             d["kind"] = "CancelPreview"
+        case .measuredApron(let width, let length):
+            d["kind"] = "MeasuredApron"; d["width"] = width; d["length"] = length
         case .previewDrawing:
             d["kind"] = "PreviewDrawing"
         case .addStudioPattern(let pattern):

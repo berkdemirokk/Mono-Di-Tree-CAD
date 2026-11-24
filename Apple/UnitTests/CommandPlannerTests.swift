@@ -59,6 +59,16 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertNotNil(refusal(command, context(.blank, selected: nil)))
     }
 
+    func testMeasuredApronUsesTypedCentimetresForTheEditableBody() throws {
+        let command = try XCTUnwrap(CommandParser.parse("önlük modeli 65 cm x 85 cm").command)
+        XCTAssertEqual(command, .measuredApron(width: 650, length: 850))
+        let planned = try XCTUnwrap(plan(command, context(.blank, selected: nil)))
+        let body = try XCTUnwrap(planned.patternPreview?.pieces.first)
+        XCTAssertEqual(body.maxX - body.minX, 650, accuracy: 0.001)
+        XCTAssertEqual(body.maxY - body.minY, 850, accuracy: 0.001)
+        XCTAssertNotNil(refusal(.measuredApron(width: 20, length: 850), context(.blank, selected: nil)))
+    }
+
     func testStudioModelsArePreparedWithoutReplacingTheWorkingProject() throws {
         for pattern in StudioPattern.allCases {
             let document = sample()
