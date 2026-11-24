@@ -69,7 +69,7 @@ struct CommandBar: View {
         if isShown {
             VStack(alignment: .leading, spacing: 8) {
                 fieldRow
-                if dynamicTypeSize.isAccessibilitySize {
+                if showsOutput && dynamicTypeSize.isAccessibilitySize {
                     // At very large text a card is taller than the screen: it scrolls inside the bar
                     // instead of pushing the bar under the navigation bar.
                     ScrollView { outputs }
