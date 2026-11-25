@@ -2259,6 +2259,11 @@ public partial class MainWindow : Window
         var staleNotice=StaleRulesNotice(Document,changes);
         var candidate=Document.Clone();
         ApplyDraftChanges(candidate,changes);
+        if (filePath is null && recoveredSource is null && candidate.Name == ProjectDocument.DefaultName)
+        {
+            var stem = Path.GetFileNameWithoutExtension(path).Trim();
+            if (stem.Length > 0) candidate.Name = stem;
+        }
         Validate(candidate);
         var expected=approvedVersion ?? (fileVersion is not null && filePath is not null && string.Equals(Path.GetFullPath(path),Path.GetFullPath(filePath),StringComparison.OrdinalIgnoreCase)
             ? fileVersion : ProjectStorage.CaptureVersion(path));
@@ -2267,7 +2272,12 @@ public partial class MainWindow : Window
         filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });
         try
         {
-            if(changes.Count>0)session.Execute(document=>ApplyDraftChanges(document,changes),ProjectStorage.Validate);
+            if(changes.Count>0 || candidate.Name != Document.Name)
+                session.Execute(document =>
+                {
+                    ApplyDraftChanges(document,changes);
+                    document.Name = candidate.Name;
+                },ProjectStorage.Validate);
         }
         catch(Exception ex)
         {

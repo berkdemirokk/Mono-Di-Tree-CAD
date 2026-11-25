@@ -512,7 +512,8 @@ public sealed class Layer
 
 public sealed class ProjectDocument
 {
-    public string Name { get; set; } = "Yeni proje";
+    public const string DefaultName = "Yeni proje";
+    public string Name { get; set; } = DefaultName;
     public List<PatternPiece> Pieces { get; set; } = [];
 
     /// <summary>
