@@ -247,7 +247,7 @@ public sealed class PlannerHostileTests
         Assert.NotNull(plan.Stamp);
         if (view is not null) Assert.True(plan.Stamp.IsCurrent(view, selection), $"{context}: a fresh stamp is not current");
 
-        var core = plan.Kind is PlanKind.AddRectangle or PlanKind.AddLine or PlanKind.ResizePiece or PlanKind.RenamePiece or PlanKind.RenameProject or PlanKind.DeletePiece or PlanKind.DuplicatePiece;
+        var core = plan.Kind is PlanKind.AddTrapezoid or PlanKind.AddRectangle or PlanKind.AddLine or PlanKind.ResizePiece or PlanKind.RenamePiece or PlanKind.RenameProject or PlanKind.DeletePiece or PlanKind.DuplicatePiece;
         Assert.True(core == plan.AppliesInCore, $"{context}: {plan.Kind} AppliesInCore={plan.AppliesInCore}");
         var operation = plan.Kind is PlanKind.MovePiece or PlanKind.MovePieceTo or PlanKind.RotatePiece or PlanKind.MirrorPiece;
         Assert.True(operation == (plan.Operation is not null), $"{context}: {plan.Kind} has Operation={plan.Operation}");
