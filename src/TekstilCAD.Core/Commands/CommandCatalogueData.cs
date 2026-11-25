@@ -95,6 +95,9 @@ internal static class CommandCatalogueData
             "Sürmekte olan çizimi uçlarını birleştirmeden bitirir; en az iki nokta gerekir.",
             "Açık çizgiyi bitir", ["çizimi açık bırak", "açık bitir"],
             ["açık bırak", "çizimi bitir"]));
+        all.Add(F("draw.trapezoid", GDraw, "Ölçü yazarak yamuk çiz",
+            "Alt ve üst kenar ortalanarak kapalı bir parça çizilir.",
+            ["yamuk alt 60 cm üst 40 cm yükseklik 50 cm"], "yamuk", "alt üst kenar"));
         all.Add(F("draw.rectangle", GDraw, "Ölçü yazarak dikdörtgen çiz",
             "Genişliği ve yüksekliği yazarsınız, program sizin için dikdörtgen bir parça çizer.",
             ["120 x 80 dikdörtgen", "kare 100", "12 x 8 cm dikdörtgen"],

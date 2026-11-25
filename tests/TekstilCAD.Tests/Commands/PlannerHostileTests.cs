@@ -31,6 +31,9 @@ public sealed class PlannerHostileTests
         foreach (var (w, h) in new (double, double)[]
                  { (120, 80), (1, 1), (0.001, 0.001), (20000, 20000), (20000.5, 10), (0, 80), (-5, 80), (double.NaN, 80), (80, double.PositiveInfinity), (1e8, 1e8), (double.MaxValue, 1), (double.Epsilon, 5) })
             list.Add(new RectangleCommand(w, h));
+        list.Add(new TrapezoidCommand(600, 400, 500));
+        list.Add(new TrapezoidCommand(double.NaN, 400, 500));
+        list.Add(new TrapezoidCommand(400, 600, 0));
         list.Add(new RectangleCommand(100, 100, true));
         list.Add(new RectangleCommand(100, double.NaN, true));
         list.Add(new RectangleCommand(0, 100, true));
@@ -244,7 +247,7 @@ public sealed class PlannerHostileTests
         Assert.NotNull(plan.Stamp);
         if (view is not null) Assert.True(plan.Stamp.IsCurrent(view, selection), $"{context}: a fresh stamp is not current");
 
-        var core = plan.Kind is PlanKind.AddRectangle or PlanKind.AddLine or PlanKind.ResizePiece or PlanKind.RenamePiece or PlanKind.RenameProject or PlanKind.DeletePiece or PlanKind.DuplicatePiece;
+        var core = plan.Kind is PlanKind.AddTrapezoid or PlanKind.AddRectangle or PlanKind.AddLine or PlanKind.ResizePiece or PlanKind.RenamePiece or PlanKind.RenameProject or PlanKind.DeletePiece or PlanKind.DuplicatePiece;
         Assert.True(core == plan.AppliesInCore, $"{context}: {plan.Kind} AppliesInCore={plan.AppliesInCore}");
         var operation = plan.Kind is PlanKind.MovePiece or PlanKind.MovePieceTo or PlanKind.RotatePiece or PlanKind.MirrorPiece;
         Assert.True(operation == (plan.Operation is not null), $"{context}: {plan.Kind} has Operation={plan.Operation}");

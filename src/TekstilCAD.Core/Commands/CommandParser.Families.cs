@@ -162,6 +162,22 @@ public static partial class CommandParser
     // Drawing: rectangle, square, line
     // ================================================================================================================
 
+    private static ParseResult ParseTrapezoid(State s)
+    {
+        const string example = "yamuk alt 60 cm üst 40 cm yükseklik 50 cm";
+        if (CheckNumbers(s) is { } error) return error;
+        var items = s.Items;
+        if (items.Count != 7 || !items[1].IsWord("alt") || !items[3].IsWord("ust") || !items[5].IsWord("yukseklik"))
+            return ParseResult.Refused(Refusals.NumberMissingFor(example));
+        var dimensions = new[] { items[2], items[4], items[6] };
+        if (dimensions.Any(t => !t.IsNumber || t.Unit is null))
+            return ParseResult.Refused(Refusals.NumberMissingFor(example));
+        var measures = dimensions.Select(t => new Meas { Value = t.Value, Unit = t.Unit, Start = t.Start }).ToList();
+        var (mm, refusal) = ResolveMeasures(s, measures, new MeasureRules());
+        if (refusal is not null) return refusal;
+        return ParseResult.Understood(new TrapezoidCommand(mm![0], mm[1], mm[2]));
+    }
+
     private static ParseResult ParseDraw(State s)
     {
         var refusal = Preflight(s, DrawAllowed, actsOnSelection: false);

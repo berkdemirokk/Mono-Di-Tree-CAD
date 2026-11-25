@@ -7,6 +7,38 @@ internal sealed partial class PlannerContext
     /// <summary>Corner of the first piece of a project, in millimetres (C01 sentence: "soldan 20 mm, yukarıdan 20 mm").</summary>
     internal const double FirstPieceOriginMm = 20;
 
+    private PlanResult PlanTrapezoid(TrapezoidCommand c)
+    {
+        if (ProjectGuards() is { } guard) return Refuse(guard);
+        if (new[] { c.BottomMm, c.TopMm, c.HeightMm }.Any(side =>
+                !double.IsFinite(side) || side < CommandParser.MinLengthMm || side > CommandParser.MaxLengthMm))
+            return Refuse(Refusals.OutOfRangeMeasure());
+
+        // Place and validate the bounding rectangle with the same layer, capacity and gap rules as other pieces.
+        var width = Math.Max(c.BottomMm, c.TopMm);
+        var result = PieceOperations.AddRectangle(Doc, width, c.HeightMm, FirstOrigin(), view.NewPieceLayerId);
+        if (!result.Succeeded) return Refuse(MapFailure(result));
+        var edited = result.Document!;
+        var piece = edited.Pieces.First(p => p.Id == result.PieceId);
+        var bounds = BoundsOf(piece);
+        var topInset = (width - c.TopMm) / 2;
+        var bottomInset = (width - c.BottomMm) / 2;
+        piece.Points = [new(bounds.MinX + topInset, bounds.MinY), new(bounds.MaxX - topInset, bounds.MinY),
+                        new(bounds.MaxX - bottomInset, bounds.MaxY), new(bounds.MinX + bottomInset, bounds.MaxY)];
+        if (Math.Abs(piece.Points[1].X - piece.Points[0].X - c.TopMm) > c.TopMm * 1e-9 ||
+            Math.Abs(piece.Points[2].X - piece.Points[3].X - c.BottomMm) > c.BottomMm * 1e-9)
+            return Refuse(Custom(Refusals.OutOfRange, "Bu konumda yamuk kenar ölçüleri korunamıyor."));
+        Geometry.ValidateContour(piece.Points);
+        var stamp = PieceStamp.Capture(view, selection, null, StampScope.Document);
+        var id = Reid(edited, piece.Id, $"{stamp.ContentDigest}|trapezoid|{Inv(c.BottomMm)}|{Inv(c.TopMm)}|{Inv(c.HeightMm)}");
+        var dimensions = $"alt {Mm(c.BottomMm)}, üst {Mm(c.TopMm)}, yükseklik {Mm(c.HeightMm)}";
+        return Of(new Plan(PlanKind.AddTrapezoid, PlanClass.Geometry, c, $"Yamuk çizilecek: {dimensions}.", stamp, Doc.Clone(), edited)
+        {
+            Ghost = Scene(GhostStyle.Preview, [new GhostPolygon(piece.Points.ToArray(), true)], SizeLabels(bounds)),
+            CreatedPieceId = id, AddsPiece = true, ActionName = "Çizim", ResultText = $"Yamuk çizildi: {dimensions}."
+        });
+    }
+
     private PlanResult PlanRectangle(RectangleCommand c)
     {
         if (ProjectGuards() is { } guard) return Refuse(guard);
