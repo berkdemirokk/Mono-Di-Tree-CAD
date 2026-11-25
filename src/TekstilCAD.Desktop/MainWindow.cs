@@ -2267,6 +2267,9 @@ public partial class MainWindow : Window
         Validate(candidate);
         var expected=approvedVersion ?? (fileVersion is not null && filePath is not null && string.Equals(Path.GetFullPath(path),Path.GetFullPath(filePath),StringComparison.OrdinalIgnoreCase)
             ? fileVersion : ProjectStorage.CaptureVersion(path));
+        // A prepared import may continue after Save As when only the automatic title changed.
+        var reviewedBeforeRename = changes.Count == 0 && candidate.Name != Document.Name &&
+            dxfPreparationStamp is { } review && DxfStampMatches(review) ? review : null;
         var savedVersion=ProjectStorage.SaveIfUnchanged(candidate,path,expected);
         // Track the new version even if updating the live session unexpectedly fails.
         filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });
@@ -2288,6 +2291,12 @@ public partial class MainWindow : Window
         }
         foreach(var change in changes)propertyDrafts.Remove(change.Id);
         filePath = path; fileVersion=savedVersion; savedFileHasGradingRules=Document.GradingRules.Count>0; savedFileHasMetadata=Document.Pieces.Any(p=>p.Metadata is not null); savedFileHasNestingSnapshot=Document.NestingSnapshot is not null; savedFileHasGrainline=Document.Pieces.Any(p=>p.Grainline is not null); savedFileHasImportProvenance=Document.ImportProvenance is not null; session.MarkSaved(); dirty = false;
+        if (reviewedBeforeRename is not null)
+            dxfPreparationStamp = reviewedBeforeRename with
+            {
+                Original = Document, Snapshot = candidate,
+                UndoCount = session.UndoCount, RedoCount = session.RedoCount
+            };
         if(recoveredSource is not null) recoveredDocumentSaved=true;
         // A saved project does not include the unfinished drawing. Keep all recovery
         // snapshots until it is committed or explicitly discarded.
