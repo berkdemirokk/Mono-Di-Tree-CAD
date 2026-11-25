@@ -1,0 +1,28 @@
+name: Check TestFlight build
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: App version
+        required: true
+        type: string
+      build_number:
+        description: Build number
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check build and assigned groups
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_BASE64: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+          MARKETING_VERSION: ${{ inputs.marketing_version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: node .github/scripts/testflight-status.mjs
