@@ -2259,15 +2259,28 @@ public partial class MainWindow : Window
         var staleNotice=StaleRulesNotice(Document,changes);
         var candidate=Document.Clone();
         ApplyDraftChanges(candidate,changes);
+        if (filePath is null && recoveredSource is null && candidate.Name == ProjectDocument.DefaultName)
+        {
+            var stem = Path.GetFileNameWithoutExtension(path).Trim();
+            if (stem.Length > 0) candidate.Name = stem;
+        }
         Validate(candidate);
         var expected=approvedVersion ?? (fileVersion is not null && filePath is not null && string.Equals(Path.GetFullPath(path),Path.GetFullPath(filePath),StringComparison.OrdinalIgnoreCase)
             ? fileVersion : ProjectStorage.CaptureVersion(path));
+        // A prepared import may continue after Save As when only the automatic title changed.
+        var reviewedBeforeRename = changes.Count == 0 && candidate.Name != Document.Name &&
+            dxfPreparationStamp is { } review && DxfStampMatches(review) ? review : null;
         var savedVersion=ProjectStorage.SaveIfUnchanged(candidate,path,expected);
         // Track the new version even if updating the live session unexpectedly fails.
         filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });
         try
         {
-            if(changes.Count>0)session.Execute(document=>ApplyDraftChanges(document,changes),ProjectStorage.Validate);
+            if(changes.Count>0 || candidate.Name != Document.Name)
+                session.Execute(document =>
+                {
+                    ApplyDraftChanges(document,changes);
+                    document.Name = candidate.Name;
+                },ProjectStorage.Validate);
         }
         catch(Exception ex)
         {
@@ -2278,6 +2291,12 @@ public partial class MainWindow : Window
         }
         foreach(var change in changes)propertyDrafts.Remove(change.Id);
         filePath = path; fileVersion=savedVersion; savedFileHasGradingRules=Document.GradingRules.Count>0; savedFileHasMetadata=Document.Pieces.Any(p=>p.Metadata is not null); savedFileHasNestingSnapshot=Document.NestingSnapshot is not null; savedFileHasGrainline=Document.Pieces.Any(p=>p.Grainline is not null); savedFileHasImportProvenance=Document.ImportProvenance is not null; session.MarkSaved(); dirty = false;
+        if (reviewedBeforeRename is not null)
+            dxfPreparationStamp = reviewedBeforeRename with
+            {
+                Original = Document, Snapshot = candidate,
+                UndoCount = session.UndoCount, RedoCount = session.RedoCount
+            };
         if(recoveredSource is not null) recoveredDocumentSaved=true;
         // A saved project does not include the unfinished drawing. Keep all recovery
         // snapshots until it is committed or explicitly discarded.

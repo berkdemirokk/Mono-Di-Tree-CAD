@@ -1157,6 +1157,7 @@ internal static class DesktopVerification
             VerifyDxfDecodedNames(studio,reportPath,checks);
             VerifyDxfPiecePreview(studio,work,reportPath,checks);
             VerifySelectedDraftConflict(studio,checks);
+            VerifyFirstSaveProjectName(studio,work,checks);
             VerifySaveAsVersionProtection(studio,work,checks);
             VerifyProjectSaveConflictPresentation(studio,work,checks);
             VerifyDiscardPromptLongName(studio,reportPath,checks);
@@ -7314,6 +7315,35 @@ internal static class DesktopVerification
         }
         finally { MainWindow.ProjectSaveConflictForVerification=null; prompt?.Close(); }
     }
+    private static void VerifyFirstSaveProjectName(MainWindow studio,string work,List<string> checks)
+    {
+        var path = Path.Combine(work,"Yaz Koleksiyonu.tcad");
+        studio.LoadDocument(new ProjectDocument());
+        var version = studio.CaptureSaveAsDestination(path);
+        File.WriteAllText(path,"external");
+        try { studio.SaveAsTo(path,version); throw new InvalidOperationException("Save conflict expected"); }
+        catch(IOException) { }
+        Check(studio.Document.Name == "Yeni proje" && File.ReadAllText(path) == "external",
+            "Failed first save preserves the default name and external file",checks);
+
+        studio.SaveAsTo(path,studio.CaptureSaveAsDestination(path));
+        Check(studio.Document.Name == "Yaz Koleksiyonu" && ProjectStorage.Load(path).Name == studio.Document.Name,
+            "First save names the default project from the file stem in memory and on disk",checks);
+        Invoke(studio,"Undo");
+        Check(studio.Document.Name == "Yeni proje","Undo restores the pre-save project name",checks);
+        Invoke(studio,"Redo");
+        Check(studio.Document.Name == "Yaz Koleksiyonu","Redo restores the saved project name",checks);
+        studio.OpenProjectFile(path);
+        var copy = Path.Combine(work,"renamed-file.tcad");
+        studio.SaveAsTo(copy,studio.CaptureSaveAsDestination(copy));
+        Check(ProjectStorage.Load(copy).Name == "Yaz Koleksiyonu","Save As preserves an existing project name",checks);
+
+        studio.LoadDocument(new ProjectDocument { Name = "Özel ad" });
+        studio.SaveAsTo(copy,studio.CaptureSaveAsDestination(copy));
+        Check(studio.Document.Name == "Özel ad" && ProjectStorage.Load(copy).Name == "Özel ad",
+            "A name assigned before the first save takes priority over the file name",checks);
+    }
+
     private static void VerifySaveAsVersionProtection(MainWindow studio,string work,List<string> checks)
     {
         var piece=new PatternPiece { Name="Özgün",Points=[new(0,0),new(10,0),new(10,10)] };
