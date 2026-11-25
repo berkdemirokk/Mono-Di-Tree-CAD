@@ -3,7 +3,7 @@ namespace TekstilCAD.Core.Commands;
 /// <summary>What a plan will do. One kind per family of commands.</summary>
 public enum PlanKind
 {
-    AddRectangle, AddLine,
+    AddRectangle, AddLine, AddTrapezoid,
     MovePiece, MovePieceTo, RotatePiece, MirrorPiece,
     ResizePiece, RenamePiece, DeletePiece, DuplicatePiece,
     SelectPiece,

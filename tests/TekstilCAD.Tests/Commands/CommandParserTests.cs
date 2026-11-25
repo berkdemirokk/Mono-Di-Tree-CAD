@@ -5,6 +5,18 @@ namespace TekstilCAD.Tests;
 
 public sealed class CommandParserTests
 {
+    [Theory]
+    [InlineData("yamuk alt 65,5 cm üst 400 mm yükseklik 50 cm", true)]
+    [InlineData("yamuk alt 60 cm üst 40 cm", false)]
+    [InlineData("yamuk alt 60 cm üst -10 mm yükseklik 50 cm", false)]
+    [InlineData("yamuk alt 60 üst 40 yükseklik 50", false)]
+    public void TrapezoidRequiresThreePositiveDimensionsWithUnits(string text, bool valid)
+    {
+        var parsed = CommandParser.Parse(text);
+        if (valid) Assert.Equal(new TrapezoidCommand(655, 400, 500), parsed.Command);
+        else Assert.Null(parsed.Command);
+    }
+
     private static readonly string[] B1 = { "Ön beden", "Arka beden", "Kol" };
     private static readonly string[] B8 = { "Ön beden", "Ön beden 2" };
 

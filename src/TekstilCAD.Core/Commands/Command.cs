@@ -8,6 +8,7 @@ namespace TekstilCAD.Core.Commands;
 public abstract record Command;
 
 /// <summary>"120 x 80 dikdörtgen" (C01) and "kare 100" (C02, <see cref="IsSquare"/>).</summary>
+public sealed record TrapezoidCommand(double BottomMm, double TopMm, double HeightMm) : Command;
 public sealed record RectangleCommand(double WidthMm, double HeightMm, bool IsSquare = false) : Command;
 
 public enum LineOrientation { Horizontal, Vertical }

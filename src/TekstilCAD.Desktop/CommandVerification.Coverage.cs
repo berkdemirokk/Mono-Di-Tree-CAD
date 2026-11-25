@@ -30,6 +30,9 @@ internal static partial class CommandVerification
     private static readonly CoverageRow[] CoverageRows =
     [
         new("C01", "120 x 80 dikdörtgen", "empty"),
+        new("-", "yamuk alt 60 cm üst 40 cm yükseklik 50 cm", "empty",
+            After: (window, _) => window.Document.Pieces.Single().Points.SequenceEqual(
+                new Point2[] { new(120,20),new(520,20),new(620,520),new(20,520) })),
         new("C02", "kare 100", "empty"),
         new("C03", "150 çizgi", "empty"),
         new("C04", "80 dikey çizgi", "empty"),

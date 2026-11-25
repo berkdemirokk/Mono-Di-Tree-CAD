@@ -28,6 +28,7 @@ internal sealed partial class PlannerContext
 
     internal PlanResult PlanCommand(Command command) => command switch
     {
+        TrapezoidCommand c => PlanTrapezoid(c),
         RectangleCommand c => PlanRectangle(c),
         LineCommand c => PlanLine(c),
         MoveByCommand c => PlanMoveBy(c),
