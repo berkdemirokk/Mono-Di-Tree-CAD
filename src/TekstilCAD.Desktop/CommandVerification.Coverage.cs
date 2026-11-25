@@ -82,6 +82,7 @@ internal static partial class CommandVerification
         new("C46", "aç", "piece", "File.Open", "Open", true),
         new("C47", "yeni", "piece", "File.New", "NewDocument", true),
         new("C48", "dxf al", "empty", "Handoff.ImportDxf", "ImportDxf", true),
+        new("C49-A4", "yazdır", "piece", "Handoff.ExportProjectA4", "ExportProjectA4", true),
         new("C49", "dışa aktar", "piece", "Handoff.Export", "Export", true),
         new("C50", "seçili parçayı dxf yap", "piece", "Handoff.ExportSelectedDxf", "ExportSelectedDxf", true),
         new("C51", "a4 çıktı", "piece", "Handoff.ExportSelectedA4", "ExportSelectedA4", true),

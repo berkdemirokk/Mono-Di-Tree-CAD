@@ -8580,7 +8580,7 @@ internal static class DesktopVerification
         try { Invoke(studio,"EnsurePropertyDraftsApplied"); }
         catch(InvalidOperationException ex) { stopped=ex.Message.Contains("taslağı"); }
         Check(stopped,$"{state} property drafts stop the output guard",checks);
-        foreach(var method in new[] { "Export","OpenMachineCenter","OpenTextileTools" })
+        foreach(var method in new[] { "Export","ExportProjectA4","OpenMachineCenter","OpenTextileTools" })
         {
             // Enter the method only after verifying its guard is preceded solely
             // by explicitly safe, non-dialog guard calls.
@@ -12428,6 +12428,8 @@ internal static class DesktopVerification
             {
                 try { return File.Exists(store.DraftRecoveryPath) && DocumentSession.ContentEquals(recoveredDocument,RecoveryEnvelope.Deserialize(File.ReadAllBytes(store.DraftRecoveryPath)).Document); }
                 catch(IOException) { return false; }
+                // Windows may deny opening the old snapshot while its replacement is pending.
+                catch(UnauthorizedAccessException) { return false; }
                 catch(InvalidDataException) { return false; }
             }
             PumpUntil(NewSnapshotPresent);

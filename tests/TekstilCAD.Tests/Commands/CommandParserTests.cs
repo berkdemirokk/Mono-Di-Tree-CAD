@@ -676,6 +676,8 @@ public sealed class CommandParserTests
     [InlineData("yeni katman", HandoffTarget.Layers, null)]
     [InlineData("koordinat gir", HandoffTarget.CoordinateDrawing, null)]
     [InlineData("kesime gönder", HandoffTarget.Export, null)]
+    [InlineData("yazdır", HandoffTarget.ExportProjectA4, null)]
+    [InlineData("kağıda yazdır", HandoffTarget.ExportProjectA4, null)]
     [InlineData("a4 çıktı", HandoffTarget.ExportSelectedA4, null)]
     [InlineData("seçili parçayı dxf yap", HandoffTarget.ExportSelectedDxf, null)]
     [InlineData("hakkında", HandoffTarget.About, null)]

@@ -3817,13 +3817,24 @@ public partial class MainWindow : Window
     {
         EnsureNoExport();
         EnsurePropertyDraftsApplied();
+        ExportProject(paperOnly: false);
+    }
+    private void ExportProjectA4()
+    {
+        EnsureNoExport();
+        EnsurePropertyDraftsApplied();
+        ExportProject(paperOnly: true);
+    }
+    private void ExportProject(bool paperOnly)
+    {
         var snapshot=Document.Clone();
         var warning=OutputLossNotice();
         if(warning is not null && MessageBox.Show(this,warning+"\n\nDevam edilsin mi?", "Dışa aktarım bilgisi", MessageBoxButton.YesNo, MessageBoxImage.Information)!=MessageBoxResult.Yes)return;
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
-        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter="DXF · koordinatları koru (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf|PDF A4 sayfalar (*.pdf)|*.pdf|DXF · ekran yönü, Y ters (*.dxf)|*.dxf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter=paperOnly ? "Gerçek boyutlu A4 PDF (*.pdf)|*.pdf" : "DXF · koordinatları koru (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf|PDF A4 sayfalar (*.pdf)|*.pdf|DXF · ekran yönü, Y ters (*.dxf)|*.dxf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dlg.ShowDialog(this)!=true)return;
-        ExportDestination.ValidateExtension(dlg.FileName,dlg.FilterIndex);
+        var format = paperOnly ? 5 : dlg.FilterIndex;
+        ExportDestination.ValidateExtension(dlg.FileName,format);
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje dosya seçimi sırasında değişti; dışa aktarımı yeniden başlatın.");
         EnsureWritableDestination(dlg.FileName); Validate(snapshot);
         EnsureExportDoesNotReplaceOpenProject(dlg.FileName);
@@ -3836,14 +3847,14 @@ public partial class MainWindow : Window
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje onay sırasında değişti; dışa aktarımı yeniden başlatın.");
         EnsureWritableDestination(dlg.FileName);
         EnsureExportDoesNotReplaceOpenProject(dlg.FileName);
-        if(dlg.FilterIndex is 1 or 6)
+        if(format is 1 or 6)
         {
             var layers=DxfFormat.PlanLayers(snapshot);
             if(layers.Any(layer=>layer.Changed) && new DxfLayerReviewWindow(this,layers).ShowDialog()!=true)return;
             if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje inceleme sırasında değişti; DXF dışa aktarımını yeniden başlatın.");
         }
         EnsureExportDoesNotReplaceOpenProject(dlg.FileName);
-        _ = StartExportAfterPreflight(snapshot,dlg.FileName,dlg.FilterIndex,targetVersion,
+        _ = StartExportAfterPreflight(snapshot,dlg.FileName,format,targetVersion,
             message=>MessageBox.Show(this,message,"Dışa aktarım bilgisi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
     }
     internal const string HpglPreflightMessage = "Bu aktarım tüm proje parçalarını 40 birim/mm ile bir HPGL dosyasına yazar. "+

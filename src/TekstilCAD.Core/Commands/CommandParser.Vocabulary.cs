@@ -214,7 +214,8 @@ public static partial class CommandParser
         Add(new FileCommand(FileAction.New), "yeni", "yeni proje", "yeni kalip", "bos sayfa", "sifirdan basla");
         Add(new HandoffCommand(HandoffTarget.ImportDxf), "dxf al", "dxf ac", "dxf yukle", "dosyadan kalip al", "ice aktar", "dxf");
         Add(new HandoffCommand(HandoffTarget.Export), "disa aktar", "pdf yap", "pdf", "plotter dosyasi hazirla", "kesime gonder",
-            "plotterdan cikar", "yazdir", "plotter dosyasi", "plotter");
+            "plotterdan cikar", "plotter dosyasi", "plotter");
+        Add(new HandoffCommand(HandoffTarget.ExportProjectA4), "yazdir", "kagida yazdir", "projeyi yazdir", "projeyi a4 pdf yap");
         Add(new HandoffCommand(HandoffTarget.ExportSelectedDxf), "secili parcayi dxf yap", "secili parcayi dxf", "secilen parcayi aktar", "secili parcayi aktar");
         Add(new HandoffCommand(HandoffTarget.ExportSelectedA4), "a4 cikti", "a4 pdf yap", "a4 pdf", "secili parcayi yazdir", "a4");
 
