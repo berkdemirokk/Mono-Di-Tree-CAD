@@ -360,3 +360,19 @@ extension ScreenshotTourTests {
         snap("39-brief-output")
     }
 }
+
+extension ScreenshotTourTests {
+    func testDescribeAnApronAndPreparePlotterOutput() {
+        let app = launch(["--ui-test-reset-draft"])
+        app.buttons["open-pattern-brief"].tap()
+        let field = app.textFields["brief-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("65 cm eninde 85 cm boyunda cepli bir önlük çiz ve makinada bastır\n")
+        let share = app.buttons["brief-share"]
+        XCTAssertTrue(share.waitForExistence(timeout: 10))
+        XCTAssertTrue(share.label.contains("PLT"), share.label)
+        app.swipeUp()
+        snap("40-plotter-output")
+    }
+}
