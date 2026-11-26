@@ -139,10 +139,10 @@ enum AppTheme {
     /// sRGB red, green, blue in 0...1.
     typealias Tone = (Double, Double, Double)
 
-    static let page = adaptive(light: (0.967, 0.967, 0.948),
-                               dark: (0.055, 0.083, 0.075), darkHigh: (0.0, 0.0, 0.0))
+    static let page = adaptive(light: (0.955, 0.961, 0.975),
+                               dark: (0.052, 0.062, 0.083), darkHigh: (0.0, 0.0, 0.0))
     static let card = adaptive(light: (1.0, 1.0, 1.0),
-                               dark: (0.105, 0.145, 0.134), darkHigh: (0.075, 0.085, 0.110))
+                               dark: (0.105, 0.12, 0.15), darkHigh: (0.075, 0.085, 0.110))
     static let accent = adaptive(light: accentLight, lightHigh: accentLightHigh,
                                  dark: accentDark, darkHigh: accentDarkHigh)
     /// Tinted fill behind accent icons and pressed outline buttons.
@@ -151,7 +151,7 @@ enum AppTheme {
                                      lightAlpha: 0.10, darkAlpha: 0.16)
     /// The filled main button while a finger is on it: darker in light, lighter in dark, so its
     /// label keeps its contrast (a see-through accent dropped white text to 3.9:1).
-    static let accentPressed = adaptive(light: (0.045, 0.25, 0.215), lightHigh: (0.025, 0.18, 0.155),
+    static let accentPressed = adaptive(light: (0.09, 0.18, 0.50), lightHigh: (0.045, 0.10, 0.32),
                                         dark: (0.64, 0.87, 0.76), darkHigh: (0.80, 0.95, 0.86))
     /// Text and icons placed on a filled accent: white in light, near-black on the lighter dark accent.
     static let onAccent = adaptive(light: (1.0, 1.0, 1.0),
@@ -173,10 +173,10 @@ enum AppTheme {
     /// even on a phone set to another region, so the screen never mixes two languages.
     static let locale = Locale(identifier: "tr_TR")
 
-    private static let accentLight: Tone = (0.065, 0.34, 0.285)
-    private static let accentLightHigh: Tone = (0.04, 0.24, 0.19)
-    private static let accentDark: Tone = (0.54, 0.82, 0.69)
-    private static let accentDarkHigh: Tone = (0.70, 0.94, 0.82)
+    private static let accentLight: Tone = (0.13, 0.25, 0.66)
+    private static let accentLightHigh: Tone = (0.07, 0.16, 0.45)
+    private static let accentDark: Tone = (0.65, 0.76, 1.0)
+    private static let accentDarkHigh: Tone = (0.82, 0.88, 1.0)
 
     /// A colour that resolves per appearance and per Increase Contrast. `lightHigh` and `darkHigh`
     /// default to the standard variant.
