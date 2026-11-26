@@ -10,8 +10,10 @@ struct PatternBriefStudio: View {
     @State private var project: DraftProject?
     @State private var file: URL?
     @State private var problem: String?
+    @State private var printStatus: String?
+    @StateObject private var printer = PatternPaperPrinter()
 
-    private let example = "65 cm eninde 85 cm boyunda cepli bir önlük çiz ve PDF hazırla"
+    private let example = "65 cm eninde 85 cm boyunda cepli bir önlük çiz ve plotterda bastır"
 
     var body: some View {
         NavigationStack {
@@ -58,7 +60,7 @@ struct PatternBriefStudio: View {
                             .buttonStyle(.borderless)
                             .accessibilityHint("Tarifi düzenleyebilirsin.")
                         } else if previous != nil && brief.isEmpty {
-                            Text("“Cebi kaldır” veya “Yazdır” yazabilirsin.")
+                            Text("“Cebi kaldır” veya “Plotterda bastır” yazabilirsin.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -87,10 +89,14 @@ struct PatternBriefStudio: View {
                 }
             }
         }
+        #if os(iOS)
+        .background(PatternPrintAnchor(presenter: printer))
+        #endif
         .onChange(of: brief) { _ in
             project = nil
             file = nil
             problem = nil
+            printStatus = nil
         }
     }
 
@@ -116,14 +122,18 @@ struct PatternBriefStudio: View {
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("brief-correct")
             }
-            #if os(iOS)
-            Button { prepareFile(pattern, as: .paper) } label: {
-                Label("Yazdır", systemImage: "printer")
+            Button { prepareFile(pattern, as: .plotter) } label: {
+                Label("Plotter dosyası hazırla", systemImage: "doc.badge.arrow.up")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("brief-plotter")
+            Button { prepareFile(pattern, as: .paper) } label: {
+                Label("A4 yazdır", systemImage: "printer")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
             .accessibilityIdentifier("brief-print")
-            #endif
             if let file {
                 ShareLink(item: file) {
                     Label("\(file.pathExtension.uppercased()) dosyasını paylaş", systemImage: "square.and.arrow.up")
@@ -155,6 +165,7 @@ struct PatternBriefStudio: View {
         file = nil
         project = nil
         problem = nil
+        printStatus = nil
         do {
             let (pattern, format) = try PatternBrief.read(brief, previous: previous)
             previous = pattern
@@ -168,8 +179,16 @@ struct PatternBriefStudio: View {
     private func prepareFile(_ pattern: DraftProject, as format: PatternBrief.Output) {
         file = nil
         problem = nil
+        printStatus = nil
         do {
             switch format {
+            case .plotter:
+                file = try PatternPlotterFile.export(pattern)
+                printStatus = "PLT hazır · HP-GL, 40 birim/mm. Dosyayı plotter uygulamana aktar."
+            case .paper:
+                let url = try PatternBriefPDF.export(pattern)
+                file = url
+                printer.present(url, title: pattern.name) { message in printStatus = message }
             case .pdf:
                 file = try PatternBriefPDF.export(pattern)
             case .tcad:
