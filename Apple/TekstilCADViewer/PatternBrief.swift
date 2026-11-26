@@ -44,7 +44,7 @@ enum PatternBrief {
         }
     }
 
-    private static func read(_ text: String) throws -> (project: DraftProject, output: Output?) {
+    static func read(_ text: String, previous: DraftProject? = nil) throws -> (project: DraftProject, output: Output?) {
         guard text.utf16.count <= 512 else { throw Problem("Tarifi 512 karakter içinde yazın.") }
         let normalized = TurkishText.fold(TurkishText.normalize(text))
             .replacingOccurrences(of: #"(?<=[0-9])[,](?=[0-9])"#, with: ".", options: .regularExpression)
@@ -100,6 +100,12 @@ enum PatternBrief {
                 }
                 continue
             }
+            if ["cebi", "cep"].contains(word), let action = peek(1), ["kaldir", "cikar", "sil", "ekle"].contains(action) {
+                guard pocket == nil else { throw Problem("Tek cep seçeneği belirtin.") }
+                pocket = action == "ekle"
+                index += 2
+                continue
+            }
             let requestedModel: StudioPattern?
             switch word {
             case "onluk", "onlugu": requestedModel = .apron
@@ -124,6 +130,26 @@ enum PatternBrief {
             }
             index += 1
         }
+        if model == nil, let previous {
+            if width == nil, length == nil, pocket == nil {
+                guard output != nil else { throw Problem("Değişecek ölçüyü, cebi veya çıktı biçimini yazın.") }
+                return (previous, output)
+            }
+            guard previous.name == StudioPattern.apron.rawValue,
+                  let body = previous.pieces.first(where: { $0.name == "Gövde" }) else {
+                throw Problem("Bu ölçü ve cep düzeltmeleri önlük için kullanılabilir.")
+            }
+            var updated = try apron(width: width ?? body.maxX - body.minX,
+                                    length: length ?? body.maxY - body.minY,
+                                    pocket: pocket ?? previous.pieces.contains { $0.name == "Cep" })
+            updated.id = previous.id
+            for index in updated.pieces.indices {
+                if let original = previous.pieces.first(where: { $0.name == updated.pieces[index].name }) {
+                    updated.pieces[index].id = original.id
+                }
+            }
+            return (updated, output)
+        }
         guard let model else { throw Problem("Modeli belirtin: önlük, etek veya bez çanta.") }
         guard model == .apron else {
             guard width == nil, length == nil, pocket == nil else {
@@ -131,10 +157,14 @@ enum PatternBrief {
             }
             return (model.makeProject(), output)
         }
-        guard var project = StudioPattern.makeApron(width: width ?? 600, length: length ?? 810) else {
+        return (try apron(width: width ?? 600, length: length ?? 810, pocket: pocket ?? true), output)
+    }
+
+    private static func apron(width: Double, length: Double, pocket: Bool) throws -> DraftProject {
+        guard var project = StudioPattern.makeApron(width: width, length: length) else {
             throw Problem("Önlük eni 30–120 cm, boyu 35–150 cm aralığında olmalı.")
         }
         if pocket == false { project.pieces.removeAll { $0.name == "Cep" } }
-        return (project, output)
+        return project
     }
 }

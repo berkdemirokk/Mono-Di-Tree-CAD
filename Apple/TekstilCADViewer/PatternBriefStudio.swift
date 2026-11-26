@@ -6,6 +6,7 @@ struct PatternBriefStudio: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var writing: Bool
     @State private var brief = ""
+    @State private var previous: DraftProject?
     @State private var project: DraftProject?
     @State private var file: URL?
     @State private var problem: String?
@@ -20,7 +21,7 @@ struct PatternBriefStudio: View {
                         Text("Ne hazırlayalım?")
                             .font(.system(.title, design: .serif).weight(.semibold))
                             .accessibilityAddTraits(.isHeader)
-                        Text("Modeli, ölçüleri ve istediğin dosya biçimini yaz.")
+                        Text(previous == nil ? "Modeli, ölçüleri ve istediğin dosya biçimini yaz." : "Örneğin «eni 70 cm olsun», «cebi kaldır» veya «PDF hazırla» yaz.")
                             .foregroundStyle(AppTheme.muted)
                         TextField("Kalıp tarifin", text: $brief)
                             .textFieldStyle(.roundedBorder)
@@ -30,7 +31,7 @@ struct PatternBriefStudio: View {
                             .submitLabel(.go)
                             .onSubmit(submit)
                             .accessibilityIdentifier("brief-field")
-                        if brief.isEmpty {
+                        if brief.isEmpty && previous == nil {
                             Button {
                                 brief = example
                                 writing = true
@@ -84,6 +85,11 @@ struct PatternBriefStudio: View {
             Text(pattern.name)
                 .font(.title2.bold())
                 .accessibilityAddTraits(.isHeader)
+            Button("Tarifle düzelt") {
+                brief = ""
+                writing = true
+            }
+            .accessibilityIdentifier("brief-correct")
             StudioPatternPreview(project: pattern)
                 .frame(height: 156)
                 .background(Color(red: 0.06, green: 0.22, blue: 0.20),
@@ -124,8 +130,8 @@ struct PatternBriefStudio: View {
         project = nil
         problem = nil
         do {
-            let pattern = try PatternBrief.parse(brief)
-            let format = try PatternBrief.output(in: brief)
+            let (pattern, format) = try PatternBrief.read(brief, previous: previous)
+            previous = pattern
             project = pattern
             if let format { prepareFile(pattern, as: format) }
         } catch {

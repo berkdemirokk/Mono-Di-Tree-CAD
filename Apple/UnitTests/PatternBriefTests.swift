@@ -37,3 +37,27 @@ final class PatternBriefTests: XCTestCase {
         XCTAssertNil(try PatternBrief.output(in: "etek çiz"))
     }
 }
+
+extension PatternBriefTests {
+    func testApronRevisionsPreservePreviousMeasurementsPiecesAndIdentity() throws {
+        let initial = try PatternBrief.parse("67,5 x 92,5 cm cepli önlük")
+        let original = initial
+        let withoutPocket = try PatternBrief.read("cebi kaldır", previous: initial).project
+        XCTAssertEqual(withoutPocket.pieces, [original.pieces[0]])
+        let wider = try PatternBrief.read("eni 70 cm olsun", previous: withoutPocket).project
+        XCTAssertEqual(wider.id, initial.id)
+        XCTAssertEqual(wider.pieces.map(\.id), withoutPocket.pieces.map(\.id))
+        let body = try XCTUnwrap(wider.pieces.first)
+        XCTAssertEqual(body.maxX - body.minX, 700, accuracy: 0.001)
+        XCTAssertEqual(body.maxY - body.minY, 925, accuracy: 0.001)
+        for (request, expected) in [("PDF hazırla", PatternBrief.Output.pdf), ("TCAD olarak kaydet", .tcad)] {
+            let result = try PatternBrief.read(request, previous: wider)
+            XCTAssertEqual(result.project, wider)
+            XCTAssertEqual(result.output, expected)
+        }
+        XCTAssertThrowsError(try PatternBrief.read("cebi büyüt", previous: wider))
+        XCTAssertThrowsError(try PatternBrief.read("eni 2 cm olsun", previous: wider))
+        XCTAssertThrowsError(try PatternBrief.read("cebi kaldır"))
+        XCTAssertEqual(initial, original)
+    }
+}
