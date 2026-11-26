@@ -161,6 +161,10 @@ internal sealed partial class PlannerContext
                 planClass = PlanClass.Dangerous;
                 text = "Dışa aktarma penceresi açılacak. Dosya yalnız inceleme içindir; üretim onayı değildir ve makineye gönderilmez.";
                 break;
+            case HandoffTarget.ExportHpgl:
+                planClass = PlanClass.Dangerous;
+                text = "HPGL / PLT dışa aktarma penceresi açılacak. Yalnız HPGL / PLT dosyası hazırlanır; dosya üretim onayı değildir ve makineye gönderilmez.";
+                break;
             case HandoffTarget.ExportProjectA4:
                 if (Doc.Pieces.Count == 0) return Refuse(Refusals.NoPiecesYet());
                 planClass = PlanClass.Dangerous;

@@ -201,11 +201,11 @@ public sealed class CommandParserTests
     public void MachinePrintPhrasesPrepareReviewOnlyExport(string input)
     {
         var parsed = CommandParser.Parse(input);
-        Assert.Equal(HandoffTarget.Export, Assert.IsType<HandoffCommand>(parsed.Command).Target);
+        Assert.Equal(HandoffTarget.ExportHpgl, Assert.IsType<HandoffCommand>(parsed.Command).Target);
 
         var result = CommandPlanner.Plan(parsed, PlannerTestData.View(PlannerTestData.B1()), Selection.None);
         Assert.True(result.IsPlan, result.Refusal?.Message);
-        Assert.Equal("Dışa aktarma penceresi açılacak. Dosya yalnız inceleme içindir; üretim onayı değildir ve makineye gönderilmez.", result.Plan!.Preview);
+        Assert.Equal("HPGL / PLT dışa aktarma penceresi açılacak. Yalnız HPGL / PLT dosyası hazırlanır; dosya üretim onayı değildir ve makineye gönderilmez.", result.Plan!.Preview);
         Assert.True(result.Plan.Danger);
     }
 
@@ -703,6 +703,8 @@ public sealed class CommandParserTests
     [InlineData("yeni katman", HandoffTarget.Layers, null)]
     [InlineData("koordinat gir", HandoffTarget.CoordinateDrawing, null)]
     [InlineData("kesime gönder", HandoffTarget.Export, null)]
+    [InlineData("makinada bastır", HandoffTarget.ExportHpgl, null)]
+    [InlineData("plotterda bastır", HandoffTarget.ExportHpgl, null)]
     [InlineData("yazdır", HandoffTarget.ExportProjectA4, null)]
     [InlineData("kağıda yazdır", HandoffTarget.ExportProjectA4, null)]
     [InlineData("a4 çıktı", HandoffTarget.ExportSelectedA4, null)]

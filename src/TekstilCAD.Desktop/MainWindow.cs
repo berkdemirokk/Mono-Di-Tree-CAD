@@ -3838,21 +3838,27 @@ public partial class MainWindow : Window
         EnsurePropertyDraftsApplied();
         ExportProject(paperOnly: false);
     }
+    private void ExportPlotter()
+    {
+        EnsureNoExport();
+        EnsurePropertyDraftsApplied();
+        ExportProject(paperOnly: false, hpglOnly: true);
+    }
     private void ExportProjectA4()
     {
         EnsureNoExport();
         EnsurePropertyDraftsApplied();
         ExportProject(paperOnly: true);
     }
-    private void ExportProject(bool paperOnly)
+    private void ExportProject(bool paperOnly, bool hpglOnly = false)
     {
         var snapshot=Document.Clone();
         var warning=OutputLossNotice();
         if(warning is not null && MessageBox.Show(this,warning+"\n\nDevam edilsin mi?", "Dışa aktarım bilgisi", MessageBoxButton.YesNo, MessageBoxImage.Information)!=MessageBoxResult.Yes)return;
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
-        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter=paperOnly ? "Gerçek boyutlu A4 PDF (*.pdf)|*.pdf" : "DXF · koordinatları koru (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf|PDF A4 sayfalar (*.pdf)|*.pdf|DXF · ekran yönü, Y ters (*.dxf)|*.dxf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        var dlg = new SaveFileDialog { Title=hpglOnly ? $"Tüm proje HPGL / PLT dışa aktarılacak · {Document.Pieces.Count} parça" : $"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter=paperOnly ? "Gerçek boyutlu A4 PDF (*.pdf)|*.pdf" : hpglOnly ? "HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl" : "DXF · koordinatları koru (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf|PDF A4 sayfalar (*.pdf)|*.pdf|DXF · ekran yönü, Y ters (*.dxf)|*.dxf", FileName=SafeFileName(Document.Name), AddExtension=true, DefaultExt=hpglOnly ? ".plt" : null, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dlg.ShowDialog(this)!=true)return;
-        var format = paperOnly ? 5 : dlg.FilterIndex;
+        var format = paperOnly ? 5 : hpglOnly ? 3 : dlg.FilterIndex;
         ExportDestination.ValidateExtension(dlg.FileName,format);
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje dosya seçimi sırasında değişti; dışa aktarımı yeniden başlatın.");
         EnsureWritableDestination(dlg.FileName); Validate(snapshot);

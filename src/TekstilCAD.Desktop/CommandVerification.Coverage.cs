@@ -87,6 +87,7 @@ internal static partial class CommandVerification
         new("C48", "dxf al", "empty", "Handoff.ImportDxf", "ImportDxf", true),
         new("C49-A4", "yazdır", "piece", "Handoff.ExportProjectA4", "ExportProjectA4", true),
         new("C49", "dışa aktar", "piece", "Handoff.Export", "Export", true),
+        new("C49-PLT", "plotterda bastır", "piece", "Handoff.ExportHpgl", "ExportPlotter", true),
         new("C50", "seçili parçayı dxf yap", "piece", "Handoff.ExportSelectedDxf", "ExportSelectedDxf", true),
         new("C51", "a4 çıktı", "piece", "Handoff.ExportSelectedA4", "ExportSelectedA4", true),
         new("C52", "1 cm dikiş payı", "piece", "Handoff.TextileTools", null, true),
