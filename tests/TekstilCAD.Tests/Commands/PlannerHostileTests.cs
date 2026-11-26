@@ -1633,13 +1633,14 @@ public sealed class PlannerHostileTests
     public void HandoffsThatNeedNoPieceAreAlwaysPlanned()
     {
         var empty = new ProjectDocument();
-        foreach (var target in new[] { HandoffTarget.ImportDxf, HandoffTarget.Export, HandoffTarget.MachineCenter, HandoffTarget.Layers, HandoffTarget.About, HandoffTarget.DesignRequest, HandoffTarget.RecoveryScan, HandoffTarget.CoordinateDrawing })
+        foreach (var target in new[] { HandoffTarget.ImportDxf, HandoffTarget.Export, HandoffTarget.ExportHpgl, HandoffTarget.MachineCenter, HandoffTarget.Layers, HandoffTarget.About, HandoffTarget.DesignRequest, HandoffTarget.RecoveryScan, HandoffTarget.CoordinateDrawing })
         {
             var plan = AssertPlan(PlanOf(new HandoffCommand(target), empty, null));
             Assert.Null(plan.TargetPieceId);
             Assert.False(plan.NeedsSelectedPiece);
         }
         Assert.Equal(PlanClass.Dangerous, AssertPlan(PlanOf(new HandoffCommand(HandoffTarget.Export), empty, null)).Class);
+        Assert.Equal(PlanClass.Dangerous, AssertPlan(PlanOf(new HandoffCommand(HandoffTarget.ExportHpgl), empty, null)).Class);
         Assert.Equal(PlanClass.NoChange, AssertPlan(PlanOf(new HandoffCommand(HandoffTarget.Layers), empty, null)).Class);
     }
 

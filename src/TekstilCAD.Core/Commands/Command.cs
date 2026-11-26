@@ -86,7 +86,7 @@ public sealed record FileCommand(FileAction Action) : Command;
 
 public enum HandoffTarget
 {
-    ImportDxf, Export, ExportSelectedDxf, ExportSelectedA4,
+    ImportDxf, Export, ExportHpgl, ExportSelectedDxf, ExportSelectedA4,
     TextileTools, MachineCenter, Grainline, PieceMetadata, MirrorCopy, GroupMove,
     Duplicate, Layers, CoordinateDrawing, About, DesignRequest, RecoveryScan, ExportProjectA4,
 }
