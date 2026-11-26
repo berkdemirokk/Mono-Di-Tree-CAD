@@ -537,16 +537,16 @@ extension ViewerUITests {
         field.tap()
         field.typeText("65 cm eninde 85 cm boyunda cepli bir önlük çiz ve PDF hazırla\n")
         XCTAssertTrue(app.buttons["brief-share"].waitForExistence(timeout: 10))
-        field.tap()
-        guard let original = field.value as? String else { return XCTFail("Tarif alanı okunamadı") }
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: original.count))
-        field.typeText("70 cm eninde 90 cm boyunda cepli bir önlük çiz\n")
+        let revise = app.buttons["Tarifle düzelt"]
+        for _ in 0..<4 where !revise.isHittable { app.swipeUp() }
+        revise.tap()
+        field.typeText("eni 70 cm olsun\n")
         let edit = app.buttons["brief-open-editor"]
         for _ in 0..<5 where !edit.isHittable { app.swipeUp() }
         XCTAssertTrue(edit.isHittable)
         edit.tap()
         XCTAssertTrue(countLabel(2, in: app).waitForExistence(timeout: 10))
         let canvas = app.descendants(matching: .any)["Dokunarak parça seçebileceğin kalıp çizimi"]
-        XCTAssertTrue((canvas.value as? String)?.contains("En 700 milimetre, boy 900 milimetre.") == true)
+        XCTAssertTrue((canvas.value as? String)?.contains("En 700 milimetre, boy 850 milimetre.") == true)
     }
 }
