@@ -64,6 +64,8 @@ private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
     @State private var editorRoute: EditorRoute?
+    @State private var showingBrief = false
+    @State private var briefForEditing: DraftProject?
     @State private var localDraft: DraftSummary?
     @State private var recentProjects: [CADProjectLibrary.Entry] = []
     @State private var didStart = false
@@ -316,6 +318,16 @@ private struct ContentView: View {
         .background(AppTheme.page.ignoresSafeArea())
         .sheet(item: $editorRoute, onDismiss: editorClosed) { route in
             EasyCADWorkspace(example: route.example, imported: route.document)
+        }
+        .sheet(isPresented: $showingBrief, onDismiss: {
+            guard let document = briefForEditing else { return }
+            briefForEditing = nil
+            openEditor(EditorRoute(document: document))
+        }) {
+            PatternBriefStudio { document in
+                briefForEditing = document
+                showingBrief = false
+            }
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
@@ -573,11 +585,19 @@ private struct ContentView: View {
                         .foregroundStyle(AppTheme.ink)
                         .accessibilityAddTraits(.isHeader)
 
-                    Button { openEditor(EditorRoute()) } label: {
-                        Label("Yeni proje oluştur", systemImage: "plus")
+                    Button { showingBrief = true } label: {
+                        Label("Tarif ederek oluştur", systemImage: "text.bubble")
                             .frame(maxWidth: .infinity, minHeight: 50)
                     }
                     .buttonStyle(.appPrimary)
+                    .accessibilityHint("Kalıbı ve istediğin dosya biçimini yaz.")
+                    .accessibilityIdentifier("open-pattern-brief")
+
+                    Button { openEditor(EditorRoute()) } label: {
+                        Label("Yeni proje oluştur", systemImage: "plus")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.appSecondary)
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 10) { homeFileActions }
                         VStack(spacing: 6) { homeFileActions }

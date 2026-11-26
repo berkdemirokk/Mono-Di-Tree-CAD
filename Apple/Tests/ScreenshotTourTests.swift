@@ -345,3 +345,18 @@ final class ScreenshotTourTests: XCTestCase {
         snap("37-command-large-text-preview")
     }
 }
+
+extension ScreenshotTourTests {
+    func testTourBriefAndOutput() {
+        let app = launch(["--ui-test-reset-draft"])
+        app.buttons["open-pattern-brief"].tap()
+        let field = app.textFields["brief-field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        snap("38-brief-start")
+        field.tap()
+        field.typeText("cepli önlük çiz ve PDF hazırla\n")
+        XCTAssertTrue(app.buttons["brief-share"].waitForExistence(timeout: 10))
+        app.swipeUp()
+        snap("39-brief-output")
+    }
+}
