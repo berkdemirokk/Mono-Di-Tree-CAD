@@ -547,21 +547,55 @@ private struct ContentView: View {
     }
 
     @ViewBuilder
-    private var homeFileActions: some View {
+    private var homeTools: some View {
+        Button { openEditor(EditorRoute()) } label: {
+            Label("Yeni proje oluştur", systemImage: "square.and.pencil")
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.bordered)
+
         Button { showingImporter = true } label: {
             Label("Dosya aç (.tcad)", systemImage: "folder")
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .buttonStyle(.appSecondary)
+        .buttonStyle(.bordered)
         .accessibilityHint("Dosyayı önizlemek için açar.")
         Button { openEditor(EditorRoute(example: true)) } label: {
             Label("Örnekle dene", systemImage: "square.on.square")
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
-        .buttonStyle(.appSecondary)
+        .buttonStyle(.bordered)
         .accessibilityHint("İki hazır parçayla uygulamayı denersin.")
+    }
+
+    private static let previewApron = StudioPattern.apron.makeProject()
+
+    private var describeEntry: some View {
+        Button { showingBrief = true } label: {
+            HStack(spacing: 16) {
+                StudioPatternPreview(project: Self.previewApron)
+                    .frame(width: 76, height: 76)
+                    .background(Color(red: 0.06, green: 0.22, blue: 0.20), in: RoundedRectangle(cornerRadius: 14))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Tarif ederek oluştur").font(.headline)
+                    Text("Modeli ve ölçüleri yaz").font(.subheadline).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.right").font(.footnote.bold()).foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.secondary.opacity(0.22)))
+        .accessibilityLabel("Tarif ederek oluştur")
+        .accessibilityHint("Kalıbı ve istediğin dosya biçimini yaz.")
+        .accessibilityIdentifier("open-pattern-brief")
     }
 
     private var home: some View {
@@ -581,27 +615,16 @@ private struct ContentView: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Kalıbını kolayca oluştur")
-                        .font(.system(.largeTitle, design: .serif).weight(.semibold))
-                        .foregroundStyle(AppTheme.ink)
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(.primary)
                         .accessibilityAddTraits(.isHeader)
 
-                    Button { showingBrief = true } label: {
-                        Label("Tarif ederek oluştur", systemImage: "text.bubble")
-                            .frame(maxWidth: .infinity, minHeight: 50)
-                    }
-                    .buttonStyle(.appPrimary)
-                    .accessibilityHint("Kalıbı ve istediğin dosya biçimini yaz.")
-                    .accessibilityIdentifier("open-pattern-brief")
-
-                    Button { openEditor(EditorRoute()) } label: {
-                        Label("Yeni proje oluştur", systemImage: "plus")
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.appSecondary)
+                    describeEntry
                     ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 10) { homeFileActions }
-                        VStack(spacing: 6) { homeFileActions }
+                        HStack(spacing: 8) { homeTools }
+                        VStack(spacing: 4) { homeTools }
                     }
+
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
