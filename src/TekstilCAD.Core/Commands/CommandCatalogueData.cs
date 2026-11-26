@@ -241,10 +241,7 @@ internal static class CommandCatalogueData
         all.Add(D("exchange.export-all", GExchange, "Hepsini dışa aktar…",
             "Projedeki bütün parçaları DXF, SVG, HPGL ya da PDF biçiminde inceleme dosyası olarak yazar; üretim onayı değildir.",
             "Tümünü dışa aktar…", ["dışa aktar", "pdf yap", "plotter dosyası hazırla", "kesime gönder", "plotterdan çıkar"],
-            ["dışa ver", "hepsini çıkar", "plotter"]));
-        all.Add(D("exchange.export-hpgl", GExchange, "Tüm projeyi HPGL / PLT dışa aktar…",
-            "Projedeki bütün parçaları yalnız HPGL / PLT inceleme dosyası olarak yazar; üretim onayı değildir ve makineye göndermez.",
-            "HPGL / PLT dışa aktar…", ["makinada bastır", "plotterda bastır"], None));
+            ["dışa ver", "hepsini çıkar", "plotter", "makinada bastır", "plotterda bastır"]));
         all.Add(D("exchange.grain-review", GExchange, "İplik işaretli inceleme DXF…",
             "İplik yönü çizgilerini işaretleyerek inceleme DXF'i yazar. Üretim dosyası değildir; işaretler başka programda kesim çizgisi sanılabilir.",
             "İplik işaretli DXF inceleme dosyası…", None,
