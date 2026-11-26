@@ -582,7 +582,7 @@ private struct ContentView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Tarif ederek oluştur").font(.headline)
-                    Text("Modeli ve ölçüleri yaz").font(.subheadline).foregroundStyle(.secondary)
+                    Text("Kalıp ve plotter çıktısı hazırla").font(.subheadline).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.right").font(.footnote.bold()).foregroundStyle(.secondary)
