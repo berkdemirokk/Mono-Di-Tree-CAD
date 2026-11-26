@@ -1,4 +1,5 @@
 using System.Globalization;
+using TekstilCAD.Core;
 using TekstilCAD.Core.Commands;
 
 namespace TekstilCAD.Tests;
@@ -192,6 +193,20 @@ public sealed class CommandParserTests
         Assert.Equal(HandoffTarget.TextileTools, grading.Target);
         Assert.Equal(1, grading.Tab);
         Assert.Null(grading.Value);
+    }
+
+    [Theory]
+    [InlineData("makinada bastır")]
+    [InlineData("plotterda bastır")]
+    public void MachinePrintPhrasesPrepareReviewOnlyExport(string input)
+    {
+        var parsed = CommandParser.Parse(input);
+        Assert.Equal(HandoffTarget.Export, Assert.IsType<HandoffCommand>(parsed.Command).Target);
+
+        var result = CommandPlanner.Plan(parsed, PlannerTestData.View(PlannerTestData.B1()), Selection.None);
+        Assert.True(result.IsPlan, result.Refusal?.Message);
+        Assert.Equal("Dışa aktarma penceresi açılacak. Dosya yalnız inceleme içindir; üretim onayı değildir ve makineye gönderilmez.", result.Plan!.Preview);
+        Assert.True(result.Plan.Danger);
     }
 
     [Fact]

@@ -240,7 +240,7 @@ internal static class CommandCatalogueData
             ["işaretli dxf", "köşe işareti", "çentik"]));
         all.Add(D("exchange.export-all", GExchange, "Hepsini dışa aktar…",
             "Projedeki bütün parçaları DXF, SVG, HPGL ya da PDF biçiminde inceleme dosyası olarak yazar; üretim onayı değildir.",
-            "Tümünü dışa aktar…", ["dışa aktar", "pdf yap", "plotter dosyası hazırla", "kesime gönder", "plotterdan çıkar"],
+            "Tümünü dışa aktar…", ["dışa aktar", "pdf yap", "plotter dosyası hazırla", "kesime gönder", "plotterdan çıkar", "makinada bastır", "plotterda bastır"],
             ["dışa ver", "hepsini çıkar", "plotter"]));
         all.Add(D("exchange.grain-review", GExchange, "İplik işaretli inceleme DXF…",
             "İplik yönü çizgilerini işaretleyerek inceleme DXF'i yazar. Üretim dosyası değildir; işaretler başka programda kesim çizgisi sanılabilir.",
