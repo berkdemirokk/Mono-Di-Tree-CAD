@@ -61,3 +61,19 @@ extension PatternBriefTests {
         XCTAssertEqual(initial, original)
     }
 }
+
+extension PatternBriefTests {
+    func testPrinterRequestsUseTheCurrentDrawingAndRejectUnknownMachineActions() throws {
+        let draft = try PatternBrief.parse("67 x 82 cm cepsiz önlük")
+        for text in ["makinada bastır", "makinede bastır", "plotterda bastır", "plotter dosyası hazırla", "yazdır"] {
+            let result = try PatternBrief.read(text, previous: draft)
+            XCTAssertEqual(result.project, draft)
+            XCTAssertEqual(result.output, .plotter)
+        }
+        XCTAssertEqual(try PatternBrief.read("kâğıda yazdır", previous: draft).output, .paper)
+        XCTAssertEqual(try PatternBrief.output(in: "bez çanta oluştur ve makinede bastır"), .plotter)
+        XCTAssertThrowsError(try PatternBrief.read("makinada bastır"))
+        XCTAssertThrowsError(try PatternBrief.read("TCAD olarak kaydet ve bastır", previous: draft))
+        XCTAssertThrowsError(try PatternBrief.read("kesim makinesine gönder", previous: draft))
+    }
+}

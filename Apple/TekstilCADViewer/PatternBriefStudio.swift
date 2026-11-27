@@ -10,27 +10,42 @@ struct PatternBriefStudio: View {
     @State private var project: DraftProject?
     @State private var file: URL?
     @State private var problem: String?
+    @State private var printStatus: String?
+    @StateObject private var printer = PatternPaperPrinter()
 
-    private let example = "65 cm eninde 85 cm boyunda cepli bir önlük çiz ve PDF hazırla"
+    private let example = "65 cm eninde 85 cm boyunda cepli bir önlük çiz ve plotterda bastır"
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Ne hazırlayalım?")
-                            .font(.system(.title, design: .serif).weight(.semibold))
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(previous == nil ? "Ne hazırlayalım?" : "Neyi değiştirelim?")
+                            .font(.title2.bold())
                             .accessibilityAddTraits(.isHeader)
-                        Text(previous == nil ? "Modeli, ölçüleri ve istediğin dosya biçimini yaz." : "Örneğin «eni 70 cm olsun», «cebi kaldır» veya «PDF hazırla» yaz.")
-                            .foregroundStyle(AppTheme.muted)
-                        TextField("Kalıp tarifin", text: $brief)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.body)
-                            .frame(minHeight: 44)
-                            .focused($writing)
-                            .submitLabel(.go)
-                            .onSubmit(submit)
-                            .accessibilityIdentifier("brief-field")
+                        HStack(spacing: 8) {
+                            TextField("Kalıp tarifin", text: $brief)
+                                .textFieldStyle(.plain)
+                                .font(.body)
+                                .focused($writing)
+                                .submitLabel(.go)
+                                .onSubmit(submit)
+                                .accessibilityIdentifier("brief-field")
+                            Button(action: submit) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                    .font(.title)
+                                    .frame(minWidth: 44, minHeight: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(AppTheme.accent)
+                            .disabled(brief.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .accessibilityLabel("Tarifi uygula")
+                            .accessibilityIdentifier("brief-submit")
+                        }
+                        .padding(.leading, 14)
+                        .padding(.trailing, 3)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 15))
+                        .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(.secondary.opacity(0.25)).allowsHitTesting(false))
                         if brief.isEmpty && previous == nil {
                             Button {
                                 brief = example
@@ -40,17 +55,18 @@ struct PatternBriefStudio: View {
                                     .font(.subheadline)
                                     .multilineTextAlignment(.leading)
                                     .fixedSize(horizontal: false, vertical: true)
+                                    .frame(minHeight: 44)
                             }
-                            .buttonStyle(.appSecondary)
+                            .buttonStyle(.borderless)
                             .accessibilityHint("Tarifi düzenleyebilirsin.")
+                        } else if previous != nil && brief.isEmpty {
+                            Text("“Cebi kaldır” veya “Plotterda bastır” yazabilirsin.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
-                        Button(action: submit) {
-                            Label("Tarifi uygula", systemImage: "arrow.forward")
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.appPrimary)
-                        .disabled(brief.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityIdentifier("brief-submit")
+                    }
+                    if let printStatus {
+                        Text(printStatus).font(.callout).accessibilityIdentifier("brief-print-status")
                     }
                     if let problem {
                         Label(problem, systemImage: "exclamationmark.circle")
@@ -73,44 +89,64 @@ struct PatternBriefStudio: View {
                 }
             }
         }
+        #if os(iOS)
+        .background(PatternPrintAnchor(presenter: printer))
+        #endif
         .onChange(of: brief) { _ in
             project = nil
             file = nil
             problem = nil
+            printStatus = nil
         }
     }
 
     private func result(_ pattern: DraftProject) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(pattern.name)
-                .font(.title2.bold())
-                .accessibilityAddTraits(.isHeader)
-            Button("Tarifle düzelt") {
-                brief = ""
-                writing = true
-            }
-            .accessibilityIdentifier("brief-correct")
             StudioPatternPreview(project: pattern)
-                .frame(height: 156)
+                .frame(height: 190)
+                .frame(maxWidth: .infinity)
                 .background(Color(red: 0.06, green: 0.22, blue: 0.20),
-                            in: RoundedRectangle(cornerRadius: AppTheme.radius))
+                            in: RoundedRectangle(cornerRadius: 18))
                 .accessibilityIdentifier("brief-preview")
-            Text(pattern.pieces.map(\.name).joined(separator: " · "))
-                .font(.subheadline)
-                .foregroundStyle(AppTheme.muted)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(pattern.name).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                    Text(pattern.pieces.map(\.name).joined(separator: " · "))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Tarifle düzelt") {
+                    brief = ""
+                    writing = true
+                }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("brief-correct")
+            }
+            Button { prepareFile(pattern, as: .plotter) } label: {
+                Label("Plotter dosyası hazırla", systemImage: "doc.badge.arrow.up")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("brief-plotter")
+            Button { prepareFile(pattern, as: .paper) } label: {
+                Label("A4 yazdır", systemImage: "printer")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("brief-print")
             if let file {
                 ShareLink(item: file) {
                     Label("\(file.pathExtension.uppercased()) dosyasını paylaş", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.appPrimary)
+                .buttonStyle(.bordered)
                 .accessibilityIdentifier("brief-share")
             } else {
                 HStack {
                     Button("A4 PDF hazırla") { prepareFile(pattern, as: .pdf) }
                     Button("TCAD hazırla") { prepareFile(pattern, as: .tcad) }
                 }
-                .buttonStyle(.appSecondary)
+                .buttonStyle(.bordered)
             }
             Button {
                 openEditor(pattern)
@@ -119,7 +155,7 @@ struct PatternBriefStudio: View {
                 Label("Çizimde düzenle", systemImage: "pencil")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.appSecondary)
+            .buttonStyle(.bordered)
             .accessibilityIdentifier("brief-open-editor")
         }
     }
@@ -129,6 +165,7 @@ struct PatternBriefStudio: View {
         file = nil
         project = nil
         problem = nil
+        printStatus = nil
         do {
             let (pattern, format) = try PatternBrief.read(brief, previous: previous)
             previous = pattern
@@ -142,8 +179,16 @@ struct PatternBriefStudio: View {
     private func prepareFile(_ pattern: DraftProject, as format: PatternBrief.Output) {
         file = nil
         problem = nil
+        printStatus = nil
         do {
             switch format {
+            case .plotter:
+                file = try PatternPlotterFile.export(pattern)
+                printStatus = "PLT hazır · HP-GL, 40 birim/mm. Dosyayı plotter uygulamana aktar."
+            case .paper:
+                let url = try PatternBriefPDF.export(pattern)
+                file = url
+                printer.present(url, title: pattern.name) { message in printStatus = message }
             case .pdf:
                 file = try PatternBriefPDF.export(pattern)
             case .tcad:

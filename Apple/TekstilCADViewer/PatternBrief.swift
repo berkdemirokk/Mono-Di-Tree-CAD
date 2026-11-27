@@ -3,7 +3,7 @@ import Foundation
 /// Parses a single editable starter pattern. Every token must describe a supported
 /// model, measurement, output or request phrase before a project is produced.
 enum PatternBrief {
-    enum Output: Equatable { case pdf, tcad }
+    enum Output: Equatable { case pdf, tcad, paper, plotter }
 
     private struct Problem: LocalizedError {
         let message: String
@@ -74,7 +74,25 @@ enum PatternBrief {
             }
         }
 
+        let printVerbs: Set<String> = ["bastir", "yazdir"]
+        let paperDestinations: Set<String> = ["a4", "yazicida", "yaziciya", "kagida"]
+        let plotterDestinations: Set<String> = ["makinada", "makinede", "makinaya", "makineye", "plotterda", "plottera"]
+        func select(_ format: Output) throws {
+            guard output == nil || output == format else { throw Problem("Bir çıktı seçin: plotter, A4, PDF veya TCAD.") }
+            output = format
+        }
         while let word = peek() {
+            let followedByPrint = peek(1).map(printVerbs.contains) == true
+            if (plotterDestinations.contains(word) || paperDestinations.contains(word)) && followedByPrint {
+                try select(plotterDestinations.contains(word) ? .plotter : .paper)
+                index += 2
+                continue
+            }
+            if printVerbs.contains(word) || ["hpgl", "plt", "plotter"].contains(word) {
+                try select(.plotter)
+                index += 1
+                continue
+            }
             if let label = axis(word) {
                 guard let value = number(peek(1)), let unit = factor(peek(2)) else { throw Problem(example) }
                 try set(label, value * unit)
@@ -123,8 +141,7 @@ enum PatternBrief {
                 pocket = word == "cepli"
             } else if word == "pdf" || word == "tcad" {
                 let requested: Output = word == "pdf" ? .pdf : .tcad
-                guard output == nil || output == requested else { throw Problem("Tek çıktı biçimi seçin: PDF veya TCAD.") }
-                output = requested
+                try select(requested)
             } else if !requestWords.contains(word) {
                 throw Problem("Tarifteki “\(words[index])” ifadesi desteklenmiyor.")
             }
