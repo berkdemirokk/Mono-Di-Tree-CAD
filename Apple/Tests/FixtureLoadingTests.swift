@@ -77,6 +77,8 @@ final class FixtureLoadingTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "üretim için dışa aktarılamaz")).firstMatch.exists)
         XCTAssertFalse(app.buttons["Kopyasını düzenle"].exists,
                        "A dart-bearing project must stay read-only so its sewing marks cannot be lost in an editable copy.")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Paylaş")).firstMatch.exists,
+                       "A dart-bearing read-only preview must not expose an export action that could omit sewing legs.")
         app.terminate()
     }
 
