@@ -46,6 +46,27 @@ enum PatternBrief {
 
     static func read(_ text: String, previous: DraftProject? = nil) throws -> (project: DraftProject, output: Output?) {
         guard text.utf16.count <= 512 else { throw Problem("Tarifi 512 karakter içinde yazın.") }
+        let foldedBrief = TurkishText.fold(TurkishText.normalize(text))
+        if foldedBrief.contains("yerlestir") {
+            let source: DraftProject
+            if let previous {
+                source = previous
+            } else if foldedBrief.contains("onluk") || foldedBrief.contains("onlugu") {
+                source = StudioPattern.apron.makeProject()
+            } else if foldedBrief.contains("etek") {
+                source = StudioPattern.skirt.makeProject()
+            } else if foldedBrief.contains("bez canta") || foldedBrief.contains("bez cantasi") {
+                source = StudioPattern.tote.makeProject()
+            } else {
+                throw Problem("Yerleşim için mevcut kalıbı açın veya önlük belirtin.")
+            }
+            guard let marker = try MarkerBrief.parse(text, source: source) else {
+                throw Problem("Yerleşim tarifi anlaşılamadı.")
+            }
+            return (try MarkerLayout.arrange(source, widthMM: marker.widthMM,
+                                             gapMM: marker.gapMM, marginMM: marker.marginMM,
+                                             quantities: marker.quantities), marker.output)
+        }
         let normalized = TurkishText.fold(TurkishText.normalize(text))
             .replacingOccurrences(of: #"(?<=[0-9])[,](?=[0-9])"#, with: ".", options: .regularExpression)
             .replacingOccurrences(of: #"(?<=[0-9])(?=cm|mm|x)"#, with: " ", options: .regularExpression)
