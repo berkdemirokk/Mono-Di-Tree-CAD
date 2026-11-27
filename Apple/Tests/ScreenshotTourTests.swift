@@ -376,3 +376,25 @@ extension ScreenshotTourTests {
         snap("40-plotter-output")
     }
 }
+
+extension ScreenshotTourTests {
+    func testEditableMarkerExamplePreparesThreePiecesAndPlotterFile() {
+        let app = launch(["--ui-test-reset-draft"])
+        app.buttons["open-pattern-brief"].tap()
+        let example = app.buttons["brief-marker-example"]
+        XCTAssertTrue(example.waitForExistence(timeout: 5))
+        example.tap()
+        let field = app.textFields["brief-field"]
+        XCTAssertTrue((field.value as? String)?.contains("150 cm") == true)
+        app.buttons["brief-submit"].tap()
+        let share = app.buttons["brief-share"]
+        XCTAssertTrue(share.waitForExistence(timeout: 10))
+        XCTAssertTrue(share.label.contains("PLT"))
+        app.swipeUp()
+        snap("41-marker-layout")
+        let editor = app.buttons["brief-open-editor"]
+        for _ in 0..<4 where !editor.isHittable { app.swipeUp() }
+        editor.tap()
+        XCTAssertTrue(app.staticTexts["3 parça • Tümü ekranda"].waitForExistence(timeout: 10))
+    }
+}
