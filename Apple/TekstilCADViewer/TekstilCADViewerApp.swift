@@ -721,6 +721,12 @@ private struct ContentView: View {
                                     .font(.caption).foregroundStyle(AppTheme.muted)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
+                            if project.pieces.contains(where: { !$0.darts.isEmpty }) {
+                                Text("Kesikli mavi çizgiler pens dikiş kollarıdır; kesim çizgisi değildir.")
+                                    .font(.caption).foregroundStyle(AppTheme.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("dart-preview-legend")
+                            }
                             viewerFooter(project)
                         }
                         .appCard()
@@ -841,6 +847,7 @@ private struct Drawing {
         }
     }
     struct Grain { let start: Point; let end: Point; let needsReview: Bool }
+    struct DartLegs { let start: Point; let apex: Point; let end: Point }
     struct Piece {
         let name: String?
         let points: [Point]
@@ -852,6 +859,7 @@ private struct Drawing {
         let quantity: Int?
         let grainStatus: String
         let grain: Grain?
+        let darts: [DartLegs]
 
         func displayName(index: Int) -> String {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -880,6 +888,81 @@ private struct Drawing {
               CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
         return number.boolValue
     }
+
+    private static func signedArea(_ points: [Point]) -> Double {
+        guard points.count >= 3 else { return 0 }
+        var area = 0.0
+        for index in points.indices {
+            let next = points[(index + 1) % points.count]
+            area += points[index].x * next.y - next.x * points[index].y
+        }
+        return area / 2
+    }
+
+    private static func contains(_ point: Point, polygon: [Point]) -> Bool {
+        var inside = false
+        for index in polygon.indices {
+            let a = polygon[index], b = polygon[(index + 1) % polygon.count]
+            let cross = (point.x - a.x) * (b.y - a.y) - (point.y - a.y) * (b.x - a.x)
+            let dot = (point.x - a.x) * (point.x - b.x) + (point.y - a.y) * (point.y - b.y)
+            if abs(cross) <= 1e-8 && dot <= 1e-8 { return true }
+            if (a.y > point.y) != (b.y > point.y),
+               point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x {
+                inside.toggle()
+            }
+        }
+        return inside
+    }
+
+    private static func validateParametricContours(_ object: [String: Any], requireControls: Bool) throws {
+        let rawPieces = object["Pieces"] as? [[String: Any]] ?? []
+        var foundControls = false
+        for piece in rawPieces {
+            guard let curves = piece["Curves"], !(curves is NSNull) else { continue }
+            foundControls = true
+            guard jsonBoolean(piece["Closed"]) == false,
+                  let elements = curves as? [[String: Any]],
+                  !elements.isEmpty, elements.count <= 2_000 else {
+                throw ViewerError.message("Parametrik kontur geçersiz.")
+            }
+            for curve in elements {
+                guard let kind = curve["$type"] as? String else {
+                    throw ViewerError.message("Parametrik kontur geçersiz.")
+                }
+                let expected: Set<String>
+                switch kind {
+                case "line": expected = ["$type", "Start", "End"]
+                case "cubicBezier": expected = ["$type", "P0", "P1", "P2", "P3"]
+                case "arc": expected = ["$type", "Center", "Radius", "StartAngle", "SweepAngle"]
+                default: throw ViewerError.message("Bilinmeyen parametrik kontur türü.")
+                }
+                guard Set(curve.keys) == expected else {
+                    throw ViewerError.message("Parametrik kontur geçersiz.")
+                }
+                for key in expected where key != "$type" {
+                    if ["Radius", "StartAngle", "SweepAngle"].contains(key) {
+                        guard let number = jsonNumber(curve[key]), number.isFinite,
+                              (key != "Radius" || number > 0) else {
+                            throw ViewerError.message("Parametrik kontur geçersiz.")
+                        }
+                    } else {
+                        guard let point = curve[key] as? [String: Any],
+                              Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                              let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
+                              x.isFinite, y.isFinite,
+                              abs(x) <= 100_000_000, abs(y) <= 100_000_000,
+                              (point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true) else {
+                            throw ViewerError.message("Parametrik kontur geçersiz.")
+                        }
+                    }
+                }
+            }
+        }
+        if requireControls && !foundControls {
+            throw ViewerError.message("Sürüm 9 parametrik kontur içermiyor.")
+        }
+    }
+
     static func load(_ url: URL) throws -> Drawing {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
         if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
@@ -896,7 +979,7 @@ private struct Drawing {
            let number = array[0] as? NSNumber,
            CFGetTypeID(number) != CFBooleanGetTypeID(),
            number.doubleValue.isFinite, number.doubleValue.rounded() == number.doubleValue,
-           (1...9).contains(number.intValue), let body = array[1] as? [String: Any] {
+           (1...10).contains(number.intValue), let body = array[1] as? [String: Any] {
             schemaVersion = number.intValue
             object = body
         } else if let body = root as? [String: Any] { object = body }
@@ -921,61 +1004,46 @@ private struct Drawing {
             }
         }
         if schemaVersion == 9 {
-            let rawPieces = object["Pieces"] as? [[String: Any]] ?? []
-            var foundControls = false
-            for piece in rawPieces {
-                guard let curves = piece["Curves"] else { continue }
-                foundControls = true
-                guard jsonBoolean(piece["Closed"]) == false,
-                      let elements = curves as? [[String: Any]],
-                      !elements.isEmpty, elements.count <= 2_000 else {
-                    throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
-                }
-                for curve in elements {
-                    guard let kind = curve["$type"] as? String else {
-                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
-                    }
-                    let expected: Set<String>
-                    switch kind {
-                    case "line": expected = ["$type", "Start", "End"]
-                    case "cubicBezier": expected = ["$type", "P0", "P1", "P2", "P3"]
-                    case "arc": expected = ["$type", "Center", "Radius", "StartAngle", "SweepAngle"]
-                    default: throw ViewerError.message("Bilinmeyen parametrik kontur türü.")
-                    }
-                    guard Set(curve.keys) == expected else {
-                        throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
-                    }
-                    for key in expected where key != "$type" {
-                        if ["Radius", "StartAngle", "SweepAngle"].contains(key) {
-                            guard let number = jsonNumber(curve[key]),
-                                  number.isFinite,
-                                  (key != "Radius" || number > 0) else {
-                                throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
-                            }
-                        } else {
-                            guard let point = curve[key] as? [String: Any],
-                                  Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]),
-                                  let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
-                                  x.isFinite, y.isFinite,
-                                  abs(x) <= 100_000_000, abs(y) <= 100_000_000,
-                                  (point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true) else {
-                                throw ViewerError.message("Sürüm 9 parametrik konturu geçersiz.")
-                            }
-                        }
-                    }
-                }
-            }
-            guard foundControls else {
-                throw ViewerError.message("Sürüm 9 parametrik kontur içermiyor.")
-            }
+            try validateParametricContours(object, requireControls: true)
+        } else if schemaVersion == 10 {
+            try validateParametricContours(object, requireControls: false)
         } else if let pieces = object["Pieces"] as? [[String: Any]],
-                  pieces.contains(where: { $0["Curves"] != nil }) {
+                  pieces.contains(where: { piece in
+                      guard let curves = piece["Curves"] else { return false }
+                      return !(curves is NSNull)
+                  }) {
             throw ViewerError.message("Parametrik kontur için sürüm 9 gerekir.")
+        }
+        if schemaVersion == 10 {
+            guard let rawPieces = object["Pieces"] as? [[String: Any]] else {
+                throw ViewerError.message("Sürüm 10 pens işaretleri geçersiz.")
+            }
+            var foundDarts = false
+            var totalDarts = 0
+            for piece in rawPieces {
+                guard let rawDarts = piece["Darts"], !(rawDarts is NSNull) else { continue }
+                guard let darts = rawDarts as? [[String: Any]], (1...64).contains(darts.count),
+                      jsonBoolean(piece["Closed"]) == true,
+                      let rawPoints = piece["Points"] as? [[String: Any]], rawPoints.count >= 3 else {
+                    throw ViewerError.message("Sürüm 10 pens işaretleri geçersiz.")
+                }
+                foundDarts = true
+                totalDarts += darts.count
+                guard totalDarts <= 200_000 else { throw ViewerError.message("Sürüm 10 pens sayısı sınırı aşıldı.") }
+            }
+            guard foundDarts else { throw ViewerError.message("Sürüm 10 projesinde pens işareti eksik.") }
+        } else if let pieces = object["Pieces"] as? [[String: Any]],
+                  pieces.contains(where: { piece in
+                      guard let darts = piece["Darts"] else { return false }
+                      return !(darts is NSNull)
+                  }) {
+            throw ViewerError.message("Pens işaretleri için sürüm 10 gerekir.")
         }
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
         }
         var total = 0
+        var dartValidationWork = 0
         var pieces: [Piece] = []
         var bounds: Bounds?
         for raw in rawPieces {
@@ -993,6 +1061,55 @@ private struct Drawing {
                 if pieceBounds == nil { pieceBounds = Bounds(coordinate) }
                 else { pieceBounds?.include(coordinate) }
                 return coordinate
+            }
+            var darts: [DartLegs] = []
+            if schemaVersion == 10, let rawDarts = raw["Darts"], !(rawDarts is NSNull) {
+                guard let marks = rawDarts as? [[String: Any]], !marks.isEmpty, marks.count <= 64,
+                      closed, raw["Curves"] == nil || raw["Curves"] is NSNull else {
+                    throw ViewerError.message("Sürüm 10 pens işaretleri geçersiz.")
+                }
+                let vertices = points.count > 3 && points.first!.x == points.last!.x && points.first!.y == points.last!.y
+                    ? Array(points.dropLast()) : points
+                guard vertices.count >= 3,
+                      vertices.allSatisfy({ abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }) else {
+                    throw ViewerError.message("Sürüm 10 pens konturu geçersiz.")
+                }
+                dartValidationWork += marks.count * vertices.count
+                guard dartValidationWork <= 20_000_000 else {
+                    throw ViewerError.message("Sürüm 10 pens doğrulama sınırı aşıldı.")
+                }
+                let area = signedArea(vertices)
+                guard area.isFinite, area != 0 else { throw ViewerError.message("Sürüm 10 pens konturu geçersiz.") }
+                var usedEdges = Set<Int>()
+                for mark in marks {
+                    guard Set(mark.keys) == Set(["EdgeIndex", "StartFraction", "EndFraction", "DepthMm"]),
+                          let edgeNumber = jsonNumber(mark["EdgeIndex"]), edgeNumber.isFinite,
+                          edgeNumber.rounded() == edgeNumber, edgeNumber >= 0, edgeNumber < Double(vertices.count),
+                          let startFraction = jsonNumber(mark["StartFraction"]), startFraction.isFinite,
+                          let endFraction = jsonNumber(mark["EndFraction"]), endFraction.isFinite,
+                          let depth = jsonNumber(mark["DepthMm"]), depth.isFinite,
+                          startFraction > 0, startFraction < endFraction, endFraction < 1,
+                          depth > 0, depth <= 100_000 else {
+                        throw ViewerError.message("Sürüm 10 pens ölçüleri veya alanları geçersiz.")
+                    }
+                    let edgeIndex = Int(edgeNumber)
+                    guard usedEdges.insert(edgeIndex).inserted else {
+                        throw ViewerError.message("Aynı kenarda birden fazla pens tanımı desteklenmiyor.")
+                    }
+                    let a = vertices[edgeIndex], b = vertices[(edgeIndex + 1) % vertices.count]
+                    let dx = b.x - a.x, dy = b.y - a.y, length = hypot(dx, dy)
+                    guard length.isFinite, length > 1e-8 else { throw ViewerError.message("Sürüm 10 pens kenarı çok kısa.") }
+                    let start = Point(x: a.x + dx * startFraction, y: a.y + dy * startFraction)
+                    let end = Point(x: a.x + dx * endFraction, y: a.y + dy * endFraction)
+                    let midpoint = (startFraction + endFraction) / 2
+                    let apex = Point(x: a.x + dx * midpoint - dy / length * depth * (area > 0 ? 1 : -1),
+                                     y: a.y + dy * midpoint + dx / length * depth * (area > 0 ? 1 : -1))
+                    guard [start, apex, end].allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) <= 100_000_000 && abs($0.y) <= 100_000_000 }),
+                          contains(apex, polygon: vertices) else {
+                        throw ViewerError.message("Sürüm 10 pens ucu konturun dışında veya sınır dışı.")
+                    }
+                    darts.append(DartLegs(start: start, apex: apex, end: end))
+                }
             }
             let metadata = raw["Metadata"] as? [String: Any]
             let quantityNumber = metadata?["Quantity"] as? NSNumber
@@ -1025,14 +1142,16 @@ private struct Drawing {
             pieces.append(Piece(name: raw["Name"] as? String, points: points, bounds: pieceBounds, closed: closed,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
-                                grainStatus: grainStatus, grain: parsedGrain))
+                                grainStatus: grainStatus, grain: parsedGrain, darts: darts))
         }
-        let formatNotice = schemaVersion == 9
+        let formatNotice = schemaVersion == 10
+            ? "Bu dosya bilgisayardaki programın sürüm 10 biçiminde. Pens dikiş kolları kesikli mavi çizgiyle önizlenir; burada düzenlenemez veya üretim için dışa aktarılamaz. Kaynak dosya değişmeden kalır. Kesim ve dikim için bilgisayardaki programda doğrulayın."
+            : schemaVersion == 9
             ? "Bu dosya bilgisayardaki programın yeni biçimiyle (sürüm 9) kaydedilmiş. Burada yalnızca parçaların çizgileri gösterilir; eğriler düzenlenemez ve denetlenemez. Kesmeden önce dosyayı bilgisayarda açıp kontrol et."
             : schemaVersion >= 6
             ? "Bu dosya bilgisayardaki programın yeni biçimiyle (sürüm \(schemaVersion)) kaydedilmiş. Burada yalnızca parçaların çizgileri gösterilir; çentikler, kesim yerleşimi ve katmanlar gösterilmez. Kesmeden önce dosyayı bilgisayarda açıp kontrol et."
             : nil
-        let editableDraft = CADSketchImport.loadEditableCopy(from: data, jsonRoot: root)
+        let editableDraft = schemaVersion == 10 ? nil : CADSketchImport.loadEditableCopy(from: data, jsonRoot: root)
         return Drawing(name: name, pieces: pieces, bounds: bounds, formatNotice: formatNotice,
                        editableDraft: editableDraft)
     }
@@ -1228,16 +1347,26 @@ private struct DrawingView: View {
                     let start = position(grain.start), end = position(grain.end)
                     let dx = end.x - start.x, dy = end.y - start.y
                     let length = hypot(dx, dy)
-                    guard length.isFinite && length > 0.1 else { continue }
-                    let ux = dx / length, uy = dy / length
-                    let arrow = min(CGFloat(9), length / 3)
-                    var grainPath = Path()
-                    grainPath.move(to: start); grainPath.addLine(to: end)
-                    grainPath.move(to: CGPoint(x: end.x - ux * arrow - uy * arrow * 0.5, y: end.y - uy * arrow + ux * arrow * 0.5))
-                    grainPath.addLine(to: end)
-                    grainPath.addLine(to: CGPoint(x: end.x - ux * arrow + uy * arrow * 0.5, y: end.y - uy * arrow - ux * arrow * 0.5))
-                    context.stroke(grainPath, with: .color(grain.needsReview ? .orange : AppTheme.ink),
-                                   style: StrokeStyle(lineWidth: 1.5, dash: grain.needsReview ? [4, 3] : []))
+                    if length.isFinite && length > 0.1 {
+                        let ux = dx / length, uy = dy / length
+                        let arrow = min(CGFloat(9), length / 3)
+                        var grainPath = Path()
+                        grainPath.move(to: start); grainPath.addLine(to: end)
+                        grainPath.move(to: CGPoint(x: end.x - ux * arrow - uy * arrow * 0.5, y: end.y - uy * arrow + ux * arrow * 0.5))
+                        grainPath.addLine(to: end)
+                        grainPath.addLine(to: CGPoint(x: end.x - ux * arrow + uy * arrow * 0.5, y: end.y - uy * arrow - ux * arrow * 0.5))
+                        context.stroke(grainPath, with: .color(grain.needsReview ? .orange : AppTheme.ink),
+                                       style: StrokeStyle(lineWidth: 1.5, dash: grain.needsReview ? [4, 3] : []))
+                    }
+                }
+                if !piece.darts.isEmpty {
+                    for dart in piece.darts {
+                        var path = Path()
+                        path.move(to: position(dart.start))
+                        path.addLine(to: position(dart.apex))
+                        path.addLine(to: position(dart.end))
+                        context.stroke(path, with: .color(.blue), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                    }
                 }
             }
         }

@@ -24,7 +24,8 @@ final class FixtureLoadingTests: XCTestCase {
         return app
     }
 
-    private func versionedProject(_ version: Any, includeRequiredMetadata: Bool = false) -> String {
+    private func versionedProject(_ version: Any, includeRequiredMetadata: Bool = false,
+                                 dartOverride: [String: Any]? = nil) -> String {
         var piece: [String: Any] = [
             "Name": "Kontur", "Closed": true,
             "Points": [["X": 0, "Y": 0], ["X": 100, "Y": 0], ["X": 100, "Y": 100]]
@@ -54,12 +55,43 @@ final class FixtureLoadingTests: XCTestCase {
                     "End": ["X": 100, "Y": 0]
                 ]]
                 body["Pieces"] = [piece]
+            case 10:
+                piece["Points"] = [["X": 0, "Y": 0], ["X": 100, "Y": 0],
+                                    ["X": 100, "Y": 100], ["X": 0, "Y": 100]]
+                piece["Darts"] = [dartOverride ?? [
+                    "EdgeIndex": 0, "StartFraction": 0.4, "EndFraction": 0.6, "DepthMm": 20
+                ]]
+                body["Pieces"] = [piece]
             default:
                 break
             }
         }
         let data = try! JSONSerialization.data(withJSONObject: [version, body], options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
+    }
+
+    func testVersionTenShowsReadOnlySewnDartPreviewWithoutExportControls() {
+        let app = launch(json: versionedProject(10, includeRequiredMetadata: true))
+        XCTAssertTrue(app.staticTexts["Windows Önizleme"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["dart-preview-legend"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "üretim için dışa aktarılamaz")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["Kopyasını düzenle"].exists,
+                       "A dart-bearing project must stay read-only so its sewing marks cannot be lost in an editable copy.")
+        app.terminate()
+    }
+
+    func testMalformedVersionTenDartsAreRejected() {
+        let malformed: [[String: Any]] = [
+            ["EdgeIndex": 9, "StartFraction": 0.4, "EndFraction": 0.6, "DepthMm": 20],
+            ["EdgeIndex": 0, "StartFraction": 0.6, "EndFraction": 0.4, "DepthMm": 20],
+            ["EdgeIndex": 0, "StartFraction": 0.4, "EndFraction": 0.6, "DepthMm": 1000],
+            ["EdgeIndex": 0, "StartFraction": 0.4, "EndFraction": 0.6, "DepthMm": 20, "Unknown": true]
+        ]
+        for dart in malformed {
+            let app = launch(json: versionedProject(10, includeRequiredMetadata: true, dartOverride: dart))
+            XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+            app.terminate()
+        }
     }
 
     func testNewerWindowsEnvelopesShowReadOnlyLimitations() {
@@ -77,7 +109,8 @@ final class FixtureLoadingTests: XCTestCase {
 
     func testUnsupportedAndMalformedNewerVersionsAreRejected() {
         let cases: [(String, String)] = [
-            (versionedProject(10), "Desteklenmeyen proje biçimi."),
+            (versionedProject(11), "Desteklenmeyen proje biçimi."),
+            (versionedProject(10), "Sürüm 10 projesinde pens işareti eksik."),
             (versionedProject(9), "Sürüm 9 parametrik kontur içermiyor."),
             (versionedProject(8), "Sürüm 8 katman listesi eksik."),
             (versionedProject(7), "Sürüm 7 döndürme izi eksik."),
