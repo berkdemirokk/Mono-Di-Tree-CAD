@@ -161,7 +161,7 @@ internal sealed partial class PlannerContext
         if (c.WidthMm is null && c.HeightMm is null) return Refuse(Refusals.NumberMissingFor("genişliği 95 yap"));
         // R11 before R10, as PieceOperations.ResizeRectangle checks them (extra data first, then the shape).
         var hasRule = Doc.GradingRules.Any(r => r.SourcePieceId == piece.Id);
-        if (piece.Curves is not null || piece.Grainline is not null || piece.Notches is not null || hasRule)
+        if (piece.Curves is not null || piece.Grainline is not null || piece.Notches is not null || piece.Darts is not null || hasRule)
             return Refuse(Refusals.HasExtraData());
         var before = BoundsOf(piece);
         var result = PieceOperations.ResizeRectangle(Doc, piece.Id, c.WidthMm, c.HeightMm);

@@ -540,6 +540,8 @@ public sealed class CadCanvas : FrameworkElement
         {
             if(!CanDragMarkedVertex(piece,vertex))return;
         }
+        if(vertex>=0 && piece?.Darts is not null)
+        { owner.SetStatus("Pens işaretleri varken kontur köşesi taşınamaz; önce pensi kaldırın.");return; }
         if(piece is not null)
         {
             // Moving a member of a multi-selection moves the whole group in
@@ -880,6 +882,7 @@ public sealed class CadCanvas : FrameworkElement
             throw new InvalidOperationException("Parça veya seçim değişti; nokta taşımasını yeniden başlatın.");
         if(owner.HasPropertyDraftFor(id))
             throw new InvalidOperationException("Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");
+        if(piece.Darts is not null)throw new InvalidOperationException("Pens işaretleri varken kontur köşesi taşınamaz.");
         if(piece.Notches is not null && (vertexIndex<0 || vertexIndex>=piece.Points.Count || !CanDragMarkedVertex(piece,vertexIndex)))
             throw new InvalidOperationException("İşaret koordinat bitleri kaynak köşeyle eşleşmiyor; işlem uygulanmadı.");
         if(proposed.Count!=original.Count || proposed.Count<=SynchronousVertexLimit || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
@@ -1061,6 +1064,24 @@ public sealed class CadCanvas : FrameworkElement
             var visible=isPrimaryDrag ? dragPreview! : hasGroupPreview ? groupPreview! : p.Points;
             var fill=p.Closed ? selected ? StudioTheme.PieceSelectedFill : StudioTheme.PieceFill : null;
             DrawContour(dc,visible,p.Closed,fill,pen);
+            if(p.Darts is not null)
+            {
+                var dartBrush=StudioTheme.Notch;var dartPen=new Pen(dartBrush,1.8) { DashStyle=DashStyles.Dash };
+                foreach(var dart in p.Darts)
+                {
+                    try
+                    {
+                        var drawPiece=p.Points.SequenceEqual(visible) ? p : p.Clone();
+                        if(!ReferenceEquals(drawPiece,p))drawPiece.Points=visible.ToList();
+                        var (start,apex,dartEnd)=DartTools.GetLegs(drawPiece,dart);
+                        var a=Screen(start);var tip=Screen(apex);var b=Screen(dartEnd);
+                        if(MarkerCanAffectViewport(a,RenderSize)||MarkerCanAffectViewport(tip,RenderSize)||MarkerCanAffectViewport(b,RenderSize))
+                        { dc.DrawLine(dartPen,a,tip);dc.DrawLine(dartPen,tip,b); }
+                    }
+                    catch(ArgumentException) { /* Corrupt or stale marks are rejected at project load and remain invisible here. */ }
+                }
+                if(selected)Text(dc,$"Pens · {p.Darts.Count}",PieceLabelOrigin(visible),dartBrush,11);
+            }
             if(p.Notches is not null)
             {
                 var notchBrush=StudioTheme.Notch;var notchPen=new Pen(notchBrush,2);
@@ -1148,6 +1169,7 @@ public sealed class CadCanvas : FrameworkElement
         if(ghost is null)return null;
         var box=Rect.Empty;
         foreach(var polygon in ghost.Polygons)foreach(var point in polygon.Points)box.Union(Screen(point));
+        foreach(var line in ghost.Lines){box.Union(Screen(line.Start));box.Union(Screen(line.End));}
         foreach(var label in ghost.Labels)box.Union(LabelPlate(label,Format(label.Text,Brushes.White,13),clampLabels));
         return box.IsEmpty ? null : box;
     }
@@ -1184,6 +1206,8 @@ public sealed class CadCanvas : FrameworkElement
             var figure=new PathFigure(Screen(polygon.Points[0]),[new PolyLineSegment(polygon.Points.Skip(1).Select(Screen).ToList(),true)],polygon.Closed);
             dc.DrawGeometry(polygon.Closed ? fill : null,pen,new PathGeometry([figure]));
         }
+        var internalPen=new Pen(new SolidColorBrush(color),2) { DashStyle=DashStyles.Dash };
+        foreach(var line in scene.Lines)dc.DrawLine(internalPen,Screen(line.Start),Screen(line.End));
         var text=new SolidColorBrush(Color.FromRgb(0xEA,0xF4,0xFF));
         var plate=new SolidColorBrush(Color.FromArgb(0xD0,0x0D,0x18,0x27));
         foreach(var label in scene.Labels)

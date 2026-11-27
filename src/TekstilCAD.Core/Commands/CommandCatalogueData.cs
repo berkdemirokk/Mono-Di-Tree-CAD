@@ -204,6 +204,10 @@ internal static class CommandCatalogueData
             "Parçanın dış kenarına eşit genişlikte pay ekler ve sonucu ayrı bir parça yapar; Tekstil araçları penceresi açılır.",
             ["1 cm dikiş payı", "dikiş payı 10", "bir buçuk santim pay ver"],
             "pay", "pay ekle", "dikiş", "kenar payı", "dikiş payı ekle"));
+        all.Add(F("size.dart", GSize, "İç pens ekle",
+            "Seçili kapalı parçanın kenarına iki iç dikiş kolu ekler; kumaş konturu değişmez. Örnek kenar numarası konturun nokta sırasını izler.",
+            ["1 kenara 40 mm ağızlı 20 mm derinlikte pens ekle"],
+            "pens", "iç pens", "pens ekle", "pens oluştur"));
         all.Add(F("size.grade", GSize, "Beden oluştur…",
             "Seçili parçadan daha büyük ya da daha küçük bedenler üretir (serileme); Tekstil araçları penceresi açılır.",
             ["bir beden büyüt", "bir üst beden", "L bedeni çıkar", "serileme yap"],
