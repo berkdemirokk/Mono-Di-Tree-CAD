@@ -103,13 +103,27 @@ public class PlannerRefusalTests
     }
 
     [Fact]
-    public void R10NotARectangle()
+    public void R10OpenContourCannotBeResized()
     {
-        var triangle = new PatternPiece { Name = "Üçgen", Points = [new(0, 0), new(100, 0), new(50, 80)] };
-        var doc = PieceOperationTestData.Doc(triangle);
+        var open = new PatternPiece { Name = "Açık kontur", Closed = false, Points = [new(0, 0), new(100, 0), new(50, 80)] };
+        var doc = PieceOperationTestData.Doc(open);
+        var before = doc.Clone();
         var refusal = Refused(Plan(new ResizeCommand(95, null), doc, Sel(doc)));
         Assert.Equal("R10", refusal.Code);
-        Assert.Equal(Refusals.TemplateNotRectangle, refusal.Message);
+        Assert.Equal("Yalnızca doğrulanabilir kapalı çokgenlerin ölçüsü değiştirilebilir.", refusal.Message);
+        Assert.True(DocumentSession.ContentEquals(before, doc));
+    }
+
+    [Fact]
+    public void R10SelfIntersectingContourCannotBeResized()
+    {
+        var crossing = new PatternPiece { Name = "Kesişen kontur", Points = [new(0, 0), new(100, 100), new(0, 100), new(100, 0)] };
+        var doc = PieceOperationTestData.Doc(crossing);
+        var before = doc.Clone();
+        var refusal = Refused(Plan(new ResizeCommand(95, null), doc, Sel(doc)));
+        Assert.Equal("R10", refusal.Code);
+        Assert.Equal("Kontur geçersiz; ölçü değiştirme işlemi uygulanmadı.", refusal.Message);
+        Assert.True(DocumentSession.ContentEquals(before, doc));
     }
 
     [Fact]
