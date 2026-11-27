@@ -46,8 +46,9 @@ enum MarkerBrief {
         var end = marker
         var output: PatternBrief.Output?
         if marker + 1 < words.count {
-            guard Array(words[(marker + 1)...]) == ["ve", "plotter", "dosyasi", "hazirla"] ||
-                    Array(words[(marker + 1)...]) == ["ve", "plt", "dosyasi", "hazirla"] else {
+            let start = words[marker + 1] == "ve" ? marker + 2 : marker + 1
+            let suffix = Array(words[start...])
+            guard suffix == ["plotter", "dosyasi", "hazirla"] || suffix == ["plt", "dosyasi", "hazirla"] else {
                 throw Problem(message: "Yerleşimden sonra yalnızca “ve plotter dosyası hazırla” isteği destekleniyor.")
             }
             output = .plotter

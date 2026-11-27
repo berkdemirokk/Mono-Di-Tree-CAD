@@ -96,7 +96,7 @@ final class CommandFieldUITests: XCTestCase {
         XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
 
         enter("150 cm kumasa 2 on panel yerlestir", in: app, submit: true)
-        XCTAssertTrue(text(containing: "1500 mm kumaş eninde 2 parça pastal yerleşimi").waitForExistence(timeout: 5))
+        XCTAssertTrue(text(containing: "1500 mm kumaş eninde 2 parça pastal yerleşimi", in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(countLabel(3, in: app).exists, "Preparing the marker must leave the working project untouched")
         tapBelow(app.buttons["command-apply"], in: app)
         XCTAssertTrue(countLabel(5, in: app).waitForExistence(timeout: 5))
@@ -113,7 +113,7 @@ final class CommandFieldUITests: XCTestCase {
 
         enter("pastal yap", in: app, submit: true)
         let example = "150 cm kumaşa 2 adet Ön panel yerleştir"
-        XCTAssertTrue(text(containing: example).waitForExistence(timeout: 5))
+        XCTAssertTrue(text(containing: example, in: app).waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons[example].exists, "The example should be an actionable fill-and-preview choice")
     }
 
@@ -126,7 +126,7 @@ final class CommandFieldUITests: XCTestCase {
         XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
 
         enter("150 cm kumasa 2 on panel yerlestir plotter dosyasi hazirla", in: app, submit: true)
-        XCTAssertTrue(text(containing: "PLT dosyası hazırlanacak").waitForExistence(timeout: 5))
+        XCTAssertTrue(text(containing: "PLT dosyası hazırlanacak", in: app).waitForExistence(timeout: 5))
         tapBelow(app.buttons["command-apply"], in: app)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Dosyayı paylaş")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertTrue(countLabel(3, in: app).exists, "Preparing a PLT file must not change the working drawing")
