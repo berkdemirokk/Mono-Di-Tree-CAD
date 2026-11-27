@@ -12,6 +12,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Win32;
 using TekstilCAD.Core;
+using TekstilCAD.Core.Commands;
 using TekstilCAD.Nesting;
 using TekstilCAD.FileFormats;
 
@@ -22,6 +23,7 @@ internal sealed class ProductionNestingWindow : Window
 {
     private readonly MainWindow workspace;
     private readonly ProjectDocument initialSnapshot;
+    private readonly IReadOnlyDictionary<Guid,int> requestedQuantityOverrides;
     private readonly ListBox choices = new();
     private readonly TextBox choiceSearch = new() { Margin=new Thickness(4,2,4,3), Padding=new Thickness(7,5,7,5), MinWidth=0, MaxLength=1024 };
     private readonly Button clearChoiceSearch = new() { Content="Temizle", Padding=new Thickness(8,4,8,4), Margin=new Thickness(4,2,4,3) };
@@ -84,9 +86,22 @@ internal sealed class ProductionNestingWindow : Window
     private int previewRotation;
     private ProjectDocument? previewLayoutSnapshot;
     private readonly DispatcherTimer documentWatch = new() { Interval=TimeSpan.FromSeconds(1) };
-    public ProductionNestingWindow(MainWindow workspace, Window owner)
+    public ProductionNestingWindow(MainWindow workspace, Window owner, MeasuredNestingRequest? request=null)
     {
-        this.workspace=workspace; initialSnapshot=workspace.Document.Clone(); Owner=owner; Title="Adetli pastal önizlemesi"; Width=1000; Height=760; MinWidth=680; MinHeight=520;
+        this.workspace=workspace; initialSnapshot=workspace.Document.Clone();
+        var overrides=new Dictionary<Guid,int>();
+        if(request is not null)
+        {
+            foreach(var requested in request.Pieces)
+            {
+                var matches=initialSnapshot.Pieces.Where(p=>string.Equals(TekstilCAD.Core.Commands.TurkishText.Fold(p.Name.Trim()),TekstilCAD.Core.Commands.TurkishText.Fold(requested.Name.Trim()),StringComparison.Ordinal)).ToArray();
+                if(matches.Length!=1) throw new InvalidOperationException("İstenen parça adı projede tek ve açık biçimde bulunamadı; pastal açılmadı.");
+                overrides.Add(matches[0].Id,requested.Quantity);
+            }
+            width.Text=request.FabricWidthMm.ToString("0.###",CultureInfo.InvariantCulture);
+        }
+        requestedQuantityOverrides=overrides;
+        Owner=owner; Title="Adetli pastal önizlemesi"; Width=1000; Height=760; MinWidth=680; MinHeight=520;
         WindowStartupLocation=WindowStartupLocation.CenterOwner; StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) }; Content=root;
         var intro=new TextBlock { Text="Seçilen kesim parçaları belirtilen adet kadar yerleştirilir. Rol, adet ve tek malzeme belirtilmelidir. Kaynak proje değiştirilmez.", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,0,0,4) }; DockPanel.SetDock(intro,Dock.Top);root.Children.Add(intro);
@@ -200,9 +215,10 @@ internal sealed class ProductionNestingWindow : Window
         {
             var bounds=p.Points.Count>0 ? TekstilCAD.Core.Geometry.Bounds(p.Points) : default;
             var dimensions=p.Points.Count>0 ? $"{MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm" : "ölçü yok";
-            var label=$"{SafeChoiceText(p.Name,100)}\nKimlik: {p.Id:D}\nEn × boy: {dimensions}\nRol: {SafeChoiceText(p.Metadata?.Role,40)} · Adet: {p.Metadata?.Quantity?.ToString(CultureInfo.InvariantCulture) ?? "belirtilmedi"}\nMalzeme: {SafeChoiceText(p.Metadata?.Material,60)} · Beden: {SafeChoiceText(p.Metadata?.Size,60)}";
+            var quantity=requestedQuantityOverrides.TryGetValue(p.Id,out var requestedCount) ? requestedCount.ToString(CultureInfo.InvariantCulture)+" (bu istek)" : p.Metadata?.Quantity?.ToString(CultureInfo.InvariantCulture) ?? "belirtilmedi";
+            var label=$"{SafeChoiceText(p.Name,100)}\nKimlik: {p.Id:D}\nEn × boy: {dimensions}\nRol: {SafeChoiceText(p.Metadata?.Role,40)} · Adet: {quantity}\nMalzeme: {SafeChoiceText(p.Metadata?.Material,60)} · Beden: {SafeChoiceText(p.Metadata?.Size,60)}";
             var displayedName=SafeChoiceText(p.Name,int.MaxValue);
-            var choice=new ChoiceItem { Id=p.Id,Label=label,Name=p.Name,DisplayName=displayedName,IsSelected=p.Id==workspace.SelectedId };
+            var choice=new ChoiceItem { Id=p.Id,Label=label,Name=p.Name,DisplayName=displayedName,IsSelected=requestedQuantityOverrides.Count>0 ? requestedQuantityOverrides.ContainsKey(p.Id) : p.Id==workspace.SelectedId };
             choice.PropertyChanged+=(_,e)=> { if(e.PropertyName==nameof(ChoiceItem.IsSelected) && !updatingChoices){InvalidatePreview();UpdateChoiceSearchStatus();} else if(!updatingChoices && rotationPolicy.SelectedIndex==5 && e.PropertyName is (nameof(ChoiceItem.Allow0) or nameof(ChoiceItem.Allow90) or nameof(ChoiceItem.Allow180) or nameof(ChoiceItem.Allow270))) InvalidatePreview(); }; choiceItems.Add(choice);
         }
         choices.Items.Filter=MatchesChoiceSearch;
@@ -550,7 +566,14 @@ internal sealed class ProductionNestingWindow : Window
         var perPieceAngles=rotationMode==5 ? choiceItems.Where(c=>c.IsSelected).ToDictionary(c=>c.Id,c=>(IReadOnlyList<int>)c.AllowedAngles()) : null;
         if(perPieceAngles is not null && perPieceAngles.Any(p=>p.Value.Count==0))
         { InvalidatePreview();SetStatus("Seçili her parça için listede en az bir aday açı seçin; aramayla gizlenmiş seçimleri de kontrol edin.");return; }
-        var snapshot=workspace.Document.Clone(); var requestVersion=inputsVersion;
+        var snapshot=workspace.Document.Clone();
+        foreach(var piece in snapshot.Pieces)
+            if(requestedQuantityOverrides.TryGetValue(piece.Id,out var requestedQuantity))
+            {
+                piece.Metadata ??= new TekstilCAD.Core.PieceMetadata();
+                piece.Metadata.Quantity=requestedQuantity;
+            }
+        var requestVersion=inputsVersion;
         var cancellation=new CancellationTokenSource();calculationCancellation=cancellation;var token=cancellation.Token;
         var beforeCalculation=BeforeCalculationForVerification;cancelCalculation.Visibility=Visibility.Visible;cancelCalculation.IsEnabled=true;
         busy=true; calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;bulkAngles.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;rotationPolicy.IsEnabled=false;customAngles.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;preview.Drawing=null;highlight.ItemsSource=null;mapping.Text="";SetStatus("Hesaplanıyor…");

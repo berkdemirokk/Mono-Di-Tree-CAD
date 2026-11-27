@@ -38,6 +38,33 @@ internal static partial class SimpleViewVerification
             Invoke(window, "Undo");
             Check(window.Document.Name == "İlk proje", "Undo restores the original project name", checks);
         });
+        WithFresh(window =>
+        {
+            var project = new ProjectDocument();
+            foreach (var name in new[] { "Ön", "Arka" })
+                project.Pieces.Add(new PatternPiece { Name = name, Closed = true,
+                    Points = [new(0, 0), new(200, 0), new(200, 300), new(0, 300)] });
+            window.LoadDocument(project);
+            Simple(window, true);
+            Render(window, Temp("measured-marker-command"), 1024, 640);
+            var before = window.Document.Clone();
+            var view = InlineBox(window)!;
+            view.AutoPreview = false;
+            view.SetText("150 cm kumaşa iki ön, bir arka yerleştir");
+            string? handoffKey=null;
+            MeasuredNestingRequest? handedRequest=null;
+            window.MeasuredNestingForVerification=request=>handedRequest=request;
+            window.HandoffForVerification=(key,run)=> { handoffKey=key;run(); };
+            view.HandleKey(Key.Enter, ModifierKeys.None);
+            var previewed=view.State == CommandBarState.Preview && view.ShownPlan is not null
+                && DocumentSession.ContentEquals(before, window.Document);
+            view.HandleKey(Key.Enter, ModifierKeys.None);
+            Check(previewed && handoffKey=="Handoff.TextileTools" && handedRequest is not null
+                && handedRequest.FabricWidthMm==1500
+                && handedRequest.Pieces.SequenceEqual(new[]{new NestingPieceCount("Ön",2),new NestingPieceCount("Arka",1)})
+                && DocumentSession.ContentEquals(before, window.Document),
+                "Named marker quantities preview from the simple command box without changing the pattern", checks);
+        });
         VerifyBoxPreviewLeavesWithView(checks);
         VerifyBoxFills(checks);
         VerifyBoxChips(checks);
