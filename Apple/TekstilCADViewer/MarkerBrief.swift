@@ -54,18 +54,25 @@ enum MarkerBrief {
         }
 
         // Optional explicit spacing clauses immediately before the placement verb.
-        var requestEnd = end
-        if requestEnd >= 4, words[requestEnd - 1] == "aralik", words[requestEnd - 2] == "mm",
-           let value = Double(words[requestEnd - 3]), value.isFinite, value >= 0 {
-            gapMM = value
-            requestEnd -= 3
+        var parsedGap = false
+        var parsedMargin = false
+        while end > fabric + 1 {
+            if end >= 3, words[end - 1] == "aralik", words[end - 2] == "mm" {
+                guard !parsedGap, let value = Double(words[end - 3]), value.isFinite, value >= 0 else {
+                    throw Problem(message: "Parçalar arası boşluğu bir kez, milimetreyle yazın.")
+                }
+                gapMM = value
+                parsedGap = true
+                end -= 3
+            } else if end >= 4, Array(words[(end - 3)..<end]) == ["mm", "kenar", "payi"] {
+                guard !parsedMargin, let value = Double(words[end - 4]), value.isFinite, value >= 0 else {
+                    throw Problem(message: "Kenar payını bir kez, milimetreyle yazın.")
+                }
+                marginMM = value
+                parsedMargin = true
+                end -= 4
+            } else { break }
         }
-        if requestEnd >= 4, words[requestEnd - 1] == "payi", words[requestEnd - 2] == "kenar",
-           words[requestEnd - 3] == "mm", let value = Double(words[requestEnd - 4]), value.isFinite, value >= 0 {
-            marginMM = value
-            requestEnd -= 4
-        }
-        end = requestEnd
         guard gapMM <= 100_000, marginMM <= 100_000 else { throw Problem(message: "Aralık ve kenar payı geçerli aralıkta olmalı.") }
 
         let counts: [String: Int] = ["bir": 1, "iki": 2, "uc": 3, "dort": 4, "bes": 5]
