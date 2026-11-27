@@ -122,6 +122,10 @@ struct PatternBriefStudio: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(pattern.name).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                    if pattern.name.hasSuffix(" · Pastal") {
+                        Text("\(pattern.pieces.count) parça · Döndürmeden yerleştirme")
+                            .font(.subheadline)
+                    }
                     Text(pattern.pieces.map(\.name).joined(separator: " · "))
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
