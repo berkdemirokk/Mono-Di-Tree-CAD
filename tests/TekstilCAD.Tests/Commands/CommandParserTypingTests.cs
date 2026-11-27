@@ -11,6 +11,24 @@ public sealed class CommandParserTypingTests
     private static ParseResult Run(string input, params string[] pieces) =>
         CommandParser.Parse(input, new ParserContext(pieces));
 
+    [Fact]
+    public void MeasuredMarkerRequestCarriesMillimetresAndExactPieceCounts()
+    {
+        var result=Run("150 cm kumaşa iki Ön, bir Arka yerleştir", "Ön", "Arka");
+        var request=Assert.IsType<HandoffCommand>(result.Command);
+        Assert.Equal(HandoffTarget.TextileTools,request.Target);
+        Assert.Equal(1500,request.Value);
+        Assert.Equal(1500,request.NestingRequest!.FabricWidthMm);
+        Assert.Equal(new[]{new NestingPieceCount("Ön",2),new NestingPieceCount("Arka",1)},request.NestingRequest.Pieces);
+    }
+
+    [Fact]
+    public void MeasuredMarkerRequestRefusesUnknownPieceName()
+    {
+        var result=Run("150 cm kumaşa iki Ön, bir Arka yerleştir", "Ön", "Kol");
+        Assert.False(result.IsCommand);
+    }
+
     // ---- Assumed unit -------------------------------------------------------------------------------------------------
 
     [Theory]

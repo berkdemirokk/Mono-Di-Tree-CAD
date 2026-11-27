@@ -7,6 +7,16 @@ namespace TekstilCAD.Desktop;
 // same guarded method the matching button calls; nothing here repeats what those methods check.
 public partial class MainWindow
 {
+    internal Action<MeasuredNestingRequest>? MeasuredNestingForVerification { get; set; }
+
+    private void OpenMeasuredProductionNesting(MeasuredNestingRequest request)
+    {
+        if(BlockForDxfImport())return;
+        EnsurePropertyDraftsApplied();
+        if(MeasuredNestingForVerification is { } verification) { verification(request);return; }
+        new ProductionNestingWindow(this,this,request).ShowDialog();
+    }
+
     /// <summary>What a hand-off runs and the sentence that tells it ended.</summary>
     private sealed record HandoffRoute(Action Run, string Done);
 
@@ -31,8 +41,12 @@ public partial class MainWindow
         HandoffTarget.RecoveryScan => new(RescanRecovery, "Kurtarma taraması başlatıldı."),
         HandoffTarget.About => new(OpenAbout, "Hakkında penceresi kapandı."),
         HandoffTarget.MachineCenter => new(OpenMachineCenter, "Makine dosyası penceresi kapandı."),
-        HandoffTarget.TextileTools => new(() => OpenTextileToolsAt(hand.Tab is { } tab ? Math.Clamp(tab - 1, 0, 2) : 0,
-            hand.Value is { } value && hand.Tab is >= 2 ? value.ToString("0.###", CultureInfo.InvariantCulture) : null), "Tekstil araçları penceresi kapandı."),
+        HandoffTarget.TextileTools => new(() =>
+        {
+            if(hand.NestingRequest is { } request) OpenMeasuredProductionNesting(request);
+            else OpenTextileToolsAt(hand.Tab is { } tab ? Math.Clamp(tab - 1, 0, 2) : 0,
+                hand.Value is { } value && hand.Tab is >= 2 ? value.ToString("0.###", CultureInfo.InvariantCulture) : null);
+        }, hand.NestingRequest is null ? "Tekstil araçları penceresi kapandı." : "Adetli pastal önizlemesi kapandı."),
         _ => null,
     };
 

@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
+
 namespace TekstilCAD.Core.Commands;
 
 /// <summary>
@@ -64,6 +67,9 @@ public static partial class CommandParser
         var state = new State { Norm = norm, Folded = folded, Names = (context.PieceNames ?? Array.Empty<string>()).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() };
         var lexed = Lex(norm, folded);
 
+        var measuredNesting = TryMeasuredNesting(state);
+        if (measuredNesting is not null) return measuredNesting;
+
         // 1. Rename claims the whole line: "adı Ön Beden olsun".
         var rename = TryRename(state, lexed);
         if (rename is not null) return rename;
@@ -86,6 +92,56 @@ public static partial class CommandParser
         if (TryMultiPhrase(state)) return ParseResult.Refused(Refusals.TwoJobsRefusal());
         var classified = Classify(state);
         return state.UnitAssumed ? classified.WithUnitAssumed() : classified;
+    }
+
+    private static ParseResult? TryMeasuredNesting(State state)
+    {
+        if (!state.Folded.Contains("kumas", StringComparison.Ordinal) ||
+            !(state.Folded.Contains("yerlestir", StringComparison.Ordinal) || state.Folded.Contains("diz", StringComparison.Ordinal))) return null;
+
+        var match = Regex.Match(state.Folded,
+            @"^(?<value>[0-9]+(?:[,.][0-9]+)?)\s+(?<unit>mm|cm|m|milim(?:etre)?|santim(?:etre)?|metre)\s+kumas(?:a|in|inda)?\s+(?<items>.+?)\s+(?:yerlestir|diz|hazirla)$",
+            RegexOptions.CultureInvariant);
+        if (!match.Success || Regex.IsMatch(match.Groups["value"].Value,@"[,.][0-9]{3}$",RegexOptions.CultureInvariant) ||
+            !decimal.TryParse(match.Groups["value"].Value.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var value) ||
+            !UnitParser.TryParseUnitWord(match.Groups["unit"].Value, out var unit, out _) || value <= 0) return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
+
+        var width = UnitParser.ToMillimeters(value, unit);
+        if (width < (decimal)MinLengthMm || width > 100_000_000m) return ParseResult.Refused(Refusals.OutOfRangeMeasure());
+        var names = state.Names.Select(n => (Name:n, Folded:TurkishText.Fold(n.Trim())))
+            .Where(x => x.Folded.Length > 0).OrderByDescending(x => x.Folded.Length).ToArray();
+        var assignments = new List<NestingPieceCount>();
+        var clauses = Regex.Split(match.Groups["items"].Value.Trim(), @"\s*,\s*|\s+ve\s+", RegexOptions.CultureInvariant);
+        foreach (var clause in clauses)
+        {
+            var remainder = clause.Trim();
+            var candidate = names.FirstOrDefault(x => remainder.EndsWith(x.Folded, StringComparison.Ordinal));
+            if (candidate.Folded is null) return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
+            if (names.Count(x=>string.Equals(x.Folded,candidate.Folded,StringComparison.Ordinal))!=1)
+                return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
+            var prefix = remainder[..^candidate.Folded.Length].TrimEnd();
+            if (prefix.Length == 0 || !TryNestingCount(prefix, out var quantity) || quantity is < 1 or > 10_000)
+                return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
+            if (assignments.Any(x => string.Equals(x.Name, candidate.Name, StringComparison.Ordinal)))
+                return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
+            assignments.Add(new NestingPieceCount(candidate.Name, quantity));
+        }
+        if (assignments.Count == 0) return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
+        return ParseResult.Understood(new HandoffCommand(HandoffTarget.TextileTools, 3, (double)width,
+            new MeasuredNestingRequest((double)width, assignments)));
+    }
+
+    private static bool TryNestingCount(string text, out int count)
+    {
+        count = 0;
+        var folded = TurkishText.Fold(text.Trim());
+        if (int.TryParse(folded, NumberStyles.None, CultureInfo.InvariantCulture, out count)) return true;
+        var words = folded.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // Preserve the distinction between “ön” and “on” (ten) after accent folding.
+        for (var i = 0; i < words.Length; i++)
+            if (words[i] == "on" && TurkishText.ToLower(text.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[i]) != "on") return false;
+        return NumberWords.TryRead(words, 0, out var parsed) && parsed.WordCount == words.Length &&
+            parsed.Value is >= 1 and <= 10_000 && decimal.Truncate(parsed.Value) == parsed.Value && (count=(int)parsed.Value) > 0;
     }
 
     // ================================================================================================================

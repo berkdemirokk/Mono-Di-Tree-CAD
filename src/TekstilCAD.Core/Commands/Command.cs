@@ -96,7 +96,11 @@ public enum HandoffTarget
 /// tool-window tab (1 grading, 2 seam allowance, 3 marker) and <see cref="Value"/> a number to prefill: millimetres for
 /// seam allowance and fabric width, a count for piece metadata ("adet 2").
 /// </summary>
-public sealed record HandoffCommand(HandoffTarget Target, int? Tab = null, double? Value = null) : Command;
+public sealed record HandoffCommand(HandoffTarget Target, int? Tab = null, double? Value = null, MeasuredNestingRequest? NestingRequest = null) : Command;
+
+/// <summary>A measured fabric marker request with explicit requested copy counts by source piece name.</summary>
+public sealed record MeasuredNestingRequest(double FabricWidthMm, IReadOnlyList<NestingPieceCount> Pieces);
+public sealed record NestingPieceCount(string Name, int Quantity);
 
 /// <summary>"yardım", "?" (C61).</summary>
 public sealed record HelpCommand : Command;
