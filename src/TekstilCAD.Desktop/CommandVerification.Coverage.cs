@@ -48,6 +48,9 @@ internal static partial class CommandVerification
         new("C14", "genişliği 95 yap", "plain"),
         new("C15", "boyu 60 yap", "plain"),
         new("C16", "95 x 60 yap", "plain"),
+        new("-", "1 kenara 10 mm ağızlı 5 mm derinlikte pens ekle", "piece",
+            After: (window, _) => window.Document.Pieces.Single().Darts is { Count: 1 } &&
+                window.Document.Pieces.Single().Points.SequenceEqual(new Point2[] { new(0,0),new(20,0),new(20,10),new(0,10) })),
         new("C17", "adı kol olsun", "plain"),
         new("-", "projenin adı Yaz Koleksiyonu olsun", "empty",
             After: (window, _) => window.Document.Name == "Yaz Koleksiyonu"),
