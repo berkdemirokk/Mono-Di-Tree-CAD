@@ -63,6 +63,7 @@ public sealed class PlannerHostileTests
         foreach (var (w, h) in new (double?, double?)[]
                  { (95, null), (null, 60), (95, 60), (null, null), (0, 10), (10, 0), (-1, null), (null, -1), (double.NaN, 5), (5, double.NaN), (1e9, 1e9), (20000, 20000), (0.001, null), (double.PositiveInfinity, null) })
             list.Add(new ResizeCommand(w, h));
+        list.Add(new DartCommand(1, 20, 30));
 
         foreach (var name in new string?[]
                  { "Ön Beden", "", "   ", "\t", new string('x', 500), new string('x', 128), new string('x', 129), "a\nb\tc\0", "\uD800abc", "abc\uDC00", "😀 beden", null, "Ön beden", "Kol", "  padded  ", new string('ş', 10000) })
