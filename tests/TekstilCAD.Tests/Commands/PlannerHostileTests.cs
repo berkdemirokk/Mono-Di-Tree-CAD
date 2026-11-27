@@ -1125,14 +1125,36 @@ public sealed class PlannerHostileTests
     }
 
     [Fact]
-    public void ResizingAPieceThatIsNotARectangleIsRefusedWithR10AndOneWithAGrainlineWithR11()
+    public void ResizeAcceptsValidatedPlainTriangleButRefusesGrainlineAndUnsafeShapes()
     {
         var triangle = new PatternPiece { Name = "Üçgen", Points = [new(0, 0), new(100, 0), new(50, 80)] };
         var withGrain = Rect("İplikli", 300, 0, 100, 100);
         withGrain.Grainline = new Grainline { Start = new Point2(320, 20), End = new Point2(320, 80) };
         var doc = PieceOperationTestData.Doc(triangle, withGrain);
-        AssertRefusedWith("R10", PlanOf(new ResizeCommand(95, null), doc, Selection.Of(triangle.Id)));
+        var before = doc.Clone();
+        var plan = AssertPlan(PlanOf(new ResizeCommand(50, null), doc, Selection.Of(triangle.Id)));
+        var resized = plan.EditedDocument()!.Pieces.Single(p => p.Id == triangle.Id);
+        Assert.True(resized.Closed);
+        Assert.Equal(new Point2[] { new(0, 0), new(50, 0), new(25, 80) }, resized.Points.ToArray());
+        Assert.True(DocumentSession.ContentEquals(before, doc));
         AssertRefusedWith("R11", PlanOf(new ResizeCommand(95, null), doc, Selection.Of(withGrain.Id)));
+
+        foreach (var unsafePiece in new[]
+        {
+            new PatternPiece { Name = "Açık", Closed = false, Points = [new(0, 0), new(100, 0), new(50, 80)] },
+            new PatternPiece { Name = "Kesişen", Points = [new(0, 0), new(100, 100), new(0, 100), new(100, 0)] },
+        })
+        {
+            var unsafeDoc = PieceOperationTestData.Doc(unsafePiece);
+            var unchanged = unsafeDoc.Clone();
+            AssertRefusedWith("R10", PlanOf(new ResizeCommand(50, null), unsafeDoc, Selection.Of(unsafePiece.Id)));
+            Assert.True(DocumentSession.ContentEquals(unchanged, unsafeDoc));
+        }
+
+        var markedTriangle = triangle.Clone();
+        markedTriangle.Metadata = new PieceMetadata { Size = "38", Quantity = 2 };
+        var markedDoc = PieceOperationTestData.Doc(markedTriangle);
+        AssertRefusedWith("R11", PlanOf(new ResizeCommand(50, null), markedDoc, Selection.Of(markedTriangle.Id)));
     }
 
     [Fact]
