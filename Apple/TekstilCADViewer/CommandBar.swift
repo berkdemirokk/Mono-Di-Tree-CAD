@@ -72,12 +72,12 @@ struct CommandBar: View {
         if isShown {
             VStack(alignment: .leading, spacing: 8) {
                 fieldRow
-                if showsOutput && dynamicTypeSize.isAccessibilitySize {
-                    // At very large text a card is taller than the screen: it scrolls inside the bar
-                    // instead of pushing the bar under the navigation bar.
+                if showsOutput {
+                    // Keep the preview controls reachable on short iPhone screens as well as at
+                    // accessibility text sizes. The tools below the command bar have their own
+                    // scroll view, so they cannot bring a button in this card into view.
                     ScrollView { outputs }
-                } else {
-                    outputs
+                        .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? 320 : 240)
                 }
             }
             .padding(.horizontal)
