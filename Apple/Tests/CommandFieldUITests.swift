@@ -53,9 +53,13 @@ final class CommandFieldUITests: XCTestCase {
     }
 
     private func dragTools(in app: XCUIApplication, towardsEnd: Bool) {
-        let scroll = toolsScroll(in: app)
-        let from = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.75 : 0.25))
-        let to = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.25 : 0.75))
+        drag(app.scrollViews["workshop-tools"], towardsEnd: towardsEnd, fallback: toolsScroll(in: app))
+    }
+
+    private func drag(_ scroll: XCUIElement, towardsEnd: Bool, fallback: XCUIElement? = nil) {
+        let target = scroll.exists ? scroll : (fallback ?? scroll)
+        let from = target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.75 : 0.25))
+        let to = target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.25 : 0.75))
         from.press(forDuration: 0.05, thenDragTo: to)
     }
 
@@ -63,11 +67,19 @@ final class CommandFieldUITests: XCTestCase {
                           file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<14 {
             if element.exists && element.isHittable { break }
-            dragTools(in: app, towardsEnd: true)
+            if element.identifier == "command-apply" || element.identifier == "command-cancel" {
+                drag(app.scrollViews["command-output"], towardsEnd: true)
+            } else {
+                dragTools(in: app, towardsEnd: true)
+            }
         }
         for _ in 0..<14 {
             if element.exists && element.isHittable { break }
-            dragTools(in: app, towardsEnd: false)
+            if element.identifier == "command-apply" || element.identifier == "command-cancel" {
+                drag(app.scrollViews["command-output"], towardsEnd: false)
+            } else {
+                dragTools(in: app, towardsEnd: false)
+            }
         }
         XCTAssertTrue(element.isHittable, "Control should be reachable by scrolling", file: file, line: line)
         element.tap()

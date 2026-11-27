@@ -78,6 +78,7 @@ struct CommandBar: View {
                     // scroll view, so they cannot bring a button in this card into view.
                     ScrollView { outputs }
                         .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? 320 : 240)
+                        .accessibilityIdentifier("command-output")
                 }
             }
             .padding(.horizontal)
