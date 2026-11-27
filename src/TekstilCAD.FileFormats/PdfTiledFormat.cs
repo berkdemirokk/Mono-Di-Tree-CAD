@@ -25,6 +25,7 @@ public static class PdfTiledFormat
             ? p.Points.Concat([line.Start,line.End]) : p.Points).ToArray();
         var hasGrainlines=copy.Pieces.Any(p=>p.Grainline is not null);
         var markCount=copy.Pieces.Sum(p=>(long)(p.Notches?.Count ?? 0));
+        var dartCount=copy.Pieces.Sum(p=>(long)(p.Darts?.Count ?? 0));
         // One millimetre clearance keeps exterior contours away from joins.
         var minX=points.Min(p=>p.X)-1;var minY=points.Min(p=>p.Y)-1;
         var width=points.Max(p=>p.X)-minX+1;var height=points.Max(p=>p.Y)-minY+1;
@@ -32,7 +33,7 @@ public static class PdfTiledFormat
             throw new InvalidDataException("A4 PDF sınırları aşıldı; kalıpları daha küçük gruplar halinde dışa aktarın.");
         var cols=(int)Math.Ceiling(width/TileWidth);var rows=(int)Math.Ceiling(height/TileHeight);
         var pageCount=(long)cols*rows;
-        if(pageCount>MaximumPages || pageCount*(points.Length+4*markCount)>MaximumPointPages)
+        if(pageCount>MaximumPages || pageCount*(points.Length+4*markCount+2*dartCount)>MaximumPointPages)
             throw new InvalidDataException("A4 PDF sayfa veya nokta sınırını aşıyor; kalıpları daha küçük gruplar halinde dışa aktarın.");
         var streams=new List<string>((int)pageCount);
         for(var row=0;row<rows;row++)for(var col=0;col<cols;col++)
@@ -94,6 +95,20 @@ public static class PdfTiledFormat
                         .Append(F(x*Scale)).Append(" ").Append(F((y-radius)*Scale)).Append(" m ")
                         .Append(F(x*Scale)).Append(" ").Append(F((y+radius)*Scale)).Append(" l S\n");
                 }
+            }
+            if(dartCount>0)
+            {
+                // Sewing legs are shown as dashed internal marks; they are not cut contours.
+                body.Append("[3 2] 0 d 0.15 0.35 0.75 RG 0.5 w\n");
+                foreach(var piece in copy.Pieces)
+                foreach(var dart in piece.Darts ?? [])
+                {
+                    var legs=DartTools.GetLegs(piece,dart);
+                    string Map(Point2 p) => F((Margin+p.X-minX-col*TileWidth)*Scale)+" "+F((FrameY+TileHeight+row*TileHeight-(p.Y-minY))*Scale);
+                    var first=Map(legs.Start);var tip=Map(legs.Apex);var second=Map(legs.End);
+                    body.Append(first).Append(" m ").Append(tip).Append(" l ").Append(second).Append(" l S\n");
+                }
+                body.Append("[] 0 d\n");
             }
             body.Append("Q\n");streams.Add(body.ToString());
         }

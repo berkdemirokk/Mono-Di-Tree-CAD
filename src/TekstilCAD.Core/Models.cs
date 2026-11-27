@@ -51,6 +51,16 @@ public sealed class NotchMark
     public NotchMark Clone() => new() { VertexIndex=VertexIndex,Position=Position };
 }
 
+/// <summary>A sewn dart represented by two fractions on one straight contour edge and an inward depth (millimetres).</summary>
+public sealed class DartMark
+{
+    public int EdgeIndex { get; set; }
+    public double StartFraction { get; set; }
+    public double EndFraction { get; set; }
+    public double DepthMm { get; set; }
+    public DartMark Clone() => new() { EdgeIndex=EdgeIndex, StartFraction=StartFraction, EndFraction=EndFraction, DepthMm=DepthMm };
+}
+
 public sealed class PatternPiece
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -75,7 +85,9 @@ public sealed class PatternPiece
     public Grainline? Grainline { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NotchMark>? Notches { get; set; }
-    public PatternPiece Clone() => new() { Id = Id, Name = Name, LayerId = LayerId, Points = [.. Points], Closed = Closed, Curves = Curves is null ? null : [.. Curves], Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<DartMark>? Darts { get; set; }
+    public PatternPiece Clone() => new() { Id = Id, Name = Name, LayerId = LayerId, Points = [.. Points], Closed = Closed, Curves = Curves is null ? null : [.. Curves], Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList(), Darts=Darts?.Select(d=>d.Clone()).ToList() };
 }
 
 // Rotation names describe mathematical Y-up coordinates. On the Y-down

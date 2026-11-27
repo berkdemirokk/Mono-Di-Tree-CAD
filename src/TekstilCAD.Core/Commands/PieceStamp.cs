@@ -186,6 +186,12 @@ public sealed class PieceStamp
             w.Int(piece.Notches.Count);
             foreach (var n in piece.Notches) { w.Int(n.VertexIndex); w.Point(n.Position); }
         }
+        if (piece.Darts is null) w.Tag(0);
+        else
+        {
+            w.Tag(1); w.Int(piece.Darts.Count);
+            foreach (var dart in piece.Darts) { w.Int(dart.EdgeIndex); w.Double(dart.StartFraction); w.Double(dart.EndFraction); w.Double(dart.DepthMm); }
+        }
         if (piece.Metadata is null) w.Tag(0);
         else { w.Tag(1); w.Text(piece.Metadata.Role); w.Text(piece.Metadata.Size); w.Text(piece.Metadata.Material); w.Int(piece.Metadata.Quantity ?? -1); }
     }

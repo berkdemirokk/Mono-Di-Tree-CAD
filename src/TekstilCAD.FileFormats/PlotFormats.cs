@@ -216,6 +216,8 @@ public static class HpglFormat
         cancellationToken.ThrowIfCancellationRequested();
         beforeValidationForVerification?.Invoke(1,project);
         ProjectStorage.Validate(project,cancellationToken);
+        if (project.Pieces.Any(piece => piece.Darts is { Count: > 0 }))
+            throw new InvalidDataException("HPGL yalnız kesim konturunu içerir ve pens dikiş kollarını dışa aktaramaz. Önce dikiş kollarını içeren A4 PDF inceleme çıktısı alın.");
         GrainlineExportGuard.EnsureSupported(project);
         NotchExportGuard.EnsureSupported(project);
         cancellationToken.ThrowIfCancellationRequested();

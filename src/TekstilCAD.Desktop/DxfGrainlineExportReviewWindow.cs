@@ -53,7 +53,7 @@ internal sealed class DxfGrainlineExportReviewWindow : Window
     {
         DxfExportOmissionKind.PieceRole=>"Parça rolü",DxfExportOmissionKind.Size=>"Beden",
         DxfExportOmissionKind.Material=>"Malzeme",DxfExportOmissionKind.Quantity=>"Adet",
-        DxfExportOmissionKind.GradingRules=>"Serileme kuralları",DxfExportOmissionKind.NestingSnapshot=>"Pastal geçmişi",
+        DxfExportOmissionKind.DartMarks=>"Pens dikiş kolları",DxfExportOmissionKind.GradingRules=>"Serileme kuralları",DxfExportOmissionKind.NestingSnapshot=>"Pastal geçmişi",
         DxfExportOmissionKind.ImportProvenance=>"Aktarım kökeni",DxfExportOmissionKind.GrainlineReviewState=>"İplik yönü kontrol durumu",
         DxfExportOmissionKind.PieceIdentity=>"TekstilCAD parça kimliği",DxfExportOmissionKind.GrainlineUnsupported=>"İplik yönü semantiği",
         _=>kind.ToString()

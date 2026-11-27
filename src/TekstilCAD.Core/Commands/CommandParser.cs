@@ -87,6 +87,8 @@ public static partial class CommandParser
 
         // 5. Everything else is built from numbers, units, directions and keywords.
         state.Items = BuildItems(state.Raw, norm);
+        var dart = TryDartCommand(state);
+        if (dart is not null) return dart;
         if (state.Items.Count > 0 && state.Items[0].IsWord("yamuk"))
             return ParseTrapezoid(state);
         if (TryMultiPhrase(state)) return ParseResult.Refused(Refusals.TwoJobsRefusal());

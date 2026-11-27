@@ -5,7 +5,7 @@ public enum PlanKind
 {
     AddRectangle, AddLine, AddTrapezoid,
     MovePiece, MovePieceTo, RotatePiece, MirrorPiece,
-    ResizePiece, RenamePiece, DeletePiece, DuplicatePiece,
+    ResizePiece, AddDart, RenamePiece, DeletePiece, DuplicatePiece,
     SelectPiece,
     Undo, Redo,
     View, Tool, FinishDrawing,

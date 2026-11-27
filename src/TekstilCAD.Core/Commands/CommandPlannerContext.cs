@@ -36,6 +36,7 @@ internal sealed partial class PlannerContext
         RotateCommand c => PlanRotate(c),
         MirrorCommand c => PlanMirror(c),
         ResizeCommand c => PlanResize(c),
+        DartCommand c => PlanDart(c),
         RenameProjectCommand c => PlanProjectRename(c),
         RenameCommand c => PlanRename(c),
         DeleteCommand c => PlanDelete(c),

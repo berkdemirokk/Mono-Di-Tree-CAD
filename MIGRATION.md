@@ -10,6 +10,13 @@
 
 `50 50.dxf` BLOCK/POLYLINE yapıları içeren ikinci referanstır. BLOCK tanım geometresinin okunması, INSERT dönüşümleri veya AAMA/ASTM semantiğinin desteklendiği anlamına gelmez. Yerel `.pcs`, `.mak`, `.rul`, `.skt` dönüştürücü yoktur. Korunan uygulama kodu, DLL veya UI varlıkları projeye alınmaz.
 
+## Sürüm 10 iç pens işaretleri
+
+- Seçili kapalı düz kontura `1 kenara 40 mm ağızlı 20 mm derinlikte pens ekle` komutuyla iki iç dikiş kolu eklenir; kumaşın dış kesim konturu değişmez.
+- Pens işaretleri `.tcad` v10 olarak saklanır. Önceki sürümler v10 zarfını açmayı reddeder; v10 dosyasını eski sürüme düşürmeyin.
+- İç kollar DXF dışa aktarımında kayıp olarak raporlanır. Pastal algoritması pensli parçaları reddeder; dikim, beden ve üretim uygunluğu operatörce ayrıca doğrulanmalıdır.
+- Pens işaretleri bu sürümde Windows uygulamasında gösterilir. Gerçek fabrika kalıbı, dikiş provası ve kullanıcı kabulü henüz doğrulanmadı.
+
 ## Başka bilgisayara taşıma
 
 Kaynak ZIP'ini yeni boş dizine çıkarın; mevcut kullanıcı projesi üzerine açmayın. `global.json` ile uyumlu .NET SDK kurun, `scripts\Build.ps1 -Test` çalıştırın, ardından Windows UI akışlarını doğrulayın. SDK/önbellek/bin/obj ve gerçek kullanıcı kalıpları kaynak yedeğinin parçası değildir. Derlenmiş taşınabilir uygulama paketi ayrıca oluşturulabilir. Recovery ve simülasyon çıktı yolları taşınan bilgisayarda ayrıca kontrol edilmelidir.

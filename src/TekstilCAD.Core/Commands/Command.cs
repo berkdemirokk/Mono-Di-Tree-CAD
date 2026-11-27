@@ -41,6 +41,9 @@ public sealed record MirrorCommand(MirrorAxis Axis) : Command;
 /// <summary>"genişliği 95 yap", "95 x 60 yap" (C14-C16). A null side stays unchanged.</summary>
 public sealed record ResizeCommand(double? WidthMm, double? HeightMm) : Command;
 
+/// <summary>"2 kenara 40 mm ağızlı 20 mm derinlikte pens ekle": inserts internal sewn legs, preserving the fabric contour.</summary>
+public sealed record DartCommand(int EdgeNumber, double IntakeMm, double DepthMm) : Command;
+
 /// <summary>"adı ön beden olsun" (C17). The name keeps the letters as typed (1-128 characters).</summary>
 public sealed record RenameProjectCommand(string Name) : Command;
 public sealed record RenameCommand(string Name) : Command;

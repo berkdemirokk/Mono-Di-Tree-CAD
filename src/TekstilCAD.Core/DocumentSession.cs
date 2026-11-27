@@ -163,6 +163,11 @@ public sealed class DocumentSession
         (a is not null && b is not null && PointBitsEqual(a.Start,b.Start) && PointBitsEqual(a.End,b.End) && a.NeedsReview == b.NeedsReview);
     private static bool NotchesEqual(List<NotchMark>? a,List<NotchMark>? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && PointBitsEqual(pair.First.Position,pair.Second.Position)));
+    private static bool DartsEqual(List<DartMark>? a,List<DartMark>? b) => ReferenceEquals(a,b) ||
+        (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(pair=>pair.First.EdgeIndex==pair.Second.EdgeIndex &&
+            BitConverter.DoubleToInt64Bits(pair.First.StartFraction)==BitConverter.DoubleToInt64Bits(pair.Second.StartFraction) &&
+            BitConverter.DoubleToInt64Bits(pair.First.EndFraction)==BitConverter.DoubleToInt64Bits(pair.Second.EndFraction) &&
+            BitConverter.DoubleToInt64Bits(pair.First.DepthMm)==BitConverter.DoubleToInt64Bits(pair.Second.DepthMm)));
     private static bool NestingEquals(NestingSnapshot? a, NestingSnapshot? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.FabricWidth == b.FabricWidth && a.UsedLength == b.UsedLength &&
          BitConverter.DoubleToInt64Bits(a.Gap)==BitConverter.DoubleToInt64Bits(b.Gap) &&
@@ -181,7 +186,7 @@ public sealed class DocumentSession
         for (var i = 0; i < left.Pieces.Count; i++)
         {
             var a = left.Pieces[i]; var b = right.Pieces[i];
-            if (a.Id != b.Id || a.LayerId != b.LayerId || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !CurvesEqual(a.Curves,b.Curves) || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
+            if (a.Id != b.Id || a.LayerId != b.LayerId || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !CurvesEqual(a.Curves,b.Curves) || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches) || !DartsEqual(a.Darts,b.Darts)) return false;
             for (var j = 0; j < a.Points.Count; j++)
                 if (!PointBitsEqual(a.Points[j],b.Points[j])) return false;
         }
