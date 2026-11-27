@@ -19,6 +19,8 @@ struct CommandBar: View {
     @Binding var hasOutput: Bool
     /// Applies a confirmed plan. Returns the result line, or nil when nothing was applied.
     let apply: (CommandPlan) -> String?
+    /// Creates a local PLT file from a confirmed marker plan without changing the drawing.
+    let exportMarker: (DraftProject) -> URL?
     /// Undoes the last applied command.
     let undoLast: () -> Void
 
@@ -46,6 +48,7 @@ struct CommandBar: View {
     struct ResultState {
         var text: String
         var undoable: Bool
+        var file: URL? = nil
         /// The undo count the workshop has right after this command; the undo chip is only
         /// offered while it is still the last thing done.
         var expectedUndoCount = 0
@@ -213,7 +216,9 @@ struct CommandBar: View {
                 .controlSize(.large)
                 .accessibilityIdentifier("command-apply")
         } else {
-            Button("Uygula") { confirm(command: command, plan: plan, state: state) }
+            Button(applyTitle(for: plan)) {
+                confirm(command: command, plan: plan, state: state)
+            }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .accessibilityIdentifier("command-apply")
@@ -222,6 +227,11 @@ struct CommandBar: View {
             .buttonStyle(.bordered)
             .controlSize(.large)
             .accessibilityIdentifier("command-cancel")
+    }
+
+    private func applyTitle(for plan: CommandPlan) -> String {
+        if case .markerPlotter = plan.effect { return "PLT dosyası oluştur" }
+        return "Uygula"
     }
 
     private func helpCard(_ plan: CommandPlan) -> some View {
@@ -288,6 +298,13 @@ struct CommandBar: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("command-result")
             Spacer(minLength: 0)
+            if let file = state.file {
+                ShareLink(item: file) {
+                    Label("Dosyayı paylaş", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
             if state.undoable && context.undoCount == state.expectedUndoCount {
                 Button("Komutu geri al") {
                     undoLast()
@@ -345,17 +362,40 @@ struct CommandBar: View {
         remember(typed)
         // Names as the planner will see them (typed field values applied), so "kol seç" matches.
         let names = (context.base ?? context.document).pieces.map { $0.name }
+        do {
+            if let request = try MarkerBrief.parse(typed, source: context.base ?? context.document) {
+                showPreview(for: .markerBrief(request), source: typed)
+                return
+            }
+        } catch {
+            show(.refusal(CommandRefusal(code: "MarkerBrief", message: error.localizedDescription), isQuestion: false), source: typed)
+            return
+        }
         let parsed = CommandParser.parse(typed, context: ParserContext(pieceNames: names))
         if let command = parsed.command {
             if command == .cancelPreview {
                 card = nil
                 text = ""
+            } else if case .handoff(.textileTools, let tab, _) = command, tab == 3 {
+                show(markerHelp(source: typed), source: typed)
             } else {
                 showPreview(for: command, source: typed, unitAssumed: parsed.unitAssumed)
             }
         } else if let notice = parsed.notice {
             show(.refusal(notice, isQuestion: parsed.kind == .question), source: typed)
         }
+    }
+
+    private func markerHelp(source: String) -> CardState.Kind {
+        let pieces = (context.base ?? context.document).pieces
+        guard let piece = pieces.first else {
+            return .refusal(CommandRefusal(code: "MarkerHelp", message: "Pastal için önce çizime en az bir parça ekleyin."), isQuestion: false)
+        }
+        let sample = "150 cm kumaşa 2 adet \(piece.name) yerleştir"
+        let notice = CommandRefusal(code: "MarkerHelp",
+            message: "Kumaş enini ve her parçadan kaç adet yerleşeceğini yazın. Örnek: \(sample)",
+            buttons: [RefusalButton(sample, fill: sample)])
+        return .refusal(notice, isQuestion: false)
     }
 
     /// One of the pieces named under a "several pieces matched" question: select or delete that
@@ -409,6 +449,16 @@ struct CommandBar: View {
                 showPreview(for: command, source: state.source,
                             banner: "Parça değişti; önizleme yenilendi. Uygula ile onaylayın.",
                             unitAssumed: state.unitAssumed)
+                return
+            }
+            if case .markerPlotter(let project) = plan.effect {
+                if let file = exportMarker(project) {
+                    result = ResultState(text: "PLT dosyası hazır. Çiziminiz değişmedi.", undoable: false, file: file)
+                    card = nil
+                    text = ""
+                } else {
+                    show(.refusal(CommandRefusal(code: "MarkerExport", message: "PLT dosyası hazırlanamadı. Çiziminiz değişmedi."), isQuestion: false), source: state.source)
+                }
                 return
             }
             if let message = apply(plan) {

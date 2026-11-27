@@ -87,6 +87,51 @@ final class CommandFieldUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 5))
     }
 
+    func testMarkerRequestPreviewsAppendsToTheProjectAndCanBeUndone() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(text(startingWith: "Etek modelinden 3 parça eklenecek", in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+
+        enter("150 cm kumasa 2 on panel yerlestir", in: app, submit: true)
+        XCTAssertTrue(text(containing: "1500 mm kumaş eninde 2 parça pastal yerleşimi").waitForExistence(timeout: 5))
+        XCTAssertTrue(countLabel(3, in: app).exists, "Preparing the marker must leave the working project untouched")
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(countLabel(5, in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-undo"], in: app)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+    }
+
+    func testPastalRequestShowsAnExampleUsingARealPieceName() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(text(startingWith: "Etek modelinden 3 parça eklenecek", in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+
+        enter("pastal yap", in: app, submit: true)
+        let example = "150 cm kumaşa 2 adet Ön panel yerleştir"
+        XCTAssertTrue(text(containing: example).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[example].exists, "The example should be an actionable fill-and-preview choice")
+    }
+
+    func testMarkerPlotterRequestCreatesShareableFileWithoutChangingTheProject() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(text(startingWith: "Etek modelinden 3 parça eklenecek", in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+
+        enter("150 cm kumasa 2 on panel yerlestir plotter dosyasi hazirla", in: app, submit: true)
+        XCTAssertTrue(text(containing: "PLT dosyası hazırlanacak").waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Dosyayı paylaş")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(countLabel(3, in: app).exists, "Preparing a PLT file must not change the working drawing")
+    }
+
     func testACommandIsShownBeforeItChangesAnythingAndCanBeUndone() {
         let app = launchClean()
         openWorkshop(app)
