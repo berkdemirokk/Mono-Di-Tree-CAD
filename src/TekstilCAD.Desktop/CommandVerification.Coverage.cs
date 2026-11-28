@@ -464,8 +464,9 @@ internal static partial class CommandVerification
             {
                 Scenario(window =>
                 {
-                    var line = new CurveSegment.Line(new(0, 0), new(100, 0));
-                    var curves = new CurveSegment[] { line };
+                    CurveSegment[] curves = fixture == "locked"
+                        ? [new CurveSegment.CubicBezier(new(0, 0), new(0, 30), new(100, 30), new(100, 0))]
+                        : [new CurveSegment.Line(new(0, 0), new(100, 0))];
                     var piece = new PatternPiece { Name = "Doğru", Closed = false, Curves = [.. curves], Points = ParametricContour.Sample(curves) };
                     var document = new ProjectDocument { Pieces = [piece] };
                     if (fixture == "locked") document.Layers = [new Layer { Id = Layer.DefaultId, Name = "Kilitli", Locked = true }];
@@ -478,13 +479,15 @@ internal static partial class CommandVerification
                     var before = window.Document.Clone();
                     var session = SessionOf(window);
                     var undoCount = session.UndoCount;
+                    var selectedBefore = window.Selected?.Id;
                     var editorOpened = false;
                     window.ParametricCurveEditorForVerification = _ => editorOpened = true;
                     Type(view, "eğri noktalarını düzenle");
                     Enter(view);
                     Check(view.State == CommandBarState.Refusal && !editorOpened &&
-                        DocumentSession.ContentEquals(before, window.Document) && session.UndoCount == undoCount,
-                        $"Curve edit: {fixture} contour is refused without opening the editor or changing geometry", checks);
+                        DocumentSession.ContentEquals(before, window.Document) && session.UndoCount == undoCount &&
+                        window.Selected?.Id == selectedBefore,
+                        $"Curve edit: {fixture} contour is refused without opening the editor or changing selection, geometry or history", checks);
                 });
             }
         }
