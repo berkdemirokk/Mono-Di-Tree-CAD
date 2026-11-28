@@ -101,8 +101,9 @@ public enum HandoffTarget
 /// </summary>
 public sealed record HandoffCommand(HandoffTarget Target, int? Tab = null, double? Value = null, MeasuredNestingRequest? NestingRequest = null) : Command;
 
-/// <summary>A measured fabric marker request with explicit requested copy counts by source piece name.</summary>
-public sealed record MeasuredNestingRequest(double FabricWidthMm, IReadOnlyList<NestingPieceCount> Pieces);
+/// <summary>A measured fabric marker request with explicit copy counts and clearance values in millimetres.</summary>
+public sealed record MeasuredNestingRequest(double FabricWidthMm, IReadOnlyList<NestingPieceCount> Pieces,
+    double GapMm = 5, double EdgeMarginMm = 0);
 public sealed record NestingPieceCount(string Name, int Quantity);
 
 /// <summary>"yardım", "?" (C61).</summary>

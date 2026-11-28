@@ -489,6 +489,16 @@ public sealed class PlannerVectorTests
     }
 
     [Fact]
+    public void MeasuredMarkerPreviewNamesTheValuesThatWillBePrefilled()
+    {
+        var preview=PlanOf("150 cm kumaşa iki Ön beden, bir Arka beden, parça arası boşluk 5 mm ve kumaş kenar payı 10 mm yerleştir","B1").Preview;
+        Assert.Contains("Kumaş eni 1500 mm (150 cm)",preview);
+        Assert.Contains("parça boşluğu 5 mm",preview);
+        Assert.Contains("kenar payı 10 mm (1 cm)",preview);
+        Assert.Contains("yerleşimi inceleyin",preview);
+    }
+
+    [Fact]
     public void RotationWithoutADirectionOffersTheOtherWayAndAHalfTurn()
     {
         var plan = PlanOf("döndür", "B1");
