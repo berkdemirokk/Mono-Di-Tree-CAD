@@ -153,7 +153,7 @@ public static partial class CommandParser
         remainingFolded=foldedItems;remainingOriginal=originalItems;gapMm=5m;edgeMarginMm=0m;
         const string number=@"[0-9]+(?:[,.][0-9]+)?";
         const string unit=@"mm|cm|m|milim(?:etre)?|santim(?:etre)?|metre";
-        var option=new Regex(@"(?<separator>^|,\s*|\s+ve\s+)(?<label>parca\s+arasi\s+bosluk|parca\s+boslugu|kumasa\s+kenar\s+payi|kenar\s+payi)\s+(?<value>"+number+@")\s*(?<unit>"+unit+@")(?=$|,|\s+ve\s+)",RegexOptions.CultureInvariant);
+        var option=new Regex(@"(?<separator>^|,\s*|\s+ve\s+)(?<label>parca\s+arasi\s+bosluk|parca\s+boslugu|kumas(?:a)?\s+kenar\s+payi|kenar\s+payi)\s+(?<value>"+number+@")\s*(?<unit>"+unit+@")(?=$|,|\s+ve\s+)",RegexOptions.CultureInvariant);
         var matches=option.Matches(foldedItems);
         var ranges=new List<(int Start,int Length)>();var seenGap=false;var seenMargin=false;
         foreach(Match found in matches)
