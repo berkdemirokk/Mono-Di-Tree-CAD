@@ -70,6 +70,7 @@ enum CommandPlanner {
         "kopyala · sil · ön bedeni seç · geri al · yinele · kaydet",
         "önlük modeli ekle · etek modeli ekle · bez çanta modeli ekle",
         "Ölçülü önlük: önlük modeli 65 cm x 85 cm",
+        "plotter kalibrasyon dosyası hazırla",
         "çizimi önizle",
         "Ölçüler milimetredir; santim için 12 cm yazın."
     ]
@@ -84,6 +85,16 @@ enum CommandPlanner {
         if let refusal = unsupported(command) { return .refusal(refusal) }
 
         switch command {
+        case .plotterCalibration:
+            let reference = PatternPlotterFile.calibrationProject()
+            var plan = CommandPlan(
+                sentence: "100 × 100 mm kalibrasyon karesi ve 50 mm ölçü çizgisi için PLT dosyası hazırlanacak.",
+                note: "10 mm aralıklı işaretler içerir. Dosya paylaşılır; çiziminiz değişmez.",
+                effect: .markerPlotter(reference), isDestructive: false,
+                notice: "Kalibrasyon PLT dosyası hazır.", base: context.document,
+                baseSelection: context.selectedID)
+            plan.patternPreview = reference
+            return .plan(plan)
         case .previewDrawing:
             guard !context.document.pieces.isEmpty else { return .refusal(noPieces()) }
             var preview = make("Çizim önizlemesi", nil, .info, "", context.document, context)

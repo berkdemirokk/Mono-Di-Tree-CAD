@@ -31,6 +31,7 @@ enum HandoffTarget: Equatable {
 enum ParsedCommand: Equatable {
     case measuredApron(width: Double, length: Double)
     case markerBrief(MarkerBrief.Request)
+    case plotterCalibration
     case previewDrawing
     case addStudioPattern(StudioPattern)
     case rectangle(width: Double, height: Double, isSquare: Bool)

@@ -193,6 +193,7 @@ extension CommandParser {
         addRefusal(Refusals.zoomOrResize(), ["buyut", "kucult"])
 
         add(.previewDrawing, ["cizimi onizle", "kalibi onizle", "cizim onizlemesi"])
+        add(.plotterCalibration, ["plotter kalibrasyon dosyasi hazirla"])
         for pattern in StudioPattern.allCases {
             let name = TurkishText.fold(pattern.rawValue)
             add(.addStudioPattern(pattern), ["\(name) modeli ekle", "\(name) kalibi ekle"])

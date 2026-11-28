@@ -14,6 +14,24 @@ enum PatternPlotterFile {
         var millimetres: DraftPoint { DraftPoint(x: Double(x) / 40, y: Double(y) / 40) }
     }
 
+    /// A file-only ruler that lets the operator measure a known 100 mm square and a 50 mm
+    /// gauge after plotting. It is a disposable output reference, not a project edit.
+    static func calibrationProject() -> DraftProject {
+        let square = DraftPiece(name: "100 mm kare", closed: true, points: [
+            DraftPoint(x: 0, y: 0), DraftPoint(x: 100, y: 0),
+            DraftPoint(x: 100, y: 100), DraftPoint(x: 0, y: 100)
+        ])
+        let gauge = DraftPiece(name: "50 mm ölçü çizgisi", closed: false, points: [
+            DraftPoint(x: 25, y: 50), DraftPoint(x: 75, y: 50)
+        ])
+        let ticks = stride(from: 25.0, through: 75.0, by: 10.0).map { x in
+            DraftPiece(name: "Ölçü çizgisi işareti", closed: false, points: [
+                DraftPoint(x: x, y: 47), DraftPoint(x: x, y: 53)
+            ])
+        }
+        return DraftProject(name: "Plotter Kalibrasyon 100 mm", pieces: [square, gauge] + ticks)
+    }
+
     static func encode(_ project: DraftProject) throws -> Data {
         guard !project.pieces.isEmpty, CADLocalDraftStore.isValid(project) else {
             throw PlotError(message: "Plotter için geçerli bir kalıp gerekli.")
