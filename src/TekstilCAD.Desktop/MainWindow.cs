@@ -3754,7 +3754,7 @@ public partial class MainWindow : Window
         if(ids.Count==0 || ids.Count!=ids.Distinct().Count())throw new InvalidOperationException("DXF için en az bir farklı parça seçin.");
         var chosen=ids.ToHashSet();var selected=snapshot.Pieces.Where(p=>chosen.Contains(p.Id)).Select(p=>p.Clone()).ToList();
         if(selected.Count!=ids.Count)throw new InvalidOperationException("Seçilen parça bulunamadı; seçimi yenileyin.");
-        var output=new ProjectDocument { Name=snapshot.Name,Pieces=selected };Validate(output);
+        var output=new ProjectDocument { Name=snapshot.Name,Layers=snapshot.Layers,Pieces=selected };Validate(output);
         return new(original,snapshot,epoch,output);
     }
     private bool SelectedDxfStillCurrent(SelectedDxfCapture capture) => ReferenceEquals(Document,capture.Original) && projectEpoch==capture.Epoch &&
@@ -3798,7 +3798,7 @@ public partial class MainWindow : Window
         EnsureNoExport();EnsurePropertyDraftsApplied();
         var piece=Selected ?? throw new InvalidOperationException("A4 PDF için önce bir parça seçin.");
         var document=Document;var snapshot=document.Clone();var selected=snapshot.Pieces.Single(p=>p.Id==piece.Id);
-        var output=new ProjectDocument { Name=snapshot.Name,Pieces=[selected.Clone()] };
+        var output=new ProjectDocument { Name=snapshot.Name,Layers=snapshot.Layers,Pieces=[selected.Clone()] };
         Validate(output);
         return new(document,snapshot,projectEpoch,piece.Id,output);
     }

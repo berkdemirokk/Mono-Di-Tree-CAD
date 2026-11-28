@@ -48,7 +48,7 @@ public static class DxfNotchReviewExport
         var pieces=snapshot.Pieces.Where(piece=>ids.Contains(piece.Id)).Select(piece=>piece.Clone()).ToList();
         if(pieces.Count!=ids.Count)throw new ArgumentException("Seçilen parça bulunamadı.");
         if(!pieces.Any(piece=>piece.Notches is { Count:>0 }))throw new ArgumentException("Seçimde en az bir işaretli parça bulunmalıdır.");
-        var subset=new ProjectDocument { Name=snapshot.Name,Pieces=pieces,
+        var subset=new ProjectDocument { Name=snapshot.Name,Layers=snapshot.Layers,Pieces=pieces,
             GradingRules=snapshot.GradingRules.Where(rule=>ids.Contains(rule.SourcePieceId)).Select(rule=>rule.Clone()).ToList(),
             ImportProvenance=snapshot.ImportProvenance?.Clone() };
         var prepared=Prepare(subset,flipY,cancellationToken);

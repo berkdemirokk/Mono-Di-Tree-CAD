@@ -303,7 +303,7 @@ public sealed class MachineCenterWindow : Window
             if(studio.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce çizimi ve alan taslaklarını tamamlayın veya iptal edin.");
             var originalDocument=studio.Document;var originalSelection=studio.SelectedId;
             var snapshot=studio.Document.Clone();
-            var subset=new ProjectDocument { Name=snapshot.Name,Pieces=snapshot.Pieces.Where(p=>selected.Contains(p.Id)).Select(p=>p.Clone()).ToList() };
+            var subset=new ProjectDocument { Name=snapshot.Name,Layers=snapshot.Layers,Pieces=snapshot.Pieces.Where(p=>selected.Contains(p.Id)).Select(p=>p.Clone()).ToList() };
             if(subset.Pieces.Count!=selected.Count)throw new InvalidOperationException("Seçili parça artık projede yok; kaynak listesini yeniden açın.");
             var profile=new MachineProfile(profileName.Text.Trim(),format.SelectedIndex==1?Number(units):40,Number(scale));
             var jobFormat=format.SelectedIndex==0?JobFormat.Dxf:JobFormat.Hpgl;
