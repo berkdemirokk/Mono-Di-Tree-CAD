@@ -183,6 +183,9 @@ public class DxfNotchReviewExportTests
     public void SelectedReviewIncludesOnlyChosenMarkedPieceAndBindsFullSource(bool flip,string y)
     {
         var source=Project();source.Pieces[0].Grainline=new Grainline { Start=new(2,3),End=new(4,8),NeedsReview=true };
+        var cutLayer=new Layer { Name="Kesim" };
+        source.Layers=[..Layer.Defaults(),cutLayer];
+        source.Pieces[0].LayerId=cutLayer.Id;
         source.Pieces[1].Name="Gizli\u202Ekontrol";
         source.GradingRules.Add(new GradingRuleSet { SourcePieceId=source.Pieces[1].Id,SourceClosed=false,SourcePoints=[..source.Pieces[1].Points],Deltas=[new(0,0),new(0,0)] });
         source.ImportProvenance=new DxfImportProvenance { SourceFileName="source.dxf",SourceSha256=new string('A',64),SourceByteLength=12,MillimetersPerUnit=1 };

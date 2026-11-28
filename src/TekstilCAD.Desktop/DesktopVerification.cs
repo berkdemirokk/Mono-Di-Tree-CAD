@@ -6544,7 +6544,9 @@ internal static class DesktopVerification
         var second=new PatternPiece { Name="BACK",Points=[new(30,0),new(40,0),new(30,10)] };
         var excluded=new PatternPiece { Name="MARKED",Points=[new(60,0),new(70,0),new(60,10)],Notches=[new NotchMark { VertexIndex=1,Position=new(70,0) }] };
         var grainOnly=new PatternPiece { Name="GRAIN",Points=[new(90,0),new(100,0),new(90,10)],Grainline=new Grainline { Start=new(91,1),End=new(91,5) } };
-        var project=new ProjectDocument { Pieces=[first,second,excluded,grainOnly] };
+        var cutLayer=new Layer { Name="Kesim" };
+        first.LayerId=cutLayer.Id;
+        var project=new ProjectDocument { Layers=[..Layer.Defaults(),cutLayer],Pieces=[first,second,excluded,grainOnly] };
         try
         {
             studio.LoadDocument(project);studio.Select(first.Id);var before=studio.Document.Clone();
@@ -6680,6 +6682,9 @@ internal static class DesktopVerification
             "A4 PDF exports grainline and visual marker for review without modifying the source",checks);
         studio.LoadDocument(mismatchDocument);
         var selectedDocument=mismatchDocument.Clone();
+        var printLayer=new Layer { Name="Baski" };
+        selectedDocument.Layers=[..Layer.Defaults(),printLayer];
+        selectedDocument.Pieces[0].LayerId=printLayer.Id;
         selectedDocument.Pieces[0].Grainline=new Grainline { Start=new(10,10),End=new(90,90),NeedsReview=true };
         selectedDocument.Pieces[0].Notches=[new NotchMark { VertexIndex=1,Position=selectedDocument.Pieces[0].Points[1] }];
         var otherPiece=new PatternPiece { Name="Diğer",Points=[new(5000,0),new(5100,0),new(5000,100)] };selectedDocument.Pieces.Add(otherPiece);
