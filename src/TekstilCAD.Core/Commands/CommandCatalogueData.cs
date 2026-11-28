@@ -117,7 +117,7 @@ internal static class CommandCatalogueData
             ["döndür", "90 derece döndür", "çeyrek tur"],
             "çevir", "tur at", "açı"));
         all.Add(F("piece.resize", GPiece, "Parçanın ölçüsünü değiştir",
-            "Dikdörtgen bir parçanın genişliğini ya da yüksekliğini yazıyla değiştirir.",
+            "Dikdörtgenin veya üretim işareti olmayan geçerli kapalı çokgenin ölçüsünü değiştirir; beden serileme değildir.",
             ["genişliği 95 yap", "boyu 60 yap", "95 x 60 yap"],
             "büyüt", "küçült", "genişlet", "daralt", "ölçü", "boyutunu değiştir"));
         all.Add(F("piece.rename", GPiece, "Parçanın adını değiştir",

@@ -113,3 +113,33 @@ Kapalı eğriler (kol evi, yaka), çentik çizme aracı, tam AAMA, kesici/plotte
 - iPhone–Windows dosya yönü uyumsuzluğu yalnız koddan okundu.
 - CI'ın gerçek bir pencereyi sürüp kaydet penceresini doldurabileceği denenmedi; olmazsa etkileşimli kanıt yalnız sizin elle denemenizdir.
 - Gerçek iPhone’da kurulum ve testçi grubuna dağıtım doğrulanmayı bekliyor. Apple, 1.03 (14) derlemesini 16 Kasım’da kabul etti. [TestFlight yükleme kaydı](https://github.com/berkdemirokk/Mono-Di-Tree-CAD/actions/runs/43797711367)
+
+
+## 6. Komutla kullanım ve profesyonel ürün sırası (28 Kasım 2026)
+
+Sahibin yeni hedefi: temel işlemler Türkçe yazılı komutla, mümkün olduğunda sesli dikteyle yapılabilsin. İlk yayın kapıları gevşetilmez; Windows önceliği, ücretsiz önizleme, tek gövde, tek iş, WearCAD salt-okunur kuralı ve sahip onayıyla birleştirme korunur.
+
+**Ortak kabul sözleşmesi:** Her komut yardım kataloğunda örneklenir; Türkçe yazım, ondalık virgül, cm/mm ve belirsiz hedefler test edilir. Önizleme kaynak belgeyi değiştirmez; açık onay aynı planı en fazla bir kez uygular; düzenleme tek geri alma adımıdır. Kilitli katman ve üretim metaverisi sessizce değiştirilmez. Desteklenmeyen istek gerekçeli reddedilir. Dosya ve makine işlemlerinde hedef ve sonuç ayrıca doğrulanır; gerçek makineye otomatik iş gönderilmez. Çok adımlı komutlar ayrı güvenlik ve işlem bütünlüğü testleri tamamlanana kadar reddedilir.
+
+### Şu anki tek iş — Aşama 3.4
+
+- İlk kapsam: üretim metaverisi olmayan geçerli kapalı doğrusal çokgen. Analitik eğri, pens, çentik, iplik yönü ve serileme dönüşümleri ayrı iş olarak kalır.
+- Kabul: `yamuk alt 60 cm üst 40 cm yükseklik 50 cm`, ardından `30 x 25 cm yap`. 600 × 500 mm kontur 300 × 250 mm olur; sol üst sınır, kimlik, kapanış ve nokta sırası korunur.
+- Test önce: ana pencerenin kendi Ctrl+K komut kutusu, önizleme/onay, tam koordinat karşılaştırması, Ctrl+Z ve Ctrl+Y. Penceresiz çalışma fiziksel klavye ve operatör kabulü değildir.
+- Mevcut `PlanResize` yalnız `ResizeRectangle` çağırıyor; ürün düzeltmesi olmadan kabulün geçmesi beklenmiyor. Mevcut dikdörtgen ve metaveri koruma kontrolleri zayıflatılmaz.
+- Ürün kodu ayrı geliştirme oturumunda yazılır; bağımsız inceleme ve CI gerekir.
+
+### İlk sürümden sonraki sıra
+
+| İş | Hedef komut örneği (mevcut destek iddiası değil) | Kabul kanıtı |
+|---|---|---|
+| Kapalı analitik kontur ve düğüm düzenleme | Kol evini eğriyle çiz | Segment türü, uçlar ve tolerans korunur |
+| Pens, çentik ve eğrisel dikiş payı | 1 cm dikiş payı ekle | Gerçek kalıp, işaret korunumu, dikim provası |
+| AAMA/ASTM DXF aktarımı | Kalıbı DXF olarak dışa aktar | Bağımsız CAD ile ölçü, beden ve işaret round-trip |
+| Kısıtlı poligon pastal, yön ve maliyet | 150 cm kumaşa iki ön, bir arka yerleştir | Çakışma ve yön kontrolü; mevcut raf motoruna karşı ölçüm |
+| Ölçüden parametrik kalıp ve çok adımlı komut | Ölçülerimle etek oluştur, 36–44 serile | Bağımsız kalıp referansı ve gerçek dikim |
+| Fotoğraftan dijital kalıp | Fotoğraftaki kalıbı tara | Kalibrasyon ve bağımsız cetvel ölçümü |
+| iPhone/iPad düzenleme ve Apple Pencil | Kol parçasını 2 cm uzat | Gerçek cihaz ve Windows ile dosya turu |
+| 3D önizleme ve prova | Elbiseyi mankende göster | Bağımsız dikilmiş örnekle karşılaştırma |
+
+Ücretli API zorunluluğu getirilmez. Açık kaynak bileşenlerin lisansı ve güvenliği kullanımdan önce değerlendirilir. Doğal dil katmanı geometri uydurmaz; doğrulanmış komutları deterministik geometri motoru yürütür. Gerçek veri, cihaz ve fiziksel çıktı olmadan ticari üretime hazır iddiası yapılmaz.

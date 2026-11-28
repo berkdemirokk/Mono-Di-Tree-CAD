@@ -165,6 +165,22 @@ internal sealed partial class PlannerContext
             return Refuse(Refusals.HasExtraData());
         var before = BoundsOf(piece);
         var result = PieceOperations.ResizeRectangle(Doc, piece.Id, c.WidthMm, c.HeightMm);
+        // Preserve the existing rectangle path and all its guards. Expand only the specific
+        // unsupported-shape case to validated, closed, unmarked linear polygons.
+        var polygonResize = !result.Succeeded && result.Error == PieceOperations.NotRectangleText;
+        if (polygonResize)
+        {
+            if (!piece.Closed || piece.Points.Count > Geometry.MaxValidatedContourVertices)
+                return Refuse(Custom(Refusals.NotRectangle, "Yalnızca doğrulanabilir kapalı çokgenlerin ölçüsü değiştirilebilir."));
+            if (piece.Metadata is not null)
+                return Refuse(Custom(Refusals.ExtraData, "Bu parça üretim bilgisi taşıyor; ölçü değiştirme işlemi uygulanmadı."));
+            try { Geometry.ValidateContour(piece.Points); }
+            catch (ArgumentException)
+            {
+                return Refuse(Custom(Refusals.NotRectangle, "Kontur geçersiz; ölçü değiştirme işlemi uygulanmadı."));
+            }
+            result = PieceOperations.Resize(Doc, piece.Id, c.WidthMm, c.HeightMm);
+        }
         if (!result.Succeeded) return Refuse(MapFailure(result));
         if (!result.ChangesDocument) return Refuse(Refusals.NothingChanges(SizeMm(before.Width, before.Height)));
         var resized = result.Piece!;
@@ -193,6 +209,8 @@ internal sealed partial class PlannerContext
             else if (c.WidthMm is { } onlyW) alternatives.Add(new RefusalButton($"genişliği {N(onlyW)} cm yap"));
             else if (c.HeightMm is { } onlyH) alternatives.Add(new RefusalButton($"yüksekliği {N(onlyH)} cm yap"));
         }
+        if (polygonResize)
+            preview += " Ölçüler konturun sınır kutusuna aittir; bu işlem beden serileme değildir.";
         var labels = new List<GhostLabel>();
         if (c.WidthMm is not null || c.HeightMm is not null) labels.AddRange(SizeLabels(after));
         var plan = new Plan(PlanKind.ResizePiece, PlanClass.Geometry, c, WithUnitNote(preview),
