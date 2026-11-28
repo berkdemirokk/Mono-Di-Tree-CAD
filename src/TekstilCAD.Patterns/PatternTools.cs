@@ -273,6 +273,7 @@ public static class PatternTools
     public static PatternPiece InsertNotch(PatternPiece piece, int afterIndex, double fraction, double width, double depth, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(piece);
+        DartSafety.RequireNoDarts(piece);
         if(piece.Notches is not null)
         {
             _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
@@ -333,6 +334,7 @@ public static class PatternTools
     public static PatternPiece ReverseOpenPath(PatternPiece piece,CancellationToken cancellationToken=default)
     {
         ArgumentNullException.ThrowIfNull(piece);
+        DartSafety.RequireNoDarts(piece);
         if(piece.Notches is not null)return ReverseMarkedPath(piece,false,cancellationToken);
         var points=SnapshotPointEdit(piece,cancellationToken);
         if(piece.Closed)throw new ArgumentException("Yalnız açık konturun yönü ters çevrilebilir.");
@@ -635,6 +637,7 @@ public static class PatternTools
     {
         ArgumentNullException.ThrowIfNull(piece);
         token.ThrowIfCancellationRequested();
+        DartSafety.RequireNoDarts(piece);
         NotchSafety.RequireNoNotches(piece);
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
@@ -757,6 +760,7 @@ public static class PatternTools
     private static void ValidateSource(PatternPiece piece)
     {
         ArgumentNullException.ThrowIfNull(piece);
+        DartSafety.RequireNoDarts(piece);
         NotchSafety.RequireNoNotches(piece);
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));

@@ -41,6 +41,9 @@ public sealed record MirrorCommand(MirrorAxis Axis) : Command;
 /// <summary>"genişliği 95 yap", "95 x 60 yap" (C14-C16). A null side stays unchanged.</summary>
 public sealed record ResizeCommand(double? WidthMm, double? HeightMm) : Command;
 
+/// <summary>"2 kenara 40 mm ağızlı 20 mm derinlikte pens ekle": inserts internal sewn legs, preserving the fabric contour.</summary>
+public sealed record DartCommand(int EdgeNumber, double IntakeMm, double DepthMm) : Command;
+
 /// <summary>"adı ön beden olsun" (C17). The name keeps the letters as typed (1-128 characters).</summary>
 public sealed record RenameProjectCommand(string Name) : Command;
 public sealed record RenameCommand(string Name) : Command;
@@ -96,7 +99,11 @@ public enum HandoffTarget
 /// tool-window tab (1 grading, 2 seam allowance, 3 marker) and <see cref="Value"/> a number to prefill: millimetres for
 /// seam allowance and fabric width, a count for piece metadata ("adet 2").
 /// </summary>
-public sealed record HandoffCommand(HandoffTarget Target, int? Tab = null, double? Value = null) : Command;
+public sealed record HandoffCommand(HandoffTarget Target, int? Tab = null, double? Value = null, MeasuredNestingRequest? NestingRequest = null) : Command;
+
+/// <summary>A measured fabric marker request with explicit requested copy counts by source piece name.</summary>
+public sealed record MeasuredNestingRequest(double FabricWidthMm, IReadOnlyList<NestingPieceCount> Pieces);
+public sealed record NestingPieceCount(string Name, int Quantity);
 
 /// <summary>"yardım", "?" (C61).</summary>
 public sealed record HelpCommand : Command;

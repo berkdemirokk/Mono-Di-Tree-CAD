@@ -121,7 +121,7 @@ public static partial class PieceOperations
     {
         var refusal = Locate(document, pieceId, requireUnlocked: true, out _, out var piece);
         if (refusal is not null) return refusal;
-        if (piece.Curves is not null || piece.Grainline is not null || piece.Notches is not null
+        if (piece.Curves is not null || piece.Grainline is not null || piece.Notches is not null || piece.Darts is not null
             || document.GradingRules.Any(r => r.SourcePieceId == pieceId))
             return Fail(PieceOperationError.Unsupported, ExtrasText);
         if (!IsAxisParallelRectangle(piece)) return Fail(PieceOperationError.Unsupported, NotRectangleText);

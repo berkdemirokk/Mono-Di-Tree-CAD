@@ -156,6 +156,7 @@ public static class NestingEngine
 
     internal static void ValidateMarkers(PatternPiece piece,CancellationToken token)
     {
+        if(piece.Darts is not null)throw NestingPieceError.Create(piece.Id,"Pens işaretleri bu pastal algoritmasında korunmuyor; yerleşim uygulanmadı.",nameof(piece));
         if(piece.Notches is not { } marks)return;
         if(piece.Points is null || marks.Count==0 || marks.Count>piece.Points.Count)throw new ArgumentException("Geçersiz köşe işareti listesi.");
         var indices=new HashSet<int>();

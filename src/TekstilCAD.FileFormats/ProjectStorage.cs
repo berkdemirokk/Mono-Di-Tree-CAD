@@ -54,7 +54,7 @@ public static class ProjectStorage
             RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
                 ValidateSerializedCurves(root[1], version);
@@ -63,6 +63,7 @@ public static class ProjectStorage
                 if (version == 1 && HasSerializedMetadata(root[1])) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
                 ValidateSerializedGrainlines(root[1], version);
                 ValidateSerializedNotches(root[1],version);
+                ValidateSerializedDarts(root[1],version);
                 if (version < 3 && root[1].TryGetProperty("NestingSnapshot", out _))
                     throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
                 if (version == 3 || (version >= 4 && root[1].TryGetProperty("NestingSnapshot", out _))) ValidateSerializedNestingSnapshot(root[1]);
@@ -239,7 +240,7 @@ public static class ProjectStorage
         {
             if (piece.ValueKind != JsonValueKind.Object || !piece.TryGetProperty("Curves", out var curves))
                 continue;
-            if (version != 9) throw new InvalidDataException("Parametrik kontur için .tcad sürüm 9 gereklidir.");
+            if (version < 9) throw new InvalidDataException("Parametrik kontur için .tcad sürüm 9 veya üzeri gereklidir.");
             found = true;
             if (curves.ValueKind != JsonValueKind.Array ||
                 curves.GetArrayLength() is < 1 or > ParametricContour.MaximumSegments)
@@ -288,6 +289,31 @@ public static class ProjectStorage
         }
         if (version == 9 && !found)
             throw new InvalidDataException("Sürüm 9 parametrik kontur içermiyor.");
+    }
+
+    private static void ValidateSerializedDarts(JsonElement project,int version)
+    {
+        if(!project.TryGetProperty("Pieces",out var pieces) || pieces.ValueKind!=JsonValueKind.Array)return;
+        var found=false;
+        foreach(var piece in pieces.EnumerateArray())
+        {
+            if(piece.ValueKind!=JsonValueKind.Object || !piece.TryGetProperty("Darts",out var darts))continue;
+            if(version!=10)throw new InvalidDataException("Pens işaretleri için .tcad sürüm 10 gereklidir.");
+            found=true;
+            if(darts.ValueKind!=JsonValueKind.Array || darts.GetArrayLength() is <1 or >64)throw new InvalidDataException("Pens listesi eksik veya geçersiz.");
+            foreach(var dart in darts.EnumerateArray())
+            {
+                if(dart.ValueKind!=JsonValueKind.Object || !dart.TryGetProperty("EdgeIndex",out var edge) || edge.ValueKind!=JsonValueKind.Number || !edge.TryGetInt32(out _) ||
+                   !dart.TryGetProperty("StartFraction",out var start) || start.ValueKind!=JsonValueKind.Number || !start.TryGetDouble(out var sf) || !double.IsFinite(sf) ||
+                   !dart.TryGetProperty("EndFraction",out var end) || end.ValueKind!=JsonValueKind.Number || !end.TryGetDouble(out var ef) || !double.IsFinite(ef) ||
+                   !dart.TryGetProperty("DepthMm",out var depth) || depth.ValueKind!=JsonValueKind.Number || !depth.TryGetDouble(out var dm) || !double.IsFinite(dm))
+                    throw new InvalidDataException("Pens işaretinde gerekli ölçüler eksik veya geçersiz.");
+                var fields=dart.EnumerateObject().Select(p=>p.Name).ToHashSet(StringComparer.Ordinal);
+                if(!fields.SetEquals(new[]{"EdgeIndex","StartFraction","EndFraction","DepthMm"}) || sf<=0 || sf>=ef || ef>=1 || dm<=0 || dm>100_000)
+                    throw new InvalidDataException("Pens işaretinde bilinmeyen alan veya geçersiz ölçü var.");
+            }
+        }
+        if(version==10 && !found)throw new InvalidDataException("Sürüm 10 projesinde pens işareti eksik.");
     }
 
     // Legacy files include piece IDs and may include the computed IsFinite field. Never
@@ -443,7 +469,9 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var text = project.Pieces.Any(p => p.Curves is not null)
+        var text = project.Pieces.Any(p => p.Darts is not null)
+            ? JsonSerializer.Serialize<object[]>([10, project], Options)
+            : project.Pieces.Any(p => p.Curves is not null)
             ? JsonSerializer.Serialize<object[]>([9, project], Options)
             : project.Layers is not null
             ? JsonSerializer.Serialize<object[]>([8, project], Options)
@@ -464,7 +492,7 @@ public static class ProjectStorage
         // Never replace a usable project with bytes this version cannot reopen.
         if (Encoding.UTF8.GetByteCount(text) > MaximumProjectBytes)
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");
-        if(project.NestingSnapshot?.RotationTrace is not null || project.Pieces.Any(p => p.Curves is not null))
+        if(project.NestingSnapshot?.RotationTrace is not null || project.Pieces.Any(p => p.Curves is not null || p.Darts is not null))
         {
             // Validate the newly introduced control data and its exact preview,
             // then prove this file can be reloaded without losing any controls.
@@ -538,7 +566,7 @@ public static class ProjectStorage
             // list must carry the default layer as well.
             if (!layerIds.Contains(Layer.DefaultId)) throw new InvalidDataException("Katman listesinde varsayılan katman eksik.");
         }
-        var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0;
+        var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0; long totalDarts=0;
         foreach (var piece in project.Pieces)
         {
             token.ThrowIfCancellationRequested();
@@ -583,6 +611,29 @@ public static class ProjectStorage
                         throw new InvalidDataException("Çentik indeksi veya kaynak kontur konumu geçersiz.");
                     try { Geometry.Validate(mark.Position); }
                     catch(ArgumentOutOfRangeException ex) { throw new InvalidDataException("Çentik koordinatı geçersiz.",ex); }
+                }
+            }
+            if(piece.Darts is { } darts)
+            {
+                if(darts.Count is <1 or >64 || (totalDarts+=darts.Count)>MaximumTotalPoints || !piece.Closed || piece.Curves is not null)
+                    throw new InvalidDataException("Pens sayısı veya kaynak kontur geçersiz.");
+                var vertices=piece.Points.Count>3 && piece.Points[0]==piece.Points[^1] ? piece.Points.Count-1 : piece.Points.Count;
+                var area=Geometry.SignedArea(piece.Points);
+                var edgeIds=new HashSet<int>();
+                foreach(var dart in darts)
+                {
+                    if(dart is null || dart.EdgeIndex<0 || dart.EdgeIndex>=vertices || !edgeIds.Add(dart.EdgeIndex) ||
+                       !double.IsFinite(dart.StartFraction) || dart.StartFraction<=0 || dart.StartFraction>=1 ||
+                       !double.IsFinite(dart.EndFraction) || dart.EndFraction<=dart.StartFraction || dart.EndFraction>=1 ||
+                       !double.IsFinite(dart.DepthMm) || dart.DepthMm<=0 || dart.DepthMm>100_000 || area==0)
+                        throw new InvalidDataException("Pens ölçüleri veya kenar indeksi geçersiz.");
+                    var a=piece.Points[dart.EdgeIndex]; var b=piece.Points[(dart.EdgeIndex+1)%vertices];
+                    var edge=b-a; var length=Geometry.Distance(a,b);
+                    if(length<=Geometry.Epsilon)throw new InvalidDataException("Pens kenarı çok kısa.");
+                    var apex=a+edge*((dart.StartFraction+dart.EndFraction)/2)+new Point2(-edge.Y/length,edge.X/length)*(Math.Sign(area)*dart.DepthMm);
+                    try { Geometry.Validate(apex); }
+                    catch(ArgumentOutOfRangeException ex) { throw new InvalidDataException("Pens ucu çalışma sınırları dışında.",ex); }
+                    if(!Geometry.PointInPolygon(apex,piece.Points))throw new InvalidDataException("Pens ucu konturun dışında.");
                 }
             }
             if (piece.Id == Guid.Empty || !ids.Add(piece.Id)) throw new InvalidDataException("Parça kimlikleri benzersiz ve dolu olmalıdır.");

@@ -25,7 +25,7 @@ internal sealed class DxfNotchReviewWindow : Window
     private static string Omission(DxfExportOmissionKind kind)=>kind switch
     {
         DxfExportOmissionKind.PieceRole=>"Rol",DxfExportOmissionKind.Size=>"Beden",DxfExportOmissionKind.Material=>"Malzeme",
-        DxfExportOmissionKind.Quantity=>"Adet",DxfExportOmissionKind.GradingRules=>"Serileme kuralları",
+        DxfExportOmissionKind.Quantity=>"Adet",DxfExportOmissionKind.DartMarks=>"Pens dikiş kolları",DxfExportOmissionKind.GradingRules=>"Serileme kuralları",
         DxfExportOmissionKind.NestingSnapshot=>"Pastal geçmişi",DxfExportOmissionKind.ImportProvenance=>"Kaynak geçmişi",
         DxfExportOmissionKind.PieceIdentity=>"TekstilCAD parça kimliği",DxfExportOmissionKind.GrainlineReviewState=>"İplik yönü kontrol durumu ve ilişkisi",_=>"Diğer proje bilgisi"
     };

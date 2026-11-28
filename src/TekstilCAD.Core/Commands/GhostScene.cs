@@ -19,6 +19,7 @@ public sealed record GhostPolygon(IReadOnlyList<Point2> Points, bool Closed);
 
 /// <summary>A short text next to the frame, for example "120 mm". <see cref="Anchor"/> is in millimetres.</summary>
 public sealed record GhostLabel(Point2 Anchor, string Text, GhostLabelPlacement Placement);
+public sealed record GhostLine(Point2 Start, Point2 End);
 
 /// <summary>
 /// What the canvas draws for a preview: dashed outlines and measure labels, all in millimetres. Pure data; the canvas
@@ -26,11 +27,12 @@ public sealed record GhostLabel(Point2 Anchor, string Text, GhostLabelPlacement 
 /// </summary>
 public sealed record GhostScene(GhostStyle Style, IReadOnlyList<GhostPolygon> Polygons, IReadOnlyList<GhostLabel> Labels)
 {
+    public IReadOnlyList<GhostLine> Lines { get; init; } = Array.Empty<GhostLine>();
     /// <summary>Nothing to draw.</summary>
     public static GhostScene Empty { get; } = new(GhostStyle.Preview, Array.Empty<GhostPolygon>(), Array.Empty<GhostLabel>());
 
     /// <summary>True when there is nothing to draw.</summary>
-    public bool IsEmpty => Polygons.Count == 0 && Labels.Count == 0;
+    public bool IsEmpty => Polygons.Count == 0 && Labels.Count == 0 && Lines.Count == 0;
 
     /// <summary>The bounding box of all outline points, or null when there are none.</summary>
     public Bounds2? Bounds
@@ -49,6 +51,12 @@ public sealed record GhostScene(GhostStyle Style, IReadOnlyList<GhostPolygon> Po
                     if (p.Y < minY) minY = p.Y;
                     if (p.Y > maxY) maxY = p.Y;
                 }
+            }
+            foreach(var line in Lines)
+            foreach(var p in new[]{line.Start,line.End})
+            {
+                if(!any){minX=maxX=p.X;minY=maxY=p.Y;any=true;continue;}
+                minX=Math.Min(minX,p.X);maxX=Math.Max(maxX,p.X);minY=Math.Min(minY,p.Y);maxY=Math.Max(maxY,p.Y);
             }
             return any ? new Bounds2(minX, minY, maxX, maxY) : null;
         }

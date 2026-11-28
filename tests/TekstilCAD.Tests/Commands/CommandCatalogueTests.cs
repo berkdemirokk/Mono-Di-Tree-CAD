@@ -294,6 +294,7 @@ public sealed class CommandCatalogueTests
     [InlineData("pastal", "size.nest")]
     [InlineData("dikiş payı", "size.seam")]
     [InlineData("dikis payi", "size.seam")]
+    [InlineData("pens", "size.dart")]
     [InlineData("iplik", "piece.grainline")]
     [InlineData("geri al", "view.undo")]
     [InlineData("kaydet", "start.save")]

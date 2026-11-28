@@ -11,6 +11,48 @@ public sealed class CommandParserTypingTests
     private static ParseResult Run(string input, params string[] pieces) =>
         CommandParser.Parse(input, new ParserContext(pieces));
 
+    [Fact]
+    public void MeasuredMarkerRequestCarriesMillimetresAndExactPieceCounts()
+    {
+        var result=Run("150 cm kumaşa iki Ön, bir Arka yerleştir", "Ön", "Arka");
+        var request=Assert.IsType<HandoffCommand>(result.Command);
+        Assert.Equal(HandoffTarget.TextileTools,request.Target);
+        Assert.Equal(1500,request.Value);
+        Assert.Equal(1500,request.NestingRequest!.FabricWidthMm);
+        Assert.Equal(new[]{new NestingPieceCount("Ön",2),new NestingPieceCount("Arka",1)},request.NestingRequest.Pieces);
+    }
+
+    [Fact]
+    public void MeasuredMarkerRequestRefusesUnknownPieceName()
+    {
+        var result=Run("150 cm kumaşa iki Ön, bir Arka yerleştir", "Ön", "Kol");
+        Assert.False(result.IsCommand);
+    }
+
+    [Fact]
+    public void MeasuredMarkerRequestAcceptsCompactWidthAndExplicitCountNouns()
+    {
+        var result=Run("150cm kumaşa iki adet Ön, bir tane Arka diz", "Ön", "Arka");
+        var request=Assert.IsType<HandoffCommand>(result.Command).NestingRequest!;
+        Assert.Equal(1500,request.FabricWidthMm);
+        Assert.Equal(new[]{new NestingPieceCount("Ön",2),new NestingPieceCount("Arka",1)},request.Pieces);
+    }
+
+    [Fact]
+    public void MeasuredMarkerCountOnIsNotThePieceNameOn()
+    {
+        var result=Run("150 cm kumaşa on adet Ön yerleştir", "Ön");
+        var request=Assert.IsType<HandoffCommand>(result.Command).NestingRequest!;
+        Assert.Equal(10,Assert.Single(request.Pieces).Quantity);
+    }
+
+    [Fact]
+    public void MeasuredMarkerRejectsDecimalOverflowWidthWithoutThrowing()
+    {
+        var result=Run("79228162514264337593543950335 m kumaşa bir Ön yerleştir", "Ön");
+        Assert.False(result.IsCommand);
+    }
+
     // ---- Assumed unit -------------------------------------------------------------------------------------------------
 
     [Theory]
