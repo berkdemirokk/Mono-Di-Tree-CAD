@@ -677,6 +677,12 @@ public sealed class CommandParserTests
     public void ToolForms(string input, DrawingTool tool) => Assert.Equal(tool, Cmd<ToolCommand>(input, B1).Tool);
 
     [Theory]
+    [InlineData("eğri noktalarını düzenle")]
+    [InlineData("eğriyi düzelt")]
+    public void ParametricCurveEditForms(string input) =>
+        Assert.Equal(HandoffTarget.ParametricCurveEdit, Cmd<HandoffCommand>(input, B1).Target);
+
+    [Theory]
     [InlineData("kaydet", FileAction.Save)]
     [InlineData("farklı kaydet", FileAction.SaveAs)]
     [InlineData("yedeğini al", FileAction.SaveCopy)]

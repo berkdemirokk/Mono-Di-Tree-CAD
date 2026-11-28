@@ -148,7 +148,11 @@ internal sealed class ParametricCurveEditorWindow : Window
         };
     }
 
-    private void Apply()
+    internal void SetTextForVerification(int segmentIndex, string key, string text) => editors[segmentIndex][key].Text = text;
+
+    internal void ApplyForVerification() => Apply(fromVerification: true);
+
+    private void Apply(bool fromVerification = false)
     {
         try
         {
@@ -156,7 +160,7 @@ internal sealed class ParametricCurveEditorWindow : Window
             // Same checked sampling path used by native project persistence.
             _ = ParametricContour.Sample(segments);
             onApply(segments);
-            DialogResult = true;
+            if (!fromVerification) DialogResult = true;
         }
         catch (Exception error) when (error is ArgumentException or InvalidDataException or InvalidOperationException)
         {

@@ -99,6 +99,7 @@ internal static partial class CommandVerification
         new("C55", "makine dosyası hazırla", "empty", "Handoff.MachineCenter", "OpenMachineCenter", true),
         new("C56", "iplik yönü", "piece", "Handoff.Grainline", "EditGrainline", true),
         new("C57", "parça bilgileri", "piece", "Handoff.PieceMetadata", "EditPieceMetadata", true),
+        new("-", "eğri noktalarını düzenle", "analytic", "Handoff.ParametricCurveEdit", "EditParametricContour", true),
         new("C58", "karşı parçasını çıkar", "piece", "Handoff.MirrorCopy", "OpenMirrorCopy", true),
         new("C59", "parçaları taşı", "two", "Handoff.GroupMove", "OpenGroupMove", true),
         new("C60", "yeni katman", "simple", After: (window, _) => !window.IsSimpleView),
@@ -147,6 +148,13 @@ internal static partial class CommandVerification
                 var first = Plain("Ön beden", 10);
                 window.LoadDocument(new ProjectDocument { Pieces = [first, Plain("Kol", 200)] });
                 window.Select(first.Id);
+                break;
+            case "analytic":
+                var bezier = new CurveSegment.CubicBezier(new(0, 0), new(0, 30), new(100, 30), new(100, 0));
+                var curves = new CurveSegment[] { bezier };
+                var analytic = new PatternPiece { Name = "Eğri", Closed = false, Curves = [.. curves], Points = ParametricContour.Sample(curves) };
+                window.LoadDocument(new ProjectDocument { Pieces = [analytic] });
+                window.Select(analytic.Id);
                 break;
         }
         Layout(window);
@@ -227,7 +235,7 @@ internal static partial class CommandVerification
         }
     }
 
-    private static void VerifyCommandCoverage(List<string> checks)
+    private static void VerifyCommandCoverage(List<string> checks, string? reportPath)
     {
         windowsStable = true;
         var preferencesPath = AppPaths.UiPreferencesPath;
@@ -266,6 +274,7 @@ internal static partial class CommandVerification
         var uncovered = expected.Where(key => !reached.Contains(key) && !RefusedByDesign.ContainsKey(key)).ToList();
         Check(uncovered.Count == 0, "Every planner command kind has an executed row or a justified refusal; uncovered: " + string.Join(", ", uncovered), checks);
         Check(RefusedByDesign.Keys.All(key => !reached.Contains(key)), "No command is both executed and on the refused list", checks);
+        VerifyParametricCurveEdit(checks, reportPath);
 
         // Stage 3.4: acceptance-first for non-rectangular, unmarked closed polygons.
         // Open the window's own command box, not a detached test control.
@@ -390,4 +399,103 @@ internal static partial class CommandVerification
             Check(window.PreviewCommand("?", true).Plan?.Kind == PlanKind.Help, "A lone question mark is the help command", checks);
         });
     }
+
+    private static void VerifyParametricCurveEdit(List<string> checks, string? reportPath)
+    {
+        var root = reportPath is null ? Path.Combine(Environment.CurrentDirectory, "work", "verify") : Path.GetDirectoryName(reportPath)!;
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "parametric-curve-edit-" + Guid.NewGuid().ToString("N") + ".tcad");
+        try
+        {
+            Scenario(window =>
+            {
+                var bezier = new CurveSegment.CubicBezier(new(0, 0), new(0, 30), new(100, 30), new(100, 0));
+                var curves = new CurveSegment[] { bezier };
+                var piece = new PatternPiece { Name = "Eğri", Closed = false, Curves = [.. curves], Points = ParametricContour.Sample(curves) };
+                window.LoadDocument(new ProjectDocument { Pieces = [piece] });
+                window.Select(piece.Id);
+                window.CommandBoxHostForVerification = () => new RecordingHost();
+                var opened = window.HandleCommandBoxShortcut(System.Windows.Input.ModifierKeys.Control, System.Windows.Input.Key.K);
+                var view = window.CommandBoxView;
+                Check(opened && view is not null, "Curve edit: Ctrl+K opens the main window command box", checks);
+                if (!opened || view is null) return;
+                view.AutoPreview = false;
+                var session = SessionOf(window);
+                session.MarkSaved();
+                var before = window.Document.Clone();
+                var undoCount = session.UndoCount;
+                var editorOpened = false;
+                window.ParametricCurveEditorForVerification = editor =>
+                {
+                    editorOpened = editor.Title.Contains("Eğri", StringComparison.Ordinal);
+                    editor.SetTextForVerification(0, "P1 Y", "40");
+                    editor.ApplyForVerification();
+                };
+                Type(view, "eğri noktalarını düzenle");
+                Enter(view);
+                var planned = view.State == CommandBarState.Preview && DocumentSession.ContentEquals(before, window.Document) && session.UndoCount == undoCount;
+                Check(planned, "Curve edit: the Turkish command previews without changing the analytic source", checks);
+                if (!planned) return;
+                Enter(view);
+                var editedPiece = window.Document.Pieces.Single();
+                var editedCurve = AssertCurveEditBezier(editedPiece);
+                var edited = window.Document.Clone();
+                var applied = editorOpened && editedPiece.Id == piece.Id && editedCurve == (bezier with { P1 = new Point2(0, 40) }) &&
+                    ParametricContour.MatchesPreview(editedPiece) && session.UndoCount == undoCount + 1;
+                Check(applied, "Curve edit: the existing editor changes a Bézier handle numerically as one undo step", checks);
+                if (!applied) return;
+
+                ProjectStorage.Save(edited, path);
+                var reopened = ProjectStorage.Load(path);
+                var roundTrip = !ReferenceEquals(edited, reopened) && DocumentSession.ContentEquals(edited, reopened) &&
+                    AssertCurveEditBezier(reopened.Pieces.Single()) == editedCurve;
+                Check(roundTrip, "Curve edit: saved and reopened analytic controls match the edited document", checks);
+
+                view.SetText("");
+                var undone = view.HandleKey(System.Windows.Input.Key.Z, System.Windows.Input.ModifierKeys.Control) &&
+                    DocumentSession.ContentEquals(before, window.Document) && session.UndoCount == undoCount;
+                Check(undone, "Curve edit: Ctrl+Z restores the exact original analytic controls", checks);
+                var redone = view.HandleKey(System.Windows.Input.Key.Y, System.Windows.Input.ModifierKeys.Control) &&
+                    DocumentSession.ContentEquals(edited, window.Document) && session.UndoCount == undoCount + 1;
+                Check(redone, "Curve edit: Ctrl+Y restores the exact edited controls", checks);
+            });
+
+            foreach (var fixture in new[] { "straight", "locked" })
+            {
+                Scenario(window =>
+                {
+                    CurveSegment[] curves = fixture == "locked"
+                        ? [new CurveSegment.CubicBezier(new(0, 0), new(0, 30), new(100, 30), new(100, 0))]
+                        : [new CurveSegment.Line(new(0, 0), new(100, 0))];
+                    var piece = new PatternPiece { Name = "Doğru", Closed = false, Curves = [.. curves], Points = ParametricContour.Sample(curves) };
+                    var document = new ProjectDocument { Pieces = [piece] };
+                    if (fixture == "locked") document.Layers = [new Layer { Id = Layer.DefaultId, Name = "Kilitli", Locked = true }];
+                    window.LoadDocument(document);
+                    window.Select(piece.Id);
+                    window.CommandBoxHostForVerification = () => new RecordingHost();
+                    window.OpenCommandBox();
+                    var view = window.CommandBoxView!;
+                    view.AutoPreview = false;
+                    var before = window.Document.Clone();
+                    var session = SessionOf(window);
+                    var undoCount = session.UndoCount;
+                    var selectedBefore = window.Selected?.Id;
+                    var editorOpened = false;
+                    window.ParametricCurveEditorForVerification = _ => editorOpened = true;
+                    Type(view, "eğri noktalarını düzenle");
+                    Enter(view);
+                    Check(view.State == CommandBarState.Refusal && !editorOpened &&
+                        DocumentSession.ContentEquals(before, window.Document) && session.UndoCount == undoCount &&
+                        window.Selected?.Id == selectedBefore,
+                        $"Curve edit: {fixture} contour is refused without opening the editor or changing selection, geometry or history", checks);
+                });
+            }
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    private static CurveSegment.CubicBezier AssertCurveEditBezier(PatternPiece piece) =>
+        piece.Curves is { Count: 1 } curves && curves[0] is CurveSegment.CubicBezier bezier
+            ? bezier
+            : throw new InvalidDataException("Expected one analytic cubic Bézier segment.");
 }

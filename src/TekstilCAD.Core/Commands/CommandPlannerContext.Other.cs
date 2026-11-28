@@ -196,6 +196,10 @@ internal sealed partial class PlannerContext
                 needsPiece = true;
                 text = "Parça bilgileri penceresi açılacak (rol, adet, malzeme).";
                 break;
+            case HandoffTarget.ParametricCurveEdit:
+                needsPiece = true;
+                text = "Seçili parçanın analitik eğri kontrol noktaları düzenlenecek; değişiklikler tek işlem olarak geri alınabilir.";
+                break;
             case HandoffTarget.MirrorCopy:
                 needsPiece = true;
                 text = "Yanına aynalı parça penceresi açılacak. Önizlemeyi orada görürsünüz.";
@@ -223,7 +227,21 @@ internal sealed partial class PlannerContext
         }
         if (needsPiece)
         {
-            if (!TrySelected(out var piece, out var refusal)) return refusal;
+            var foundPiece = c.Target == HandoffTarget.ParametricCurveEdit
+                ? TryEditTarget(out var piece, out var refusal)
+                : TrySelected(out piece, out refusal);
+            if (!foundPiece) return refusal;
+            if (c.Target == HandoffTarget.ParametricCurveEdit)
+            {
+                if (piece.Curves is not { Count: > 0 })
+                    return Refuse(Condition("Seçili parçada düzenlenecek analitik eğri yok."));
+                if (!piece.Curves.Any(curve => curve is CurveSegment.CubicBezier or CurveSegment.Arc))
+                    return Refuse(Condition("Seçili parçada Bézier eğrisi veya dairesel yay yok; düz çizgi parçası değişmedi."));
+                if (piece.Curves.Count > 32)
+                    return Refuse(Condition("Bu konturda 32'den fazla eğri bölümü var; kontrol noktaları güvenle tek ekranda düzenlenemiyor."));
+                if (piece.Notches is not null || Doc.GradingRules.Any(rule => rule.SourcePieceId == piece.Id))
+                    return Refuse(Condition("Bu parçada çentik veya serileme kuralı var. Önce bağlı üretim verilerini ayrı olarak inceleyin."));
+            }
             return Of(new Plan(PlanKind.Window, planClass, c, text, PieceStamp.Capture(view, selection, piece.Id, StampScope.Piece))
             {
                 ActionName = "Pencere",
