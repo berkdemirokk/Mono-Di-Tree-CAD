@@ -59,6 +59,12 @@ struct CommandBar: View {
 
     private var showsOutput: Bool { card != nil || result != nil }
 
+    private var needsScrollableOutput: Bool {
+        if dynamicTypeSize.isAccessibilitySize { return true }
+        if let card, case .preview(.markerBrief, _) = card.kind { return true }
+        return false
+    }
+
     var body: some View {
         content
             .onChange(of: keyboardVisible) { visible in
@@ -72,13 +78,15 @@ struct CommandBar: View {
         if isShown {
             VStack(alignment: .leading, spacing: 8) {
                 fieldRow
-                if showsOutput {
+                if showsOutput && needsScrollableOutput {
                     // Keep the preview controls reachable on short iPhone screens as well as at
                     // accessibility text sizes. The tools below the command bar have their own
                     // scroll view, so they cannot bring a button in this card into view.
                     ScrollView { outputs }
                         .frame(maxHeight: dynamicTypeSize.isAccessibilitySize ? 320 : 240)
                         .accessibilityIdentifier("command-output")
+                } else if showsOutput {
+                    outputs
                 }
             }
             .padding(.horizontal)
