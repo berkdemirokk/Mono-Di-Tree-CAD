@@ -626,7 +626,8 @@ internal sealed class CommandBarView : Border
         }
         else
         {
-            if(context.SelectionIsPlainRectangle)yield return "genişliği 95 yap";
+            // RefreshChips asks the real planner before showing each suggestion. Do not duplicate its shape rules here.
+            yield return "genişliği 95 yap";
             yield return "25 sağa taşı";yield return "90 sağa döndür";
         }
     }
