@@ -333,6 +333,8 @@ struct EasyCADWorkspace: View {
             return saveProjectToLibrary() ? "Proje kaydedildi." : nil
         case .saveCopy:
             return saveSeparateCopy() ? "Bağımsız kopya kaydedildi." : nil
+        case .markerPlotter:
+            return nil
         case .info:
             return nil
         }
@@ -992,7 +994,9 @@ struct EasyCADWorkspace: View {
                 VStack(spacing: 0) {
                     CommandBar(context: commandContext(), keyboardVisible: keyboardVisible,
                                hasOutput: $commandHasOutput,
-                               apply: { applyCommand($0) }, undoLast: { undo() })
+                               apply: { applyCommand($0) },
+                               exportMarker: { try? PatternPlotterFile.export($0) },
+                               undoLast: { undo() })
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                             if dynamicTypeSize.isAccessibilitySize { statusLines }

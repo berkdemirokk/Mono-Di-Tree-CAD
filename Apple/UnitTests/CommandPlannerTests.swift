@@ -69,6 +69,35 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertNotNil(refusal(.measuredApron(width: 20, length: 850), context(.blank, selected: nil)))
     }
 
+    func testMarkerPlacementAppendsToTheWorkingProjectAndPreviewsTheWholeResult() throws {
+        let document = sample()
+        let request = MarkerBrief.Request(sourceText: "150 cm kumaşa 2 adet Ön beden yerleştir",
+            widthMM: 1500, gapMM: 10, marginMM: 10,
+            quantities: [document.pieces[0].id: 2], output: nil)
+        let planned = try XCTUnwrap(plan(.markerBrief(request), context(document)))
+        let (updated, selection) = try XCTUnwrap(edited(planned))
+        XCTAssertEqual(updated.id, document.id)
+        XCTAssertEqual(updated.name, document.name)
+        XCTAssertEqual(Array(updated.pieces.prefix(document.pieces.count)), document.pieces)
+        XCTAssertEqual(updated.pieces.count, document.pieces.count + 2)
+        XCTAssertEqual(planned.patternPreview, updated)
+        XCTAssertEqual(selection, .piece(updated.pieces[document.pieces.count].id))
+    }
+
+    func testMarkerPlotterRequestPlansASeparateFileWithoutChangingTheProject() throws {
+        let document = sample()
+        let request = MarkerBrief.Request(sourceText: "150 cm kumaşa 2 adet Ön beden yerleştir plotter",
+            widthMM: 1500, gapMM: 10, marginMM: 10,
+            quantities: [document.pieces[0].id: 2], output: .plotter)
+        let planned = try XCTUnwrap(plan(.markerBrief(request), context(document)))
+        guard case .markerPlotter(let arranged) = planned.effect else {
+            return XCTFail("Expected a file-only marker plan")
+        }
+        XCTAssertEqual(arranged.pieces.count, 2)
+        XCTAssertEqual(planned.base, document)
+        XCTAssertEqual(planned.patternPreview, arranged)
+    }
+
     func testStudioModelsArePreparedWithoutReplacingTheWorkingProject() throws {
         for pattern in StudioPattern.allCases {
             let document = sample()

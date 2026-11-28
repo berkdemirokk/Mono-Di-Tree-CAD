@@ -13,6 +13,7 @@ struct PatternBriefStudio: View {
     @State private var printStatus: String?
     @StateObject private var printer = PatternPaperPrinter()
 
+    private let markerExample = "önlük için 150 cm kumaşa 2 gövde ve 1 cep yerleştir ve plotter dosyası hazırla"
     private let example = "65 cm eninde 85 cm boyunda cepli bir önlük çiz ve plotterda bastır"
 
     var body: some View {
@@ -59,6 +60,16 @@ struct PatternBriefStudio: View {
                             }
                             .buttonStyle(.borderless)
                             .accessibilityHint("Tarifi düzenleyebilirsin.")
+                            Button {
+                                brief = markerExample
+                                writing = true
+                            } label: {
+                                Label("Pastal örneği · 150 cm kumaş, 2 gövde, 1 cep", systemImage: "square.grid.2x2")
+                                    .font(.subheadline)
+                                    .frame(minHeight: 44)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityIdentifier("brief-marker-example")
                         } else if previous != nil && brief.isEmpty {
                             Text("“Cebi kaldır” veya “Plotterda bastır” yazabilirsin.")
                                 .font(.subheadline)
@@ -111,6 +122,10 @@ struct PatternBriefStudio: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(pattern.name).font(.title2.bold()).accessibilityAddTraits(.isHeader)
+                    if pattern.name.hasSuffix(" · Pastal") {
+                        Text("\(pattern.pieces.count) parça · Döndürmeden yerleştirme")
+                            .font(.subheadline)
+                    }
                     Text(pattern.pieces.map(\.name).joined(separator: " · "))
                         .font(.subheadline).foregroundStyle(.secondary)
                 }

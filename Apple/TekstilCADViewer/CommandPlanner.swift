@@ -36,6 +36,7 @@ struct CommandPlan {
         case redo
         case saveProject
         case saveCopy
+        case markerPlotter(DraftProject)
         case info
     }
 
@@ -120,6 +121,36 @@ enum CommandPlanner {
                 return .refusal(CommandRefusal(code: "ApronDimensions", message: "Önlük eni 30–120 cm, boyu 35–150 cm olmalı."))
             }
             return planStudioModel(model, base: base, context: context, note: note)
+        case .markerBrief(let request):
+            do {
+                let arranged = try MarkerLayout.arrange(base, widthMM: request.widthMM,
+                    gapMM: request.gapMM, marginMM: request.marginMM, quantities: request.quantities)
+                if request.output == .plotter {
+                    var plan = CommandPlan(sentence: "\(n(request.widthMM)) mm kumaş eninde \(arranged.pieces.count) parça için PLT dosyası hazırlanacak.",
+                        note: "Dosya oluşturulup paylaşım seçenekleri açılır; çiziminiz değişmez.",
+                        effect: .markerPlotter(arranged), isDestructive: false,
+                        notice: "PLT dosyası hazır.", base: base, baseSelection: context.selectedID)
+                    plan.patternPreview = arranged
+                    return .plan(plan)
+                }
+                let offset = base.pieces.map(\.maxX).max().map { $0 + 20 } ?? 0
+                let additions = arranged.pieces.map { piece -> DraftPiece in
+                    var copy = piece
+                    copy.points = copy.points.map { DraftPoint(x: $0.x + offset, y: $0.y) }
+                    return copy
+                }
+                var updated = base
+                updated.pieces.append(contentsOf: additions)
+                guard CADLocalDraftStore.isValid(updated) else { return .refusal(limitRefusal()) }
+                let count = additions.count
+                let sentence = "\(n(request.widthMM)) mm kumaş eninde \(count) parça pastal yerleşimi çizimin sağına eklenecek."
+                var plan = make(sentence, note, .edit(updated, .piece(additions.first?.id)),
+                                "Pastal yerleşimi çizime eklendi.", base, context)
+                plan.patternPreview = updated
+                return .plan(plan)
+            } catch {
+                return .refusal(CommandRefusal(code: "MarkerLayout", message: error.localizedDescription))
+            }
         case .rectangle(let width, let height, let isSquare):
             return planRectangle(width, height, isSquare: isSquare, base: base, context: context, note: note)
         case .line(let length, let orientation):

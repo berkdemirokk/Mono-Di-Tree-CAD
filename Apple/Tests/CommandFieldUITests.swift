@@ -53,9 +53,13 @@ final class CommandFieldUITests: XCTestCase {
     }
 
     private func dragTools(in app: XCUIApplication, towardsEnd: Bool) {
-        let scroll = toolsScroll(in: app)
-        let from = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.75 : 0.25))
-        let to = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.25 : 0.75))
+        drag(app.scrollViews["workshop-tools"], towardsEnd: towardsEnd, fallback: toolsScroll(in: app))
+    }
+
+    private func drag(_ scroll: XCUIElement, towardsEnd: Bool, fallback: XCUIElement? = nil) {
+        let target = scroll.exists ? scroll : (fallback ?? scroll)
+        let from = target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.75 : 0.25))
+        let to = target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: towardsEnd ? 0.25 : 0.75))
         from.press(forDuration: 0.05, thenDragTo: to)
     }
 
@@ -63,11 +67,19 @@ final class CommandFieldUITests: XCTestCase {
                           file: StaticString = #filePath, line: UInt = #line) {
         for _ in 0..<14 {
             if element.exists && element.isHittable { break }
-            dragTools(in: app, towardsEnd: true)
+            if element.identifier == "command-apply" || element.identifier == "command-cancel" {
+                drag(app.scrollViews["command-output"], towardsEnd: true)
+            } else {
+                dragTools(in: app, towardsEnd: true)
+            }
         }
         for _ in 0..<14 {
             if element.exists && element.isHittable { break }
-            dragTools(in: app, towardsEnd: false)
+            if element.identifier == "command-apply" || element.identifier == "command-cancel" {
+                drag(app.scrollViews["command-output"], towardsEnd: false)
+            } else {
+                dragTools(in: app, towardsEnd: false)
+            }
         }
         XCTAssertTrue(element.isHittable, "Control should be reachable by scrolling", file: file, line: line)
         element.tap()
@@ -85,6 +97,51 @@ final class CommandFieldUITests: XCTestCase {
         XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
         tapBelow(app.buttons["command-undo"], in: app)
         XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].waitForExistence(timeout: 5))
+    }
+
+    func testMarkerRequestPreviewsAppendsToTheProjectAndCanBeUndone() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(text(startingWith: "Etek modelinden 3 parça eklenecek", in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+
+        enter("150 cm kumasa 2 on panel yerlestir", in: app, submit: true)
+        XCTAssertTrue(text(containing: "1500 mm kumaş eninde 2 parça pastal yerleşimi", in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(countLabel(3, in: app).exists, "Preparing the marker must leave the working project untouched")
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(countLabel(5, in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-undo"], in: app)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+    }
+
+    func testPastalRequestShowsAnExampleUsingARealPieceName() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(text(startingWith: "Etek modelinden 3 parça eklenecek", in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+
+        enter("pastal yap", in: app, submit: true)
+        let example = "150 cm kumaşa 2 adet Ön panel yerleştir"
+        XCTAssertTrue(text(containing: example, in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons[example].exists, "The example should be an actionable fill-and-preview choice")
+    }
+
+    func testMarkerPlotterRequestCreatesShareableFileWithoutChangingTheProject() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("etek modeli ekle", in: app, submit: true)
+        XCTAssertTrue(text(startingWith: "Etek modelinden 3 parça eklenecek", in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(countLabel(3, in: app).waitForExistence(timeout: 5))
+
+        enter("150 cm kumasa 2 on panel yerlestir plotter dosyasi hazirla", in: app, submit: true)
+        XCTAssertTrue(text(containing: "PLT dosyası hazırlanacak", in: app).waitForExistence(timeout: 5))
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Dosyayı paylaş")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(countLabel(3, in: app).exists, "Preparing a PLT file must not change the working drawing")
     }
 
     func testACommandIsShownBeforeItChangesAnythingAndCanBeUndone() {
