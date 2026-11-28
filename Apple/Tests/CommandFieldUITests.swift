@@ -129,6 +129,19 @@ final class CommandFieldUITests: XCTestCase {
         XCTAssertTrue(app.buttons[example].exists, "The example should be an actionable fill-and-preview choice")
     }
 
+    func testPlotterCalibrationFromAnEmptyWorkshopPreviewsAndSharesAReference() {
+        let app = launchClean()
+        openWorkshop(app)
+        enter("plotter kalibrasyon dosyasi hazirla", in: app, submit: true)
+        XCTAssertTrue(text(containing: "100 × 100 mm", in: app).waitForExistence(timeout: 5))
+        let share = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Dosyayı paylaş")).firstMatch
+        XCTAssertFalse(share.exists)
+        tapBelow(app.buttons["command-apply"], in: app)
+        XCTAssertTrue(share.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["command-undo"].exists)
+        XCTAssertTrue(app.staticTexts["Kalıbını oluştur"].exists)
+    }
+
     func testMarkerPlotterRequestCreatesShareableFileWithoutChangingTheProject() {
         let app = launchClean()
         openWorkshop(app)
