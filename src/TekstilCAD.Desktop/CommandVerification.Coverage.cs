@@ -316,6 +316,56 @@ internal static partial class CommandVerification
                 "Polygon resize: Ctrl+Y restores the exact resized document", checks);
         });
 
+        // Stage 3.4 discoverability: the real command box must suggest a supported edit for a selected polygon.
+        Scenario(window =>
+        {
+            var polygon = new PatternPiece { Name = "Yamuk", Points = [new(120,20),new(520,20),new(620,520),new(20,520)] };
+            window.LoadDocument(new ProjectDocument { Pieces = [polygon] });
+            window.Select(polygon.Id);
+            window.CommandBoxHostForVerification = () => new RecordingHost();
+            window.OpenCommandBox();
+            var view = window.CommandBoxView!;
+            view.AutoPreview = false;
+            var before = window.Document.Clone();
+            var session = SessionOf(window);
+            var undoCount = session.UndoCount;
+            view.RefreshChips();
+            var chip = view.ChipButtons.SingleOrDefault(button => Equals(button.Tag, "genişliği 95 yap"));
+            Check(chip is not null && chip.Focusable && chip.IsEnabled &&
+                !string.IsNullOrWhiteSpace(AutomationProperties.GetName(chip)),
+                "Polygon resize UI: the main command box offers an accessible resize suggestion for a valid selected polygon", checks);
+            if (chip is null) return;
+            chip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(view.State == CommandBarState.Preview &&
+                view.ApplyButton.Visibility == Visibility.Visible && view.CancelButton.Visibility == Visibility.Visible &&
+                DocumentSession.ContentEquals(before, window.Document) && session.UndoCount == undoCount,
+                "Polygon resize UI: clicking the suggestion opens a cancellable preview without editing the source", checks);
+            view.HandleKey(System.Windows.Input.Key.Escape, System.Windows.Input.ModifierKeys.None);
+            Check(DocumentSession.ContentEquals(before, window.Document) && session.UndoCount == undoCount,
+                "Polygon resize UI: Escape leaves the document and history unchanged", checks);
+        });
+
+        // The suggestion must not imply an unsupported edit on marked, locked or open contours.
+        foreach (var unsupported in new[] { "metadata", "grainline", "locked", "open" })
+            Scenario(window =>
+            {
+                var polygon = new PatternPiece { Name = "Yamuk", Points = [new(120,20),new(520,20),new(620,520),new(20,520)] };
+                var doc = new ProjectDocument { Pieces = [polygon] };
+                if (unsupported == "metadata") polygon.Metadata = new PieceMetadata { Size = "38" };
+                if (unsupported == "grainline") polygon.Grainline = new Grainline { Start = new(200,100), End = new(200,300) };
+                if (unsupported == "open") polygon.Closed = false;
+                if (unsupported == "locked") doc.Layers = [new Layer { Id = Layer.DefaultId, Name = "Kilitli", Locked = true }];
+                window.LoadDocument(doc);
+                window.Select(polygon.Id);
+                window.CommandBoxHostForVerification = () => new RecordingHost();
+                window.OpenCommandBox();
+                var view = window.CommandBoxView!;
+                view.AutoPreview = false;
+                view.RefreshChips();
+                Check(!view.ChipButtons.Any(button => Equals(button.Tag, "genişliği 95 yap")),
+                    "Polygon resize UI: no misleading resize suggestion for " + unsupported, checks);
+            });
+
         // "çoğalt" end to end through the existing duplicate seam: the real method runs and stops at its own choice step.
         Scenario(window =>
         {
