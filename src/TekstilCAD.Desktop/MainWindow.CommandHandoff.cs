@@ -22,6 +22,7 @@ public partial class MainWindow
 
     /// <summary>Verification only: when set, the executor passes it a key ("Handoff.Target" or "File.Action") and the method it would run instead of running it (every one of them opens a dialog).</summary>
     internal Action<string, Action>? HandoffForVerification { get; set; }
+    internal Action<ParametricCurveEditorWindow>? ParametricCurveEditorForVerification { get; set; }
 
     private HandoffRoute? HandoffRouteFor(HandoffCommand hand) => hand.Target switch
     {
@@ -35,6 +36,7 @@ public partial class MainWindow
         HandoffTarget.CoordinateDrawing => new(OpenCoordinateDrawing, "Koordinatla çizim penceresi kapandı."),
         HandoffTarget.Grainline => new(EditGrainline, "İplik yönü penceresi kapandı."),
         HandoffTarget.PieceMetadata => new(EditPieceMetadata, "Parça bilgileri penceresi kapandı."),
+        HandoffTarget.ParametricCurveEdit => new(EditParametricContour, "Parametrik kontur düzenleme penceresi kapandı."),
         HandoffTarget.MirrorCopy => new(OpenMirrorCopy, "Aynalı parça penceresi kapandı."),
         HandoffTarget.GroupMove => new(OpenGroupMove, "Toplu taşıma penceresi kapandı."),
         HandoffTarget.DesignRequest => new(OpenDesignRequest, "Elbise isteği penceresi kapandı."),

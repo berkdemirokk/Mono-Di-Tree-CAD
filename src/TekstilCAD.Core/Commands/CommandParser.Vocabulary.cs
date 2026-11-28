@@ -231,6 +231,7 @@ public static partial class CommandParser
         Add(new HandoffCommand(HandoffTarget.MachineCenter), "makine dosyasi hazirla", "makine dosyasi", "simulatoru ac", "simulator");
         Add(new HandoffCommand(HandoffTarget.Grainline), "iplik yonu", "ipligi kaldir", "duz iplik", "iplik");
         Add(new HandoffCommand(HandoffTarget.PieceMetadata), "parca bilgileri", "kumasi astar yap", "adet", "parca bilgisi");
+        Add(new HandoffCommand(HandoffTarget.ParametricCurveEdit), "egri noktalarini duzenle", "egriyi duzelt", "yay ayarlarini duzenle");
         Add(new HandoffCommand(HandoffTarget.MirrorCopy), "karsi parcasini cikar", "sol kolu da yap", "yanina aynali parca", "karsi parca", "sag kolu da yap");
         Add(new HandoffCommand(HandoffTarget.GroupMove), "parcalari tasi", "birden fazla parcayi tasi", "hepsini tasi", "tum parcalari tasi");
         Add(new HandoffCommand(HandoffTarget.Layers), "yeni katman", "katmanlar", "katman ekle", "katman");

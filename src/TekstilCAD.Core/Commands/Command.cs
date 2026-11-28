@@ -92,6 +92,7 @@ public enum HandoffTarget
     ImportDxf, Export, ExportHpgl, ExportSelectedDxf, ExportSelectedA4,
     TextileTools, MachineCenter, Grainline, PieceMetadata, MirrorCopy, GroupMove,
     Duplicate, Layers, CoordinateDrawing, About, DesignRequest, RecoveryScan, ExportProjectA4,
+    ParametricCurveEdit,
 }
 
 /// <summary>

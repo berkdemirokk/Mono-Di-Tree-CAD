@@ -179,8 +179,8 @@ internal static class CommandCatalogueData
             "İplik yönü…", ["iplik yönü", "ipliği kaldır", "düz iplik"],
             ["iplik çizgisi", "kumaş yönü"]));
         all.Add(D("piece.curve-edit", GPiece, "Eğri noktalarını düzenle…",
-            "Çizdiğiniz eğrinin ya da yayın ayar noktalarını değiştirir.",
-            "Parametrik konturu düzenle…", None,
+            "Seçili Bézier eğrisinin veya yayın analitik kontrol noktalarını değiştirir; onaylanan değişiklik tek adımda geri alınabilir.",
+            "Parametrik konturu düzenle…", ["eğri noktalarını düzenle", "eğriyi düzelt"],
             ["eğriyi düzelt", "kavis ayarı", "bézier noktaları"]));
         all.Add(D("piece.curve-flatten", GPiece, "Eğriyi sabit çizgiye çevir…",
             "Eğri ayarlarını bırakır; mevcut noktalar sabit çizgi olarak kalır. Geri alınabilir.",

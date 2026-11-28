@@ -1101,7 +1101,7 @@ public partial class MainWindow : Window
         var id = piece.Id;
         var initial = piece.Clone();
         var epoch = projectEpoch;
-        new ParametricCurveEditorWindow(this, initial, segments =>
+        var editor = new ParametricCurveEditorWindow(this, initial, segments =>
         {
             var current = Document.Pieces.FirstOrDefault(item => item.Id == id);
             if (projectEpoch != epoch || SelectedId != id || current is null ||
@@ -1117,7 +1117,9 @@ public partial class MainWindow : Window
                 ParametricContour.Regenerate(live);
                 if (live.Grainline is not null) live.Grainline.NeedsReview = true;
             });
-        }).ShowDialog();
+        });
+        if (ParametricCurveEditorForVerification is { } verifyEditor) verifyEditor(editor);
+        else editor.ShowDialog();
     }
 
     private void FlattenParametricContour()
