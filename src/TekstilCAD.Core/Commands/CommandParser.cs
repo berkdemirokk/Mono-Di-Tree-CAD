@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TekstilCAD.Core.Commands;
@@ -112,12 +113,16 @@ public static partial class CommandParser
         if(value>100_000_000m/millimetersPerUnit) return ParseResult.Refused(Refusals.OutOfRangeMeasure());
         var width = UnitParser.ToMillimeters(value, unit);
         if (width < (decimal)MinLengthMm || width > 100_000_000m) return ParseResult.Refused(Refusals.OutOfRangeMeasure());
+        var originalItems=state.Norm.Substring(match.Groups["items"].Index,match.Groups["items"].Length).Trim();
+        var foldedItems=match.Groups["items"].Value.Trim();
+        if(!TryReadNestingClearances(foldedItems,originalItems,out var items,out var originalPieceItems,out var gap,out var edgeMargin))
+            return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
+        if(edgeMargin*2m>=width) return ParseResult.Refused(Refusals.OutOfRangeMeasure());
         var names = state.Names.Select(n => (Name:n, Folded:TurkishText.Fold(n.Trim())))
             .Where(x => x.Folded.Length > 0).OrderByDescending(x => x.Folded.Length).ToArray();
         var assignments = new List<NestingPieceCount>();
-        var foldedClauses = Regex.Split(match.Groups["items"].Value.Trim(), @"\s*,\s*|\s+ve\s+", RegexOptions.CultureInvariant);
-        var originalItems=state.Norm.Substring(match.Groups["items"].Index,match.Groups["items"].Length).Trim();
-        var originalClauses=Regex.Split(originalItems,@"\s*,\s*|\s+ve\s+",RegexOptions.CultureInvariant);
+        var foldedClauses = Regex.Split(items, @"\s*,\s*|\s+ve\s+", RegexOptions.CultureInvariant);
+        var originalClauses=Regex.Split(originalPieceItems,@"\s*,\s*|\s+ve\s+",RegexOptions.CultureInvariant);
         if(foldedClauses.Length!=originalClauses.Length) return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
         for(var clauseIndex=0;clauseIndex<foldedClauses.Length;clauseIndex++)
         {
@@ -139,7 +144,39 @@ public static partial class CommandParser
         }
         if (assignments.Count == 0) return ParseResult.Refused(Refusals.Unrecognized(state.Norm));
         return ParseResult.Understood(new HandoffCommand(HandoffTarget.TextileTools, 3, (double)width,
-            new MeasuredNestingRequest((double)width, assignments)));
+            new MeasuredNestingRequest((double)width, assignments, (double)gap, (double)edgeMargin)));
+    }
+
+    private static bool TryReadNestingClearances(string foldedItems,string originalItems,out string remainingFolded,
+        out string remainingOriginal,out decimal gapMm,out decimal edgeMarginMm)
+    {
+        remainingFolded=foldedItems;remainingOriginal=originalItems;gapMm=5m;edgeMarginMm=0m;
+        const string number=@"[0-9]+(?:[,.][0-9]+)?";
+        const string unit=@"mm|cm|m|milim(?:etre)?|santim(?:etre)?|metre";
+        var option=new Regex(@"(?<separator>^|,\s*|\s+ve\s+)(?<label>parca\s+arasi\s+bosluk|parca\s+boslugu|kumas(?:a)?\s+kenar\s+payi|kenar\s+payi)\s+(?<value>"+number+@")\s*(?<unit>"+unit+@")(?=$|,|\s+ve\s+)",RegexOptions.CultureInvariant);
+        var matches=option.Matches(foldedItems);
+        var ranges=new List<(int Start,int Length)>();var seenGap=false;var seenMargin=false;
+        foreach(Match found in matches)
+        {
+            var isGap=found.Groups["label"].Value is "parca arasi bosluk" or "parca boslugu";
+            if(isGap ? seenGap : seenMargin)return false;
+            if(!decimal.TryParse(found.Groups["value"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value) ||
+                !UnitParser.TryParseUnitWord(found.Groups["unit"].Value,out var parsedUnit,out _))return false;
+            var factor=UnitParser.MillimetersPerUnit(parsedUnit);
+            if(value>100_000_000m/factor)return false;
+            var mm=value*factor;
+            if(isGap){gapMm=mm;seenGap=true;}else{edgeMarginMm=mm;seenMargin=true;}
+            ranges.Add((found.Index,found.Length));
+        }
+        // Folded text is a one-code-unit mapping of the normalized input, so these ranges
+        // also remove the corresponding original Turkish words without losing piece names.
+        var folded=new StringBuilder(foldedItems);var original=new StringBuilder(originalItems);
+        for(var i=ranges.Count-1;i>=0;i--)
+        {
+            var range=ranges[i];folded.Remove(range.Start,range.Length);original.Remove(range.Start,range.Length);
+        }
+        remainingFolded=folded.ToString().Trim(' ',',');remainingOriginal=original.ToString().Trim(' ',',');
+        return remainingFolded.Length>0 && remainingOriginal.Length>0;
     }
 
     private static bool TryNestingCount(string text, out int count)

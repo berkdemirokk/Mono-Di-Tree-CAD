@@ -245,6 +245,8 @@ internal sealed partial class PlannerContext
                     ? $"Dikiş payı şimdilik “Dikiş payı ver…” penceresinde yapılır. Pencere {MmCm(seam)} değeriyle açılacak; önizlemeyi görüp siz uygularsınız."
                     : "Dikiş payı şimdilik “Dikiş payı ver…” penceresinde yapılır. Pencere açılacak; önizlemeyi görüp siz uygularsınız.";
             case 3:
+                if(c.NestingRequest is { } measured)
+                    return $"Adetli pastal önizlemesi açılacak. Kumaş eni {MmCm(measured.FabricWidthMm)}, parça boşluğu {MmCm(measured.GapMm)} ve kenar payı {MmCm(measured.EdgeMarginMm)} girilecek; yerleşimi inceleyin.";
                 var basic = "Pastal şimdilik “Pastal yerleştir…” penceresinde yapılır. Pencere açılacak; bütün parçaların yeri değiştirilmeden önce orada sorulur.";
                 return c.Value is { } width && double.IsFinite(width) ? basic + $" Kumaş eni {MmCm(width)} olarak girilecek." : basic;
             default:

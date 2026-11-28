@@ -213,8 +213,8 @@ internal static class CommandCatalogueData
             ["bir beden büyüt", "bir üst beden", "L bedeni çıkar", "serileme yap"],
             "serileme", "beden", "büyük beden", "küçük beden", "başka beden"));
         all.Add(F("size.nest", GSize, "Pastal yerleştir…",
-            "Parçaları kumaşın eni içine dizerek pastal planı hazırlar; temel pastalda bütün parçaların yeri değişir.",
-            ["pastal yap", "parçaları yerleştir", "kumaş eni 150 santim pastal"],
+            "Parçaları belirtilen kumaş eninde, parça arası boşluk ve kumaş kenar payıyla adetli pastal önizlemesine aktarır; değerler gerçek yerleşime uygulanır.",
+            ["pastal yap", "parçaları yerleştir", "150cm kumaşa 2 Ön, parça boşluğu 5mm, kenar payı 10mm diz"],
             "pastal", "kumaşa diz", "fire", "yerleşim", "kumaş eni"));
         all.Add(D("size.textile-tools", GSize, "Tekstil araçlarını aç…",
             "Dikiş payı, beden ve pastal işlerinin hepsini tek pencerede açar.",

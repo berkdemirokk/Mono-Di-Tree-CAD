@@ -99,6 +99,8 @@ internal sealed class ProductionNestingWindow : Window
                 overrides.Add(matches[0].Id,requested.Quantity);
             }
             width.Text=request.FabricWidthMm.ToString("0.###",CultureInfo.InvariantCulture);
+            gap.Text=MeasurementInput.Format(request.GapMm);
+            edgeMargin.Text=MeasurementInput.Format(request.EdgeMarginMm);
         }
         requestedQuantityOverrides=overrides;
         Owner=owner; Title="Adetli pastal önizlemesi"; Width=1000; Height=760; MinWidth=680; MinHeight=520;

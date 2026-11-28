@@ -19,7 +19,29 @@ public sealed class CommandParserTypingTests
         Assert.Equal(HandoffTarget.TextileTools,request.Target);
         Assert.Equal(1500,request.Value);
         Assert.Equal(1500,request.NestingRequest!.FabricWidthMm);
+        Assert.Equal(5,request.NestingRequest.GapMm);
+        Assert.Equal(0,request.NestingRequest.EdgeMarginMm);
         Assert.Equal(new[]{new NestingPieceCount("Ön",2),new NestingPieceCount("Arka",1)},request.NestingRequest.Pieces);
+    }
+
+    [Theory]
+    [InlineData("150 cm kumaşa iki Ön, bir Arka, parça arası boşluk 5 mm ve kumaş kenar payı 10 mm yerleştir",5,10)]
+    [InlineData("150cm kumaşa iki Ön ve bir Arka, kenar payı 1 cm, parça boşluğu 0,5 cm diz",5,10)]
+    public void MeasuredMarkerRequestCarriesGapAndFabricEdgeMargin(string text,double expectedGap,double expectedMargin)
+    {
+        var request=Assert.IsType<HandoffCommand>(Run(text,"Ön","Arka").Command).NestingRequest!;
+        Assert.Equal(expectedGap,request.GapMm);
+        Assert.Equal(expectedMargin,request.EdgeMarginMm);
+        Assert.Equal(1500,request.FabricWidthMm);
+    }
+
+    [Theory]
+    [InlineData("150 cm kumaşa iki Ön, parça arası boşluk 2 mm, parça boşluğu 3 mm yerleştir")]
+    [InlineData("150 cm kumaşa iki Ön, kenar payı 75 cm yerleştir")]
+    [InlineData("150 cm kumaşa iki Ön, parça arası boşluk 100001 m yerleştir")]
+    public void MeasuredMarkerRejectsAmbiguousOrImpossibleClearances(string text)
+    {
+        Assert.False(Run(text,"Ön").IsCommand);
     }
 
     [Fact]
