@@ -229,12 +229,12 @@ internal static partial class SimpleViewVerification
         Scan("unselected", "parça 1 seç");
         fresh.Select(fresh.Document.Pieces[0].Id);
         Scan("selected", "genişliği 95 yap", "25 sağa taşı", "90 sağa döndür");
-        // A piece that is not a plain rectangle is not offered the width chip.
+        // A valid closed linear polygon can be resized by its boundary box; the planner owns this decision.
         fresh.LoadDocument(new ProjectDocument { Pieces = [new PatternPiece { Name = "Parça 2", Points = [new(0, 0), new(100, 0), new(60, 80)] }] });
         fresh.Select(fresh.Document.Pieces[0].Id);
         Invoke(fresh, "Refresh");
-        var notRectangle = !InlineBox(fresh)!.ChipButtons.Any(c => (string)c.Tag == "genişliği 95 yap") && InlineBox(fresh)!.ChipButtons.Any(c => (string)c.Tag == "25 sağa taşı");
-        Check(seen >= 5 && bad.Count == 0 && notRectangle, "Every example chip in the simple view command box parses to a plan and the width chip is only offered for a plain rectangle"
-            + (seen >= 5 && bad.Count == 0 && notRectangle ? "" : $" [{seen} chips; notRectangle={notRectangle}; {string.Join("; ", bad)}]"), checks);
+        var polygonResize = InlineBox(fresh)!.ChipButtons.Any(c => (string)c.Tag == "genişliği 95 yap") && InlineBox(fresh)!.ChipButtons.Any(c => (string)c.Tag == "25 sağa taşı");
+        Check(seen >= 5 && bad.Count == 0 && polygonResize, "Every example chip in the simple view command box parses to a plan and the planner offers resize for a valid closed polygon"
+            + (seen >= 5 && bad.Count == 0 && polygonResize ? "" : $" [{seen} chips; polygonResize={polygonResize}; {string.Join("; ", bad)}]"), checks);
     });
 }
